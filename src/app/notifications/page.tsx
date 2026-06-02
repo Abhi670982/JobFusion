@@ -44,13 +44,13 @@ export default function NotificationsPage() {
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 mobile-header-offset page-content">
         <Navbar />
-        <main className="flex-1 p-6 max-w-3xl mx-auto w-full">
+        <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-3xl mx-auto w-full">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-2xl font-bold" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Notifications</h1>
+              <h1 className="text-xl sm:text-2xl font-bold" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Notifications</h1>
               {unreadCount > 0 && (
                 <p className="text-sm text-muted-foreground mt-0.5">{unreadCount} unread notifications</p>
               )}
@@ -67,7 +67,7 @@ export default function NotificationsPage() {
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="rounded-xl mb-5 h-9">
+            <TabsList className="rounded-xl mb-4 lg:mb-5 h-9 flex flex-wrap sm:flex-nowrap gap-1 w-full overflow-x-auto">
               <TabsTrigger value="all" className="rounded-lg text-xs">
                 All
                 {unreadCount > 0 && <Badge className="ml-1.5 h-4 px-1.5 text-[10px] gradient-brand text-white border-0">{unreadCount}</Badge>}

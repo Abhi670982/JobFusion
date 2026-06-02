@@ -48,20 +48,20 @@ export default function SettingsPage() {
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 mobile-header-offset page-content">
         <Navbar />
-        <main className="flex-1 p-6 max-w-3xl mx-auto w-full">
+        <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-3xl mx-auto w-full">
           <div className="mb-6">
             <h1 className="text-2xl font-bold" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Settings</h1>
             <p className="text-muted-foreground text-sm mt-1">Manage your account preferences and settings</p>
           </div>
 
           <Tabs defaultValue="profile">
-            <TabsList className="rounded-xl mb-6 grid grid-cols-4 h-10">
-              <TabsTrigger value="profile" className="rounded-lg text-xs gap-1.5"><User className="w-3.5 h-3.5" />Profile</TabsTrigger>
-              <TabsTrigger value="notifications" className="rounded-lg text-xs gap-1.5"><Bell className="w-3.5 h-3.5" />Alerts</TabsTrigger>
-              <TabsTrigger value="security" className="rounded-lg text-xs gap-1.5"><Shield className="w-3.5 h-3.5" />Security</TabsTrigger>
-              <TabsTrigger value="appearance" className="rounded-lg text-xs gap-1.5"><Palette className="w-3.5 h-3.5" />Display</TabsTrigger>
+            <TabsList className="rounded-xl mb-6 grid grid-cols-2 sm:grid-cols-4 h-auto sm:h-10 gap-1 p-1">
+              <TabsTrigger value="profile" className="rounded-lg text-xs gap-1.5 py-2"><User className="w-3.5 h-3.5" />Profile</TabsTrigger>
+              <TabsTrigger value="notifications" className="rounded-lg text-xs gap-1.5 py-2"><Bell className="w-3.5 h-3.5" />Alerts</TabsTrigger>
+              <TabsTrigger value="security" className="rounded-lg text-xs gap-1.5 py-2"><Shield className="w-3.5 h-3.5" />Security</TabsTrigger>
+              <TabsTrigger value="appearance" className="rounded-lg text-xs gap-1.5 py-2"><Palette className="w-3.5 h-3.5" />Display</TabsTrigger>
             </TabsList>
  
             {/* Profile Settings */}

@@ -1,6 +1,5 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -288,4 +287,118 @@ html {
 ::selection {
   background: rgba(99, 102, 241, 0.2);
   color: inherit;
+}
+
+/* ============================================================
+   RESPONSIVE FOUNDATION
+   ============================================================ */
+
+/* Prevent horizontal overflow globally */
+html, body {
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Mobile safe area for bottom nav */
+.page-content {
+  padding-bottom: 64px; /* space for mobile bottom nav */
+}
+@media (min-width: 1024px) {
+  .page-content {
+    padding-bottom: 0;
+  }
+}
+
+/* Mobile top padding to account for hamburger button */
+.mobile-header-offset {
+  padding-top: 0;
+}
+
+/* Responsive images */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Touch targets: at least 44x44px */
+button, a, [role="button"] {
+  min-height: 44px;
+  min-width: 44px;
+}
+/* Override for inline/compact elements */
+.touch-auto {
+  min-height: auto;
+  min-width: auto;
+}
+
+/* Prevent text overflow in cards */
+.truncate-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Chart responsiveness */
+.recharts-responsive-container {
+  width: 100% !important;
+}
+
+/* Table scroll wrapper */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Safe area insets for notched devices */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .safe-bottom {
+    padding-bottom: calc(64px + env(safe-area-inset-bottom));
+  }
+  .safe-bottom-nav {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  @media (min-width: 1024px) {
+    .safe-bottom {
+      padding-bottom: 0;
+    }
+  }
+}
+
+/* Responsive typography scale */
+@media (max-width: 640px) {
+  h1 { font-size: clamp(1.5rem, 5vw, 2.25rem); }
+  h2 { font-size: clamp(1.25rem, 4vw, 1.875rem); }
+  .hero-title { font-size: clamp(2rem, 8vw, 4.5rem); }
+}
+
+/* Fix sidebar z-index stacking */
+.sidebar-fixed {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 40;
+}
+
+/* Container max-widths */
+.container-app {
+  width: 100%;
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+@media (min-width: 640px) {
+  .container-app {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+@media (min-width: 1024px) {
+  .container-app {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
 }

@@ -145,9 +145,9 @@ export default function ProfilePage() {
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 mobile-header-offset page-content">
         <Navbar />
-        <main className="flex-1 p-6 max-w-5xl mx-auto w-full space-y-5">
+        <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-5xl mx-auto w-full space-y-4 lg:space-y-5">
           <div className="mb-4">
             <h1 className="text-2xl font-bold" style={{ fontFamily: 'var(--font-jakarta), sans-serif' }}>
               My Profile

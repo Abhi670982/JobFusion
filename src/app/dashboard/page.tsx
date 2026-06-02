@@ -77,9 +77,9 @@ export default function DashboardPage() {
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 mobile-header-offset page-content">
         <Navbar />
-        <main className="flex-1 p-6 max-w-[1400px] w-full mx-auto space-y-6">
+        <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-[1400px] w-full mx-auto space-y-4 lg:space-y-6">
           {/* Welcome */}
           <motion.div
             initial={{ opacity: 0, y: -10 }}
@@ -130,7 +130,7 @@ export default function DashboardPage() {
                     <Badge className="border-white/30 bg-white/20 text-white text-[10px]">87th percentile</Badge>
                   </div>
                   <p className="text-white/70 text-sm">Complete your profile to boost your match score by 15%</p>
-                  <div className="mt-2 w-64 bg-white/20 rounded-full h-1.5">
+                  <div className="mt-2 w-full max-w-[16rem] bg-white/20 rounded-full h-1.5">
                     <div className="h-1.5 rounded-full bg-white" style={{ width: `${dashboardStats.matchScore}%` }} />
                   </div>
                 </div>
@@ -145,16 +145,16 @@ export default function DashboardPage() {
           </motion.div>
 
           {/* Stats Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <StatCard icon={Briefcase} label="Applications Sent" value={dashboardStats.applied} change="+4 this week" color="#6366f1" />
             <StatCard icon={Calendar} label="Interviews" value={dashboardStats.interviews} change="+2 scheduled" color="#10b981" />
             <StatCard icon={Star} label="Offers Received" value={dashboardStats.offers} color="#f59e0b" />
             <StatCard icon={Bookmark} label="Saved Jobs" value={dashboardStats.savedJobs} color="#8b5cf6" />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
             {/* Activity Chart */}
-            <div className="lg:col-span-2 card-premium p-5">
+            <div className="lg:col-span-2 card-premium p-4 lg:p-5">
               <div className="flex items-center justify-between mb-5">
                 <div>
                   <h3 className="font-semibold">Activity Overview</h3>
@@ -213,7 +213,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
             {/* Recent Activity */}
             <div className="card-premium p-5">
               <div className="flex items-center justify-between mb-4">

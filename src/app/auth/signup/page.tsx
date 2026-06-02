@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
-import { Eye, EyeOff, Sparkles, Code2, ArrowRight, Lock, Mail, User, CheckCircle2 } from 'lucide-react';
+import { Eye, EyeOff, Code2, ArrowRight, Lock, Mail, User, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -28,9 +29,13 @@ export default function SignUpPage() {
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_bottom_right,white,transparent_60%)]" />
 
         <Link href="/" className="flex items-center gap-2.5 relative z-10">
-          <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center">
-            <Sparkles className="w-5 h-5 text-white" />
-          </div>
+          <Image
+            src="/logo.png"
+            alt="JobFusion Logo"
+            width={36}
+            height={36}
+            className="rounded-xl object-contain"
+          />
           <span className="font-bold text-xl text-white" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>JobFusion</span>
         </Link>
 
@@ -59,9 +64,13 @@ export default function SignUpPage() {
           className="w-full max-w-md py-8"
         >
           <div className="lg:hidden flex items-center gap-2 mb-8">
-            <div className="w-8 h-8 rounded-xl gradient-brand flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-white" />
-            </div>
+            <Image
+              src="/logo.png"
+              alt="JobFusion Logo"
+              width={32}
+              height={32}
+              className="rounded-xl object-contain"
+            />
             <span className="font-bold text-xl gradient-brand-text" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>JobFusion</span>
           </div>
 

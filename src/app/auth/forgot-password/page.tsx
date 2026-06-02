@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
-import { Mail, ArrowRight, ArrowLeft, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Mail, ArrowRight, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,9 +21,13 @@ export default function ForgotPasswordPage() {
         className="w-full max-w-md"
       >
         <Link href="/" className="flex items-center gap-2 mb-10 justify-center">
-          <div className="w-9 h-9 rounded-xl gradient-brand flex items-center justify-center">
-            <Sparkles className="w-5 h-5 text-white" />
-          </div>
+          <Image
+            src="/logo.png"
+            alt="JobFusion Logo"
+            width={36}
+            height={36}
+            className="rounded-xl object-contain"
+          />
           <span className="font-bold text-xl" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
             <span className="gradient-brand-text">Job</span>Fusion
           </span>

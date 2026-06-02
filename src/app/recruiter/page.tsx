@@ -67,9 +67,9 @@ export default function RecruiterDashboard() {
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar isRecruiter />
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 mobile-header-offset page-content">
         <Navbar />
-        <main className="flex-1 p-6 max-w-[1400px] mx-auto w-full space-y-6">
+        <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-[1400px] mx-auto w-full space-y-4 lg:space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between">
             <div>

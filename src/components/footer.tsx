@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { Sparkles, MessageCircle, Link2, Code2, Play } from 'lucide-react';
+import Image from 'next/image';
+import { MessageCircle, Link2, Code2, Play } from 'lucide-react';
 
 const footerLinks = {
   Product: [
@@ -41,9 +42,13 @@ export default function Footer() {
           {/* Brand */}
           <div className="lg:col-span-2">
             <Link href="/" className="flex items-center gap-2.5 mb-4">
-              <div className="w-8 h-8 rounded-xl gradient-brand flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-white" />
-              </div>
+              <Image
+                src="/logo.png"
+                alt="JobFusion Logo"
+                width={32}
+                height={32}
+                className="rounded-xl object-contain"
+              />
               <span className="font-bold text-xl" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
                 <span className="gradient-brand-text">Job</span>
                 <span>Fusion</span>

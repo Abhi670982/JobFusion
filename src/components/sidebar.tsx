@@ -1,13 +1,14 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Briefcase, User, FileText, Bell, Settings,
-  Users, BarChart3, Sparkles, ChevronLeft, ChevronRight,
-  Bookmark, MessageSquare, LogOut, TrendingUp
+  Users, BarChart3, ChevronLeft, ChevronRight,
+  Bookmark, X, Menu
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -44,129 +45,120 @@ interface SidebarProps {
   isRecruiter?: boolean;
 }
 
+function NavLink({ item, collapsed, pathname, onClick }: {
+  item: NavItem;
+  collapsed: boolean;
+  pathname: string;
+  onClick?: () => void;
+}) {
+  const isActive = pathname === item.href || (item.href !== '/jobs' && pathname.startsWith(item.href + '/'));
+  const Icon = item.icon;
+
+  const link = (
+    <Link
+      href={item.href}
+      onClick={onClick}
+      className={cn(
+        'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative min-h-[44px]',
+        isActive
+          ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm'
+          : 'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+      )}
+    >
+      <Icon className={cn('w-5 h-5 flex-shrink-0', isActive && 'text-primary')} />
+      <AnimatePresence>
+        {!collapsed && (
+          <motion.span
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="text-sm whitespace-nowrap flex-1 overflow-hidden"
+          >
+            {item.label}
+          </motion.span>
+        )}
+      </AnimatePresence>
+      {item.badge && !collapsed && (
+        <Badge className="ml-auto h-5 px-1.5 text-[10px] gradient-brand text-white border-0">
+          {item.badge}
+        </Badge>
+      )}
+      {item.badge && collapsed && (
+        <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary" />
+      )}
+    </Link>
+  );
+
+  if (collapsed) {
+    return (
+      <Tooltip delayDuration={0}>
+        <TooltipTrigger asChild>{link}</TooltipTrigger>
+        <TooltipContent side="right" className="rounded-lg">{item.label}</TooltipContent>
+      </Tooltip>
+    );
+  }
+  return link;
+}
+
 export default function Sidebar({ isRecruiter = false }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
 
   const allItems = [...navItems, ...(isRecruiter ? recruiterItems : [])];
 
-  return (
-    <motion.aside
-      initial={false}
-      animate={{ width: collapsed ? 72 : 240 }}
-      transition={{ duration: 0.3, ease: 'easeInOut' }}
-      className="relative flex flex-col h-screen sticky top-0 bg-sidebar border-r border-sidebar-border overflow-hidden flex-shrink-0"
-    >
+  const SidebarContent = () => (
+    <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 h-16 border-b border-sidebar-border flex-shrink-0">
-        <div className="w-8 h-8 rounded-xl gradient-brand flex items-center justify-center flex-shrink-0 shadow-md">
-          <Sparkles className="w-4 h-4 text-white" />
-        </div>
-        <AnimatePresence>
-          {!collapsed && (
-            <motion.span
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              className="font-bold text-lg whitespace-nowrap overflow-hidden"
-              style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
-            >
-              <span className="gradient-brand-text">Job</span>
-              <span>Fusion</span>
-            </motion.span>
-          )}
-        </AnimatePresence>
+      <div className={cn(
+        'flex items-center gap-3 px-4 h-16 border-b border-sidebar-border flex-shrink-0',
+        collapsed && 'justify-center px-3'
+      )}>
+        <Link href="/" className="flex items-center gap-2 min-w-0">
+          <Image
+            src="/logo.png"
+            alt="JobFusion Logo"
+            width={36}
+            height={36}
+            className="rounded-xl flex-shrink-0 object-contain"
+          />
+          <AnimatePresence>
+            {!collapsed && (
+              <motion.span
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="font-bold text-lg whitespace-nowrap overflow-hidden"
+                style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
+              >
+                <span className="gradient-brand-text">Job</span>
+                <span>Fusion</span>
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </Link>
       </div>
 
       {/* Navigation */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin py-4 px-3 space-y-1">
-        {allItems.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
-          const Icon = item.icon;
+      <div className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+        {allItems.map((item) => (
+          <NavLink
+            key={item.href}
+            item={item}
+            collapsed={collapsed}
+            pathname={pathname}
+          />
+        ))}
 
-          return (
-            <Tooltip key={item.href} delayDuration={0}>
-              <TooltipTrigger asChild>
-                <Link
-                  href={item.href}
-                  className={cn(
-                    'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative',
-                    isActive
-                      ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm'
-                      : 'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
-                  )}
-                >
-                  <Icon className={cn('w-5 h-5 flex-shrink-0', isActive && 'text-primary')} />
-                  <AnimatePresence>
-                    {!collapsed && (
-                      <motion.span
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="text-sm whitespace-nowrap flex-1 overflow-hidden"
-                      >
-                        {item.label}
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
-                  {item.badge && !collapsed && (
-                    <Badge className="ml-auto h-5 px-1.5 text-[10px] gradient-brand text-white border-0">
-                      {item.badge}
-                    </Badge>
-                  )}
-                  {item.badge && collapsed && (
-                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-primary" />
-                  )}
-                  {isActive && (
-                    <motion.div
-                      layoutId="activeNav"
-                      className="absolute inset-0 rounded-xl bg-sidebar-accent -z-10"
-                    />
-                  )}
-                </Link>
-              </TooltipTrigger>
-              {collapsed && (
-                <TooltipContent side="right" className="rounded-lg">
-                  {item.label}
-                </TooltipContent>
-              )}
-            </Tooltip>
-          );
-        })}
-
-        {/* Divider */}
         <div className="my-3 border-t border-sidebar-border" />
 
-        {bottomItems.map((item) => {
-          const isActive = pathname === item.href;
-          const Icon = item.icon;
-
-          return (
-            <Tooltip key={item.href} delayDuration={0}>
-              <TooltipTrigger asChild>
-                <Link
-                  href={item.href}
-                  className={cn(
-                    'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200',
-                    isActive
-                      ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
-                      : 'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
-                  )}
-                >
-                  <Icon className="w-5 h-5 flex-shrink-0" />
-                  <AnimatePresence>
-                    {!collapsed && (
-                      <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-sm">
-                        {item.label}
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
-                </Link>
-              </TooltipTrigger>
-              {collapsed && <TooltipContent side="right">{item.label}</TooltipContent>}
-            </Tooltip>
-          );
-        })}
+        {bottomItems.map((item) => (
+          <NavLink
+            key={item.href}
+            item={item}
+            collapsed={collapsed}
+            pathname={pathname}
+          />
+        ))}
       </div>
 
       {/* User Profile */}
@@ -191,14 +183,55 @@ export default function Sidebar({ isRecruiter = false }: SidebarProps) {
           )}
         </AnimatePresence>
       </div>
+    </div>
+  );
 
-      {/* Collapse Toggle */}
-      <button
-        onClick={() => setCollapsed(!collapsed)}
-        className="absolute -right-3 top-20 w-6 h-6 rounded-full bg-background border border-border shadow-md flex items-center justify-center hover:bg-accent transition-colors z-10"
+  return (
+    <>
+      {/* Desktop Sidebar */}
+      <motion.aside
+        initial={false}
+        animate={{ width: collapsed ? 72 : 240 }}
+        transition={{ duration: 0.3, ease: 'easeInOut' }}
+        className="relative hidden lg:flex flex-col h-screen sticky top-0 bg-sidebar border-r border-sidebar-border overflow-hidden flex-shrink-0"
       >
-        {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
-      </button>
-    </motion.aside>
+        <SidebarContent />
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="absolute -right-3 top-20 w-6 h-6 rounded-full bg-background border border-border shadow-md flex items-center justify-center hover:bg-accent transition-colors z-10"
+        >
+          {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
+        </button>
+      </motion.aside>
+
+      {/* Mobile Bottom Nav */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-background/95 backdrop-blur-xl border-t border-border flex items-center justify-around px-1 py-1">
+        {[
+          ...navItems.slice(0, 4),
+          ...(isRecruiter ? recruiterItems.slice(0, 1) : [navItems[4]])
+        ].slice(0, 5).map((item) => {
+          const Icon = item.icon;
+          const isActive = pathname === item.href || (item.href !== '/jobs' && pathname.startsWith(item.href + '/'));
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                'flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl min-w-[48px] relative transition-colors',
+                isActive ? 'text-primary' : 'text-muted-foreground'
+              )}
+            >
+              <Icon className="w-5 h-5" />
+              <span className="text-[9px] font-medium leading-none mt-0.5">
+                {item.label.split(' ')[0]}
+              </span>
+              {item.badge && (
+                <span className="absolute top-0.5 right-1 w-2 h-2 rounded-full bg-primary" />
+              )}
+            </Link>
+          );
+        })}
+      </nav>
+    </>
   );
 }
