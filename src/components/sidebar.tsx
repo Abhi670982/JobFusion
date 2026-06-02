@@ -205,28 +205,41 @@ export default function Sidebar({ isRecruiter = false }: SidebarProps) {
       </motion.aside>
 
       {/* Mobile Bottom Nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-background/95 backdrop-blur-xl border-t border-border flex items-center justify-around px-1 py-1">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-background/90 backdrop-blur-md border-t border-border/80 flex items-center justify-around px-2 py-2 shadow-lg">
         {[
           ...navItems.slice(0, 4),
           ...(isRecruiter ? recruiterItems.slice(0, 1) : [navItems[4]])
         ].slice(0, 5).map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href || (item.href !== '/jobs' && pathname.startsWith(item.href + '/'));
+          
+          const mobileLabelMap: Record<string, string> = {
+            'Dashboard': 'Home',
+            'Find Jobs': 'Jobs',
+            'Saved Jobs': 'Saved',
+            'My Profile': 'Profile',
+            'Resume': 'Resume',
+            'Notifications': 'Inbox',
+          };
+          const label = mobileLabelMap[item.label] || item.label;
+
           return (
             <Link
               key={item.href}
               href={item.href}
               className={cn(
-                'flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl min-w-[48px] relative transition-colors',
-                isActive ? 'text-primary' : 'text-muted-foreground'
+                'flex flex-col items-center justify-center gap-0.5 py-1 px-2.5 rounded-xl min-w-[56px] relative transition-all duration-200',
+                isActive 
+                  ? 'text-primary bg-primary/10 font-semibold' 
+                  : 'text-muted-foreground hover:text-foreground'
               )}
             >
-              <Icon className="w-5 h-5" />
-              <span className="text-[9px] font-medium leading-none mt-0.5">
-                {item.label.split(' ')[0]}
+              <Icon className="w-5 h-5 flex-shrink-0" />
+              <span className="text-[10px] font-medium leading-none mt-1">
+                {label}
               </span>
               {item.badge && (
-                <span className="absolute top-0.5 right-1 w-2 h-2 rounded-full bg-primary" />
+                <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-primary" />
               )}
             </Link>
           );

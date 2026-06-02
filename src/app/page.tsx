@@ -7,7 +7,7 @@ import Link from 'next/link';
 import {
   Search, MapPin, Briefcase, ArrowRight, Star, CheckCircle2,
   Sparkles, ChevronDown, TrendingUp, Users, Zap, Shield,
-  BarChart3, Bell, FileText, Brain
+  BarChart3, Bell, FileText, Brain, Target
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +15,15 @@ import { Input } from '@/components/ui/input';
 import Navbar from '@/components/navbar';
 import Footer from '@/components/footer';
 import { trustedCompanies, features, testimonials, platformStats } from '@/lib/data';
+
+const iconMap: Record<string, React.ComponentType<any>> = {
+  brain: Brain,
+  zap: Zap,
+  target: Target,
+  'bar-chart': BarChart3,
+  bell: Bell,
+  'file-text': FileText,
+};
 
 function AnimatedCounter({ end, suffix = '' }: { end: number; suffix?: string }) {
   const [count, setCount] = useState(0);
@@ -233,8 +242,11 @@ export default function LandingPage() {
                 transition={{ delay: i * 0.1 }}
                 className="card-premium p-6 group cursor-default"
               >
-                <div className="w-12 h-12 rounded-2xl gradient-subtle flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform">
-                  {feature.icon}
+                <div className="w-12 h-12 rounded-2xl gradient-subtle flex items-center justify-center text-primary mb-4 group-hover:scale-110 transition-transform">
+                  {(() => {
+                    const IconComponent = iconMap[feature.icon] || Brain;
+                    return <IconComponent className="w-5 h-5" />;
+                  })()}
                 </div>
                 <h3 className="font-semibold text-base mb-2">{feature.title}</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed mb-4">{feature.description}</p>

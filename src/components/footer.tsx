@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { MessageCircle, Link2, Code2, Play } from 'lucide-react';
+import { MessageCircle, Link2, Code2, Play, Globe, Heart } from 'lucide-react';
 
 const footerLinks = {
   Product: [
@@ -94,10 +94,17 @@ export default function Footer() {
           <p className="text-sm text-muted-foreground">
             © 2025 JobFusion, Inc. All rights reserved.
           </p>
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <span>🌍 English (US)</span>
+          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <Globe className="w-4 h-4 text-muted-foreground" />
+              English (US)
+            </span>
             <span>•</span>
-            <span>Built with ❤️ for job seekers everywhere</span>
+            <span className="flex items-center gap-1.5">
+              Built with
+              <Heart className="w-3.5 h-3.5 text-red-500 fill-red-500 animate-pulse" />
+              for job seekers everywhere
+            </span>
           </div>
         </div>
       </div>

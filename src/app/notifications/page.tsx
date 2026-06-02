@@ -87,7 +87,9 @@ export default function NotificationsPage() {
                       animate={{ opacity: 1 }}
                       className="flex flex-col items-center justify-center py-20 text-center"
                     >
-                      <div className="w-16 h-16 rounded-3xl bg-muted flex items-center justify-center text-3xl mb-4">🔔</div>
+                      <div className="w-16 h-16 rounded-3xl bg-muted flex items-center justify-center mb-4">
+                        <Bell className="w-6 h-6 text-muted-foreground" />
+                      </div>
                       <h3 className="font-semibold mb-1">All caught up!</h3>
                       <p className="text-sm text-muted-foreground">No notifications in this category.</p>
                     </motion.div>

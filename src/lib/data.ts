@@ -525,37 +525,37 @@ export const activities: Activity[] = [
 
 export const features = [
   {
-    icon: '🤖',
+    icon: 'brain',
     title: 'AI-Powered Matching',
     description: 'Our proprietary AI analyses your skills, experience, and preferences to find your perfect role from India\'s top companies with up to 98% accuracy.',
     highlight: 'Up to 98% match accuracy',
   },
   {
-    icon: '⚡',
+    icon: 'zap',
     title: 'Instant Aggregation',
     description: 'We aggregate jobs from 500+ sources including LinkedIn, Naukri, company career pages, and niche tech job boards in real time.',
     highlight: '500+ sources aggregated',
   },
   {
-    icon: '🎯',
+    icon: 'target',
     title: 'Smart Skill Gap Analysis',
     description: 'Understand exactly which skills you\'re missing for your dream role and get personalised learning recommendations to bridge the gap.',
     highlight: 'Personalised skill roadmap',
   },
   {
-    icon: '📊',
+    icon: 'bar-chart',
     title: 'Salary Intelligence',
     description: 'Access real-time salary benchmarks in INR across cities and companies to negotiate with confidence and know your true market value.',
     highlight: 'Real-time ₹ salary data',
   },
   {
-    icon: '🔔',
+    icon: 'bell',
     title: 'Smart Alerts',
     description: 'Set personalised job alerts and get notified the moment a perfect opportunity appears — before it fills up. Never miss a hot role again.',
     highlight: 'Real-time notifications',
   },
   {
-    icon: '📋',
+    icon: 'file-text',
     title: 'One-Click Apply',
     description: 'Apply to multiple jobs with your JobFusion profile. Track all applications in one beautiful dashboard. Built for the Indian job market.',
     highlight: 'Streamlined applications',

@@ -183,7 +183,7 @@ export default function RecruiterDashboard() {
                       </td>
                       <td className="px-4 py-4">
                         <Badge className={`rounded-full text-xs px-2.5 ${job.status === 'active' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 'bg-amber-500/10 text-amber-600 border-amber-500/20'}`}>
-                          {job.status === 'active' ? '● Active' : '⏸ Paused'}
+                          {job.status === 'active' ? 'Active' : 'Paused'}
                         </Badge>
                       </td>
                       <td className="px-4 py-4">

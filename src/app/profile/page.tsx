@@ -5,7 +5,8 @@ import { motion } from 'framer-motion';
 import {
   User, MapPin, Briefcase, GraduationCap, Award, Code2,
   Upload, Plus, Edit3, Star, CheckCircle2,
-  Link2, ExternalLink, Globe, Camera, Phone, Mail
+  Link2, ExternalLink, Globe, Camera, Phone, Mail,
+  Cloud, Smartphone, Palette
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -81,10 +82,16 @@ const education = [
 ];
 
 const certifications = [
-  { name: 'AWS Solutions Architect – Professional', issuer: 'Amazon Web Services', year: '2023', icon: '☁️' },
-  { name: 'Meta Frontend Developer Certificate', issuer: 'Meta', year: '2022', icon: '📱' },
-  { name: 'Google UX Design Certificate', issuer: 'Google', year: '2021', icon: '🎨' },
+  { name: 'AWS Solutions Architect – Professional', issuer: 'Amazon Web Services', year: '2023', iconName: 'cloud' },
+  { name: 'Meta Frontend Developer Certificate', issuer: 'Meta', year: '2022', iconName: 'smartphone' },
+  { name: 'Google UX Design Certificate', issuer: 'Google', year: '2021', iconName: 'palette' },
 ];
+
+const certIconMap: Record<string, React.ComponentType<any>> = {
+  cloud: Cloud,
+  smartphone: Smartphone,
+  palette: Palette,
+};
 
 const projects = [
   {
@@ -396,20 +403,25 @@ export default function ProfilePage() {
               >
                 <SectionCard title="Certifications" icon={Award}>
                   <div className="space-y-3">
-                    {certifications.map((cert) => (
-                      <div
-                        key={cert.name}
-                        className="flex items-center gap-3 p-3 rounded-xl bg-muted/50"
-                      >
-                        <span className="text-2xl">{cert.icon}</span>
-                        <div>
-                          <p className="text-sm font-medium">{cert.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {cert.issuer} · {cert.year}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
+                     {certifications.map((cert) => {
+                       const IconComponent = certIconMap[cert.iconName] || Award;
+                       return (
+                         <div
+                           key={cert.name}
+                           className="flex items-center gap-3 p-3 rounded-xl bg-muted/50"
+                         >
+                           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
+                             <IconComponent className="w-5 h-5" />
+                           </div>
+                           <div>
+                             <p className="text-sm font-medium">{cert.name}</p>
+                             <p className="text-xs text-muted-foreground">
+                               {cert.issuer} · {cert.year}
+                             </p>
+                           </div>
+                         </div>
+                       );
+                     })}
                   </div>
                 </SectionCard>
               </motion.div>

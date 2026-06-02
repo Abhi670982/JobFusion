@@ -88,7 +88,7 @@ export default function DashboardPage() {
           >
             <div>
               <h1 className="text-2xl font-bold" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-                Good morning, Rahul! 👋
+                Good morning, Rahul!
               </h1>
               <p className="text-muted-foreground text-sm mt-1">
                 You have <strong className="text-foreground">12 new job matches</strong> and <strong className="text-foreground">3 unread messages</strong> today.

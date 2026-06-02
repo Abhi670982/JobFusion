@@ -19,9 +19,9 @@ import { cn } from '@/lib/utils';
 
 const analysisItems = [
   { label: 'ATS Compatibility', score: 88, color: '#10b981' },
-  { label: 'Keyword Optimization', score: 74, color: '#6366f1' },
-  { label: 'Formatting & Structure', score: 92, color: '#8b5cf6' },
-  { label: 'Action Words', score: 68, color: '#f59e0b' },
+  { label: 'Keyword Optimization', score: 74, color: '#3b82f6' },
+  { label: 'Formatting & Structure', score: 92, color: '#2563eb' },
+  { label: 'Action Words', score: 68, color: '#eab308' },
 ];
 
 const suggestions = [
@@ -176,7 +176,7 @@ export default function ResumePage() {
                   <div className="relative w-28 h-28">
                     <svg viewBox="0 0 100 100" className="transform -rotate-90 w-full h-full">
                       <circle cx="50" cy="50" r="40" fill="none" stroke="hsl(var(--muted))" strokeWidth="8" />
-                      <circle cx="50" cy="50" r="40" fill="none" stroke="#6366f1" strokeWidth="8"
+                      <circle cx="50" cy="50" r="40" fill="none" stroke="#2563eb" strokeWidth="8"
                         strokeDasharray={`${2 * Math.PI * 40 * 0.81} ${2 * Math.PI * 40 * 0.19}`}
                         strokeLinecap="round"
                       />

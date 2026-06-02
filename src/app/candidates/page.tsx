@@ -183,7 +183,9 @@ export default function CandidatesPage() {
 
           {filtered.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20 text-center">
-              <div className="text-5xl mb-4">🔍</div>
+              <div className="w-16 h-16 rounded-3xl bg-muted flex items-center justify-center mb-4">
+                <Search className="w-7 h-7 text-muted-foreground" />
+              </div>
               <h3 className="font-semibold mb-2">No candidates found</h3>
               <p className="text-sm text-muted-foreground mb-4">Try adjusting your search or filters</p>
               <Button onClick={() => { setQuery(''); setActiveSkills([]); }} variant="outline" className="rounded-xl">Reset Search</Button>
