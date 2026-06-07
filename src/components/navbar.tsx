@@ -2,17 +2,18 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from 'next-themes';
+import { useUser, useClerk } from '@clerk/nextjs';
 import {
   Bell, Moon, Sun, ChevronDown,
   User, Settings, LogOut, Briefcase, LayoutDashboard,
   Bookmark, FileText, BarChart3, Users, Menu, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger
@@ -26,10 +27,14 @@ const navLinks = [
 
 export default function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [scrolled, setScrolled] = useState(false);
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const { isSignedIn, user } = useUser();
+  const { signOut } = useClerk();
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -39,10 +44,37 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const isLoggedIn = pathname.startsWith('/dashboard') || pathname.startsWith('/profile') ||
-    pathname.startsWith('/jobs') || pathname.startsWith('/resume') ||
-    pathname.startsWith('/notifications') || pathname.startsWith('/settings') ||
-    pathname.startsWith('/candidates') || pathname.startsWith('/recruiter');
+  const isLoggedIn = !!isSignedIn;
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.push('/');
+  };
+
+  const getInitials = () => {
+    if (user?.firstName && user?.lastName) {
+      return `${user.firstName[0]}${user.lastName[0]}`;
+    }
+    if (user?.firstName) return user.firstName.slice(0, 2).toUpperCase();
+    const email = user?.emailAddresses[0]?.emailAddress || '';
+    if (email) return email.slice(0, 2).toUpperCase();
+    return 'US';
+  };
+
+  const getDisplayName = () => {
+    if (user?.firstName) return user.firstName;
+    const email = user?.emailAddresses[0]?.emailAddress || '';
+    if (email) {
+      const emailName = email.split('@')[0];
+      return emailName.charAt(0).toUpperCase() + emailName.slice(1);
+    }
+    return 'User';
+  };
+
+  const getFullName = () => {
+    if (user?.fullName) return user.fullName;
+    return getDisplayName();
+  };
 
   return (
     <>
@@ -121,20 +153,28 @@ export default function Navbar() {
                   <DropdownMenuTrigger asChild>
                     <button className="flex items-center gap-1.5 rounded-xl px-2 py-1.5 hover:bg-accent transition-colors cursor-pointer min-h-[40px]">
                       <Avatar className="w-7 h-7">
-                        <AvatarFallback className="text-xs bg-primary/10 text-primary font-semibold">RS</AvatarFallback>
+                        <AvatarImage src={user?.imageUrl} alt={getFullName()} />
+                        <AvatarFallback className="text-xs bg-primary/10 text-primary font-semibold">
+                          {getInitials()}
+                        </AvatarFallback>
                       </Avatar>
-                      <span className="hidden sm:block text-sm font-medium">Rahul S.</span>
+                      <span className="hidden sm:block text-sm font-medium">{getDisplayName()}</span>
                       <ChevronDown className="hidden sm:block w-3.5 h-3.5 text-muted-foreground" />
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-60 rounded-2xl p-1.5 shadow-xl border-border bg-popover/95 backdrop-blur-md">
                     <div className="flex items-center gap-3 px-3 py-2.5 mb-1 bg-muted/40 rounded-xl">
                       <Avatar className="w-9 h-9 border border-border">
-                        <AvatarFallback className="text-xs bg-primary/15 text-primary font-bold">RS</AvatarFallback>
+                        <AvatarImage src={user?.imageUrl} alt={getFullName()} />
+                        <AvatarFallback className="text-xs bg-primary/15 text-primary font-bold">
+                          {getInitials()}
+                        </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold truncate leading-tight">Rahul Sharma</p>
-                        <p className="text-xs text-muted-foreground truncate mt-0.5">rahul@example.com</p>
+                        <p className="text-sm font-semibold truncate leading-tight">{getFullName()}</p>
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">
+                          {user?.emailAddresses[0]?.emailAddress}
+                        </p>
                       </div>
                     </div>
 
@@ -194,10 +234,13 @@ export default function Navbar() {
                           <Settings className="w-4 h-4 mr-2 text-muted-foreground" />Settings
                         </Link>
                       </DropdownMenuItem>
-                      <DropdownMenuItem className="rounded-xl px-3 py-1.5 text-sm text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer transition-colors">
-                        <Link href="/auth/signin" className="flex items-center w-full">
+                      <DropdownMenuItem
+                        onClick={handleSignOut}
+                        className="rounded-xl px-3 py-1.5 text-sm text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer transition-colors"
+                      >
+                        <span className="flex items-center w-full">
                           <LogOut className="w-4 h-4 mr-2" />Sign Out
-                        </Link>
+                        </span>
                       </DropdownMenuItem>
                     </div>
                   </DropdownMenuContent>
@@ -205,10 +248,10 @@ export default function Navbar() {
               </>
             ) : (
               <div className="flex items-center gap-2">
-                <Link href="/auth/signin" className="hidden sm:block">
+                <Link href="/sign-in" className="hidden sm:block">
                   <Button variant="ghost" size="sm" className="rounded-xl font-medium">Sign In</Button>
                 </Link>
-                <Link href="/auth/signup" className="hidden sm:block">
+                <Link href="/sign-up" className="hidden sm:block">
                   <Button size="sm" className="rounded-xl gradient-brand text-white border-0 shadow-md hover:opacity-90 font-medium text-xs sm:text-sm px-3 sm:px-4">
                     Get Started
                   </Button>
@@ -255,10 +298,10 @@ export default function Navbar() {
                 ))}
                 <div className="h-px bg-border my-2" />
                 <div className="flex flex-col gap-2 px-4">
-                  <Link href="/auth/signin" onClick={() => setMobileMenuOpen(false)}>
+                  <Link href="/sign-in" onClick={() => setMobileMenuOpen(false)}>
                     <Button variant="outline" className="w-full rounded-xl font-medium justify-center h-10">Sign In</Button>
                   </Link>
-                  <Link href="/auth/signup" onClick={() => setMobileMenuOpen(false)}>
+                  <Link href="/sign-up" onClick={() => setMobileMenuOpen(false)}>
                     <Button className="w-full rounded-xl gradient-brand text-white border-0 font-medium justify-center h-10 shadow-md">
                       Get Started
                     </Button>

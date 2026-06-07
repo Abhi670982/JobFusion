@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
-  User, Bell, Shield, Palette, Globe, CreditCard,
-  ChevronRight, Smartphone, Mail, Lock, Eye, EyeOff,
-  Save, Trash2, LogOut, Moon, Sun, Monitor
+  User, Bell, Shield, Palette,
+  Save, Trash2, LogOut, Moon, Sun, Monitor,
+  Camera, Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,10 +13,13 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Sidebar from '@/components/sidebar';
 import Navbar from '@/components/navbar';
+import { fetchCurrentUser, fetchProfile, updateProfile, DbUser, DbProfile } from '@/lib/api-helper';
+import { useClerk } from '@clerk/nextjs';
 
 function SettingRow({ label, description, children }: { label: string; description?: string; children: React.ReactNode }) {
   return (
@@ -31,6 +34,26 @@ function SettingRow({ label, description, children }: { label: string; descripti
 }
 
 export default function SettingsPage() {
+  const { signOut } = useClerk();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Data states
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [user, setUser] = useState<DbUser | null>(null);
+  const [profile, setProfile] = useState<DbProfile | null>(null);
+
+  // Form states
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState('jobseeker');
+  const [headline, setHeadline] = useState('');
+  const [location, setLocation] = useState('');
+  const [phone, setPhone] = useState('');
+  const [expectedSalary, setExpectedSalary] = useState('');
+  const [noticePeriod, setNoticePeriod] = useState('');
+  
   const [notifSettings, setNotifSettings] = useState({
     jobMatches: true,
     applicationUpdates: true,
@@ -39,21 +62,186 @@ export default function SettingsPage() {
     weeklyDigest: false,
     marketingEmails: false,
   });
-  const [showPw, setShowPw] = useState(false);
-  const [theme, setTheme] = useState('light');
 
-  const toggle = (key: keyof typeof notifSettings) =>
+  const [toast, setToast] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const currentUser = await fetchCurrentUser();
+        if (currentUser) {
+          setUser(currentUser);
+          const prof = await fetchProfile(currentUser._id);
+          setProfile(prof);
+          if (prof) {
+            setFullName(currentUser.fullName);
+            setEmail(currentUser.email);
+            setRole(currentUser.role);
+            setHeadline(prof.headline || '');
+            setLocation(prof.location || '');
+            setPhone(prof.phone || '');
+            setExpectedSalary(prof.expectedSalary || '');
+            setNoticePeriod(prof.noticePeriod || '');
+            if (prof.notifications) {
+              setNotifSettings(prof.notifications);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error loading settings:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadSettings();
+  }, []);
+
+  const showToast = (type: 'success' | 'error', message: string) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 4000);
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+
+    setUpdating(true);
+    try {
+      const updated = await updateProfile(user._id, {
+        fullName,
+        email,
+        role,
+        headline,
+        location,
+        phone,
+        expectedSalary,
+        noticePeriod,
+        notifications: notifSettings
+      } as any);
+
+      if (updated) {
+        setProfile(updated);
+        // Update local user state
+        setUser(prev => prev ? { ...prev, fullName, email, role } : null);
+        showToast('success', 'Settings updated successfully!');
+      } else {
+        showToast('error', 'Failed to update settings.');
+      }
+    } catch (error) {
+      console.error(error);
+      showToast('error', 'Something went wrong.');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate size (2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      showToast('error', 'Image size must be under 2MB');
+      return;
+    }
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch('/api/upload-avatar', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (data.success && data.imageUrl) {
+        setUser(prev => prev ? { ...prev, profileImage: data.imageUrl } : null);
+        showToast('success', 'Profile picture updated successfully!');
+      } else {
+        showToast('error', data.error || 'Failed to upload image');
+      }
+    } catch (err) {
+      console.error("Avatar upload error:", err);
+      showToast('error', 'Something went wrong while uploading.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    const confirm = window.confirm("Are you absolutely sure you want to delete your account? This action is permanent and cannot be undone.");
+    if (!confirm) return;
+
+    try {
+      const res = await fetch(`/api/profile?userId=${user._id}`, {
+        method: 'DELETE',
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        alert("Your account has been deleted. Logging you out...");
+        await signOut();
+        window.location.href = '/';
+      } else {
+        showToast('error', data.error || 'Failed to delete account.');
+      }
+    } catch (err) {
+      console.error("Delete account error:", err);
+      showToast('error', 'Something went wrong.');
+    }
+  };
+
+  const toggleNotif = (key: keyof typeof notifSettings) => {
     setNotifSettings(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const getInitials = () => {
+    if (fullName) return fullName.slice(0, 2).toUpperCase();
+    return 'US';
+  };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen bg-background">
+        <Sidebar />
+        <div className="flex-1 flex flex-col min-w-0 mobile-header-offset page-content">
+          <Navbar />
+          <div className="flex-1 flex items-center justify-center">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0 mobile-header-offset page-content">
         <Navbar />
-        <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-3xl mx-auto w-full">
-          <div className="mb-6">
+        <main className="flex-1 p-4 lg:p-6 max-w-3xl mx-auto w-full space-y-6">
+          
+          {/* Toast Notification */}
+          {toast && (
+            <div className={`fixed bottom-4 right-4 z-50 px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2 text-sm border font-medium ${
+              toast.type === 'success' 
+                ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-600 dark:text-emerald-400' 
+                : 'bg-destructive/10 border-destructive/25 text-destructive'
+            }`}>
+              <span>{toast.message}</span>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-1">
             <h1 className="text-2xl font-bold" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Settings</h1>
-            <p className="text-muted-foreground text-sm mt-1">Manage your account preferences and settings</p>
+            <p className="text-muted-foreground text-sm">Manage your profile, preferences, and notifications</p>
           </div>
 
           <Tabs defaultValue="profile">
@@ -63,45 +251,165 @@ export default function SettingsPage() {
               <TabsTrigger value="security" className="rounded-lg text-xs gap-1.5 py-2"><Shield className="w-3.5 h-3.5" />Security</TabsTrigger>
               <TabsTrigger value="appearance" className="rounded-lg text-xs gap-1.5 py-2"><Palette className="w-3.5 h-3.5" />Display</TabsTrigger>
             </TabsList>
- 
+
             {/* Profile Settings */}
             <TabsContent value="profile" className="space-y-5">
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="card-premium p-6">
-                <h2 className="font-semibold mb-5">Profile Information</h2>
-                <div className="flex items-center gap-5 mb-6">
-                  <Avatar className="w-16 h-16 ring-4 ring-primary/20">
-                    <AvatarFallback className="text-xl gradient-brand text-white">RS</AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <Button size="sm" variant="outline" className="rounded-xl mb-1.5">Change Photo</Button>
-                    <p className="text-xs text-muted-foreground">JPG, PNG, or WebP · Max 2MB</p>
+              <form onSubmit={handleSaveProfile} className="space-y-5">
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="card-premium p-6">
+                  <h2 className="font-semibold mb-5 text-base">Personal Information</h2>
+                  
+                  <div className="flex items-center gap-5 mb-6">
+                    <div className="relative group cursor-pointer" onClick={handleAvatarClick}>
+                      <Avatar className="w-16 h-16 ring-4 ring-primary/20 hover:opacity-85 transition-opacity">
+                        <AvatarImage src={user?.profileImage} alt={fullName} />
+                        <AvatarFallback className="text-xl bg-primary/10 text-primary font-bold">
+                          {getInitials()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Camera className="w-5 h-5 text-white" />
+                      </div>
+                      <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        onChange={handleAvatarChange} 
+                        accept="image/*" 
+                        className="hidden" 
+                      />
+                    </div>
+                    <div>
+                      <Button 
+                        type="button" 
+                        size="sm" 
+                        variant="outline" 
+                        className="rounded-xl mb-1.5"
+                        onClick={handleAvatarClick}
+                        disabled={uploading}
+                      >
+                        {uploading ? 'Uploading...' : 'Change Photo'}
+                      </Button>
+                      <p className="text-xs text-muted-foreground">JPG, PNG, or WebP · Max 2MB</p>
+                    </div>
                   </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2"><Label>First Name</Label><Input defaultValue="Rahul" className="rounded-xl h-10" /></div>
-                  <div className="space-y-2"><Label>Last Name</Label><Input defaultValue="Sharma" className="rounded-xl h-10" /></div>
-                  <div className="space-y-2"><Label>Email</Label><Input defaultValue="rahul@example.com" className="rounded-xl h-10" /></div>
-                  <div className="space-y-2"><Label>Phone</Label><Input defaultValue="+91 98765 43210" className="rounded-xl h-10" /></div>
-                  <div className="space-y-2 sm:col-span-2"><Label>Job Title</Label><Input defaultValue="Senior Frontend Engineer" className="rounded-xl h-10" /></div>
-                  <div className="space-y-2 sm:col-span-2"><Label>Location</Label><Input defaultValue="Bengaluru, Karnataka" className="rounded-xl h-10" /></div>
-                </div>
-                <Separator className="my-5" />
-                <div className="flex justify-end gap-3">
-                  <Button variant="outline" className="rounded-xl">Cancel</Button>
-                  <Button className="rounded-xl gradient-brand text-white border-0"><Save className="w-4 h-4 mr-1.5" />Save Changes</Button>
-                </div>
-              </motion.div>
- 
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card-premium p-6">
-                <h2 className="font-semibold mb-2">Job Preferences</h2>
-                <p className="text-sm text-muted-foreground mb-5">Help our AI find better matches for you</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2"><Label>Desired Role</Label><Input defaultValue="Senior/Staff Engineer" className="rounded-xl h-10" /></div>
-                  <div className="space-y-2"><Label>Expected Salary</Label><Input defaultValue="₹28L – ₹45L" className="rounded-xl h-10" /></div>
-                  <div className="space-y-2"><Label>Availability</Label><Input defaultValue="30 days notice" className="rounded-xl h-10" /></div>
-                  <div className="space-y-2"><Label>Work Preference</Label><Input defaultValue="Remote / Hybrid" className="rounded-xl h-10" /></div>
-                </div>
-              </motion.div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="fullName">Full Name</Label>
+                      <Input 
+                        id="fullName" 
+                        value={fullName} 
+                        onChange={(e) => setFullName(e.target.value)} 
+                        className="rounded-xl h-10" 
+                        required 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email address</Label>
+                      <Input 
+                        id="email" 
+                        value={email} 
+                        onChange={(e) => setEmail(e.target.value)} 
+                        className="rounded-xl h-10" 
+                        required 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">Phone Number</Label>
+                      <Input 
+                        id="phone" 
+                        value={phone} 
+                        onChange={(e) => setPhone(e.target.value)} 
+                        className="rounded-xl h-10" 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="location">Location</Label>
+                      <Input 
+                        id="location" 
+                        value={location} 
+                        onChange={(e) => setLocation(e.target.value)} 
+                        className="rounded-xl h-10" 
+                      />
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label htmlFor="headline">Headline / Job Title</Label>
+                      <Input 
+                        id="headline" 
+                        value={headline} 
+                        onChange={(e) => setHeadline(e.target.value)} 
+                        className="rounded-xl h-10" 
+                        placeholder="e.g. Senior Full Stack Engineer | React & Node.js"
+                      />
+                    </div>
+                  </div>
+                </motion.div>
+
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }} 
+                  animate={{ opacity: 1, y: 0 }} 
+                  transition={{ delay: 0.1 }} 
+                  className="card-premium p-6"
+                >
+                  <h2 className="font-semibold mb-2">Job Preferences & Settings</h2>
+                  <p className="text-sm text-muted-foreground mb-5">Customize your JobFusion dashboard experience</p>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="role">Account Role</Label>
+                      <Select value={role} onValueChange={setRole}>
+                        <SelectTrigger className="rounded-xl h-10">
+                          <SelectValue placeholder="Select role" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl">
+                          <SelectItem value="jobseeker">Job Seeker</SelectItem>
+                          <SelectItem value="recruiter">Recruiter</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="expectedSalary">Expected Salary</Label>
+                      <Input 
+                        id="expectedSalary" 
+                        value={expectedSalary} 
+                        onChange={(e) => setExpectedSalary(e.target.value)} 
+                        className="rounded-xl h-10" 
+                        placeholder="e.g. ₹28L – ₹45L"
+                      />
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label htmlFor="noticePeriod">Notice Period / Availability</Label>
+                      <Input 
+                        id="noticePeriod" 
+                        value={noticePeriod} 
+                        onChange={(e) => setNoticePeriod(e.target.value)} 
+                        className="rounded-xl h-10" 
+                        placeholder="e.g. Immediate, 30 days notice"
+                      />
+                    </div>
+                  </div>
+
+                  <Separator className="my-5" />
+                  <div className="flex justify-end gap-3">
+                    <Button 
+                      type="submit" 
+                      className="rounded-xl gradient-brand text-white border-0 shadow-lg"
+                      disabled={updating}
+                    >
+                      {updating ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-4 h-4 mr-1.5" />
+                          Save Changes
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </motion.div>
+              </form>
             </TabsContent>
 
             {/* Notifications */}
@@ -120,66 +428,49 @@ export default function SettingsPage() {
                     <SettingRow label={label} description={desc}>
                       <Switch
                         checked={notifSettings[key as keyof typeof notifSettings]}
-                        onCheckedChange={() => toggle(key as keyof typeof notifSettings)}
+                        onCheckedChange={() => toggleNotif(key as keyof typeof notifSettings)}
                       />
                     </SettingRow>
                     {i < 5 && <Separator />}
                   </div>
                 ))}
+                
+                <Separator className="my-4" />
+                <div className="flex justify-end pt-2">
+                  <Button 
+                    onClick={handleSaveProfile} 
+                    className="rounded-xl gradient-brand text-white border-0 shadow-md"
+                    disabled={updating}
+                  >
+                    {updating ? 'Saving Preferences...' : 'Save Preferences'}
+                  </Button>
+                </div>
               </motion.div>
             </TabsContent>
 
             {/* Security */}
             <TabsContent value="security" className="space-y-5">
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="card-premium p-6">
-                <h2 className="font-semibold mb-5">Change Password</h2>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Current Password</Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input type={showPw ? 'text' : 'password'} placeholder="••••••••" className="pl-10 pr-10 rounded-xl h-11" />
-                      <button onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                        {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>New Password</Label>
-                    <Input type="password" placeholder="Min. 8 characters" className="rounded-xl h-11" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Confirm New Password</Label>
-                    <Input type="password" placeholder="••••••••" className="rounded-xl h-11" />
-                  </div>
-                  <Button className="rounded-xl gradient-brand text-white border-0">Update Password</Button>
-                </div>
+                <h2 className="font-semibold mb-3">Clerk Security Management</h2>
+                <p className="text-sm text-muted-foreground mb-5">
+                  JobFusion integrates with Clerk for enterprise-grade authentication. To manage passwords, active sessions, and multi-factor authentication, please use Clerk Account Settings.
+                </p>
+                <Button variant="outline" className="rounded-xl" onClick={() => window.open('https://accounts.clerk.com', '_blank')}>
+                  Open Clerk Account Center
+                </Button>
               </motion.div>
 
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card-premium p-6">
-                <h2 className="font-semibold mb-4">Two-Factor Authentication</h2>
-                <SettingRow label="Authenticator App" description="Use an authenticator app for 2FA">
-                  <div className="flex items-center gap-3">
-                    <Badge className="text-xs bg-emerald-500/10 text-emerald-600 border-emerald-500/20 rounded-full px-2">Enabled</Badge>
-                    <Button variant="outline" size="sm" className="rounded-xl">Manage</Button>
-                  </div>
-                </SettingRow>
-                <Separator />
-                <SettingRow label="SMS Authentication" description="Receive codes via text message">
-                  <Switch />
-                </SettingRow>
-              </motion.div>
-
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="card-premium p-6 border-destructive/20">
-                <h2 className="font-semibold text-destructive mb-4">Danger Zone</h2>
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card-premium p-6 border-destructive/20">
+                <h2 className="font-semibold text-destructive mb-2">Danger Zone</h2>
+                <p className="text-xs text-muted-foreground mb-4">Deleting your account is permanent. All your job applications, saved jobs, resumes, and profile information will be deleted forever.</p>
                 <div className="space-y-3">
-                  <Button variant="outline" className="w-full rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10 gap-2">
-                    <LogOut className="w-4 h-4" />
-                    Sign Out of All Devices
-                  </Button>
-                  <Button variant="outline" className="w-full rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10 gap-2">
+                  <Button 
+                    onClick={handleDeleteAccount} 
+                    variant="outline" 
+                    className="w-full rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10 gap-2 font-medium"
+                  >
                     <Trash2 className="w-4 h-4" />
-                    Delete Account
+                    Delete My Account
                   </Button>
                 </div>
               </motion.div>
@@ -189,25 +480,7 @@ export default function SettingsPage() {
             <TabsContent value="appearance">
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="card-premium p-6">
                 <h2 className="font-semibold mb-5">Appearance</h2>
-                <div>
-                  <Label className="text-sm mb-3 block">Theme</Label>
-                  <div className="grid grid-cols-3 gap-3">
-                    {[
-                      { id: 'light', icon: Sun, label: 'Light' },
-                      { id: 'dark', icon: Moon, label: 'Dark' },
-                      { id: 'system', icon: Monitor, label: 'System' },
-                    ].map(({ id, icon: Icon, label }) => (
-                      <button
-                        key={id}
-                        onClick={() => setTheme(id)}
-                        className={`p-4 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${theme === id ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/30'}`}
-                      >
-                        <Icon className={`w-5 h-5 ${theme === id ? 'text-primary' : 'text-muted-foreground'}`} />
-                        <span className={`text-xs font-medium ${theme === id ? 'text-primary' : 'text-muted-foreground'}`}>{label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <p className="text-sm text-muted-foreground mb-4">Display theme is configured automatically based on your system and the top navigation bar toggles.</p>
                 <Separator className="my-5" />
                 <SettingRow label="Compact Mode" description="Reduce spacing for a denser layout">
                   <Switch />

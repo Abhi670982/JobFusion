@@ -8,12 +8,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Briefcase, User, FileText, Bell, Settings,
   Users, BarChart3, ChevronLeft, ChevronRight,
-  Bookmark, X, Menu
+  Bookmark
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { fetchCurrentUser, fetchSavedJobs, DbUser } from '@/lib/api-helper';
 
 interface NavItem {
   href: string;
@@ -26,7 +27,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/jobs', label: 'Find Jobs', icon: Briefcase },
-  { href: '/jobs/saved', label: 'Saved Jobs', icon: Bookmark, badge: 47 },
+  { href: '/jobs/saved', label: 'Saved Jobs', icon: Bookmark },
   { href: '/profile', label: 'My Profile', icon: User },
   { href: '/resume', label: 'Resume', icon: FileText },
   { href: '/notifications', label: 'Notifications', icon: Bell, badge: 3 },
@@ -78,12 +79,12 @@ function NavLink({ item, collapsed, pathname, onClick }: {
           </motion.span>
         )}
       </AnimatePresence>
-      {item.badge && !collapsed && (
+      {item.badge && item.badge > 0 && !collapsed && (
         <Badge className="ml-auto h-5 px-1.5 text-[10px] gradient-brand text-white border-0">
           {item.badge}
         </Badge>
       )}
-      {item.badge && collapsed && (
+      {item.badge && item.badge > 0 && collapsed && (
         <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary" />
       )}
     </Link>
@@ -103,8 +104,33 @@ function NavLink({ item, collapsed, pathname, onClick }: {
 export default function Sidebar({ isRecruiter = false }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [user, setUser] = useState<DbUser | null>(null);
+  const [savedCount, setSavedCount] = useState<number>(0);
+
+  useEffect(() => {
+    async function loadSidebarData() {
+      try {
+        const currentUser = await fetchCurrentUser();
+        if (currentUser) {
+          setUser(currentUser);
+          const saved = await fetchSavedJobs(currentUser._id);
+          setSavedCount(saved.length);
+        }
+      } catch (err) {
+        console.error("Error fetching sidebar data:", err);
+      }
+    }
+    loadSidebarData();
+  }, [pathname]);
 
   const allItems = [...navItems, ...(isRecruiter ? recruiterItems : [])];
+
+  const getInitials = () => {
+    if (!user) return 'RS';
+    const names = user.fullName.split(' ');
+    if (names.length >= 2) return `${names[0][0]}${names[1][0]}`;
+    return names[0].slice(0, 2).toUpperCase();
+  };
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
@@ -140,14 +166,20 @@ export default function Sidebar({ isRecruiter = false }: SidebarProps) {
 
       {/* Navigation */}
       <div className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-        {allItems.map((item) => (
-          <NavLink
-            key={item.href}
-            item={item}
-            collapsed={collapsed}
-            pathname={pathname}
-          />
-        ))}
+        {allItems.map((item) => {
+          // Inject dynamic saved count badge
+          const displayItem = item.href === '/jobs/saved'
+            ? { ...item, badge: savedCount }
+            : item;
+          return (
+            <NavLink
+              key={displayItem.href}
+              item={displayItem}
+              collapsed={collapsed}
+              pathname={pathname}
+            />
+          );
+        })}
 
         <div className="my-3 border-t border-sidebar-border" />
 
@@ -167,7 +199,7 @@ export default function Sidebar({ isRecruiter = false }: SidebarProps) {
         collapsed && 'justify-center'
       )}>
         <Avatar className="w-8 h-8 flex-shrink-0 ring-2 ring-primary/20">
-          <AvatarFallback className="text-xs gradient-brand text-white">RS</AvatarFallback>
+          <AvatarFallback className="text-xs gradient-brand text-white">{getInitials()}</AvatarFallback>
         </Avatar>
         <AnimatePresence>
           {!collapsed && (
@@ -177,8 +209,8 @@ export default function Sidebar({ isRecruiter = false }: SidebarProps) {
               exit={{ opacity: 0 }}
               className="flex-1 min-w-0"
             >
-              <p className="text-sm font-medium truncate">Rahul Sharma</p>
-              <p className="text-xs text-muted-foreground truncate">Senior Engineer</p>
+              <p className="text-sm font-medium truncate">{user?.fullName || 'Rahul Sharma'}</p>
+              <p className="text-xs text-muted-foreground truncate">{user?.role === 'recruiter' ? 'Recruiter' : 'Senior Engineer'}</p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -212,7 +244,7 @@ export default function Sidebar({ isRecruiter = false }: SidebarProps) {
         ].slice(0, 5).map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href || (item.href !== '/jobs' && pathname.startsWith(item.href + '/'));
-          
+
           const mobileLabelMap: Record<string, string> = {
             'Dashboard': 'Home',
             'Find Jobs': 'Jobs',
@@ -223,14 +255,18 @@ export default function Sidebar({ isRecruiter = false }: SidebarProps) {
           };
           const label = mobileLabelMap[item.label] || item.label;
 
+          const displayItem = item.href === '/jobs/saved'
+            ? { ...item, badge: savedCount }
+            : item;
+
           return (
             <Link
-              key={item.href}
-              href={item.href}
+              key={displayItem.href}
+              href={displayItem.href}
               className={cn(
                 'flex flex-col items-center justify-center gap-0.5 py-1 px-2.5 rounded-xl min-w-[56px] relative transition-all duration-200',
-                isActive 
-                  ? 'text-primary bg-primary/10 font-semibold' 
+                isActive
+                  ? 'text-primary bg-primary/10 font-semibold'
                   : 'text-muted-foreground hover:text-foreground'
               )}
             >
@@ -238,7 +274,7 @@ export default function Sidebar({ isRecruiter = false }: SidebarProps) {
               <span className="text-[10px] font-medium leading-none mt-1">
                 {label}
               </span>
-              {item.badge && (
+              {displayItem.badge && displayItem.badge > 0 && (
                 <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-primary" />
               )}
             </Link>

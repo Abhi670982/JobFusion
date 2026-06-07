@@ -1,3 +1,4 @@
+import {ClerkProvider} from '@clerk/nextjs';
 import type { Metadata, Viewport } from 'next';
 import { Inter, Plus_Jakarta_Sans } from 'next/font/google';
 import './globals.css';
@@ -39,16 +40,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} ${plusJakarta.variable} font-sans antialiased overflow-x-hidden`}>
-        <ThemeProvider
+        <ClerkProvider>
+          <ThemeProvider
           attribute="class"
           defaultTheme="light"
           enableSystem={false}
           disableTransitionOnChange
-        >
+          >
           <TooltipProvider delayDuration={0}>
-            {children}
+          {children}
           </TooltipProvider>
-        </ThemeProvider>
+          </ThemeProvider>
+        </ClerkProvider>
       </body>
     </html>
   );

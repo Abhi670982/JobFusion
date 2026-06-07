@@ -364,7 +364,7 @@ export default function LandingPage() {
               Join 125,000+ professionals using JobFusion. Free forever for job seekers.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Link href="/auth/signup">
+              <Link href="/sign-up">
                 <Button size="lg" className="bg-white text-primary hover:bg-white/90 rounded-xl font-semibold px-8 shadow-xl">
                   Get Started Free
                   <ArrowRight className="w-4 h-4 ml-2" />

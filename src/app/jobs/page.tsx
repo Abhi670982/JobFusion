@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Search, SlidersHorizontal, X, ChevronDown, MapPin,
-  Briefcase, DollarSign, Wifi, LayoutGrid, List, Sparkles
+  Search, SlidersHorizontal, X, MapPin,
+  Briefcase, LayoutGrid, List, Sparkles
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,13 +16,42 @@ import { Skeleton } from '@/components/ui/skeleton';
 import Sidebar from '@/components/sidebar';
 import Navbar from '@/components/navbar';
 import JobCard from '@/components/job-card';
-import { jobs } from '@/lib/data';
 import { cn } from '@/lib/utils';
+import {
+  fetchCurrentUser,
+  fetchJobs,
+  fetchSavedJobs,
+  DbUser,
+  DbJob,
+  DbSavedJob
+} from '@/lib/api-helper';
 
 const EXPERIENCE_LEVELS = ['Entry Level', 'Mid Level', 'Senior', 'Lead / Principal', 'Executive'];
 const JOB_TYPES = ['Full-time', 'Part-time', 'Contract', 'Internship'];
 const LOCATION_TYPES = ['Remote', 'Hybrid', 'On-site'];
 const SALARY_RANGES = ['Under ₹10L', '₹10L – ₹20L', '₹20L – ₹35L', '₹35L – ₹50L', '₹50L+'];
+
+// Map labels to MongoDB enum values
+const EXP_LEVEL_MAP: Record<string, string> = {
+  'Entry Level': 'entry',
+  'Mid Level': 'mid',
+  'Senior': 'senior',
+  'Lead / Principal': 'lead',
+  'Executive': 'executive'
+};
+
+const JOB_TYPE_MAP: Record<string, string> = {
+  'Full-time': 'full-time',
+  'Part-time': 'part-time',
+  'Contract': 'contract',
+  'Internship': 'internship'
+};
+
+const LOC_TYPE_MAP: Record<string, string> = {
+  'Remote': 'remote',
+  'Hybrid': 'hybrid',
+  'On-site': 'onsite'
+};
 
 function FilterSection({ title, items, checked, onChange }: {
   title: string; items: string[]; checked: string[]; onChange: (v: string) => void;
@@ -47,13 +76,61 @@ function FilterSection({ title, items, checked, onChange }: {
   );
 }
 
+function JobCardSkeleton() {
+  return (
+    <div className="card-premium p-5 flex flex-col justify-between h-56">
+      <div className="flex gap-3">
+        <Skeleton className="w-11 h-11 rounded-xl animate-pulse" />
+        <div className="space-y-2 flex-1">
+          <Skeleton className="w-2/3 h-5 animate-pulse" />
+          <Skeleton className="w-1/3 h-4 animate-pulse" />
+        </div>
+      </div>
+      <div className="flex gap-2 my-3">
+        <Skeleton className="w-16 h-5 rounded-lg animate-pulse" />
+        <Skeleton className="w-16 h-5 rounded-lg animate-pulse" />
+      </div>
+      <div className="flex justify-between items-center mt-3 pt-3 border-t border-border">
+        <Skeleton className="w-24 h-4 animate-pulse" />
+        <Skeleton className="w-16 h-7 rounded-lg animate-pulse" />
+      </div>
+    </div>
+  );
+}
+
 export default function JobsPage() {
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<DbUser | null>(null);
+  const [allJobs, setAllJobs] = useState<DbJob[]>([]);
+  const [savedJobIds, setSavedJobIds] = useState<Set<string>>(new Set());
+
   const [query, setQuery] = useState('');
   const [location, setLocation] = useState('');
   const [mobileFilters, setMobileFilters] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [filters, setFilters] = useState({ experience: [] as string[], type: [] as string[], location: [] as string[], salary: [] as string[] });
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const currentUser = await fetchCurrentUser();
+        const jobs = await fetchJobs();
+        setAllJobs(jobs);
+
+        if (currentUser) {
+          setUser(currentUser);
+          const saved = await fetchSavedJobs(currentUser._id);
+          setSavedJobIds(new Set(saved.map((s: DbSavedJob) => s.jobId?._id).filter(Boolean)));
+        }
+      } catch (err) {
+        console.error("Error loading jobs data:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
 
   const toggleFilter = (category: keyof typeof filters, value: string) => {
     setFilters(prev => {
@@ -70,10 +147,70 @@ export default function JobsPage() {
     setFilters({ experience: [], type: [], location: [], salary: [] });
     setActiveFilters([]);
     setQuery('');
+    setLocation('');
   };
 
-  const filteredJobs = jobs.filter(job => {
-    if (query && !job.title.toLowerCase().includes(query.toLowerCase()) && !job.company.toLowerCase().includes(query.toLowerCase())) return false;
+  const handleSavedToggle = (jobId: string, nowSaved: boolean) => {
+    setSavedJobIds(prev => {
+      const next = new Set(prev);
+      if (nowSaved) {
+        next.add(jobId);
+      } else {
+        next.delete(jobId);
+      }
+      return next;
+    });
+  };
+
+  // Perform filtering client-side
+  const filteredJobs = allJobs.filter(job => {
+    // Search query matches title or company or skills
+    if (query) {
+      const q = query.toLowerCase();
+      const matchTitle = job.title.toLowerCase().includes(q);
+      const matchCompany = job.company.toLowerCase().includes(q);
+      const matchSkills = job.skills.some(s => s.toLowerCase().includes(q));
+      if (!matchTitle && !matchCompany && !matchSkills) return false;
+    }
+
+    // Location matches location text
+    if (location) {
+      const loc = location.toLowerCase();
+      if (!job.location.toLowerCase().includes(loc)) return false;
+    }
+
+    // Filter by Experience Level
+    if (filters.experience.length > 0) {
+      const mapped = filters.experience.map(f => EXP_LEVEL_MAP[f]);
+      if (!mapped.includes(job.experienceLevel)) return false;
+    }
+
+    // Filter by Job Type
+    if (filters.type.length > 0) {
+      const mapped = filters.type.map(f => JOB_TYPE_MAP[f]);
+      if (!mapped.includes(job.type)) return false;
+    }
+
+    // Filter by Work Type (Location Type)
+    if (filters.location.length > 0) {
+      const mapped = filters.location.map(f => LOC_TYPE_MAP[f]);
+      if (!mapped.includes(job.locationType)) return false;
+    }
+
+    // Filter by Salary Range
+    if (filters.salary.length > 0) {
+      const matchedSalary = filters.salary.some(f => {
+        const min = job.salaryMin || 0;
+        if (f === 'Under ₹10L') return min < 1000000;
+        if (f === '₹10L – ₹20L') return min >= 1000000 && min < 2000000;
+        if (f === '₹20L – ₹35L') return min >= 2000000 && min < 3500000;
+        if (f === '₹35L – ₹50L') return min >= 3500000 && min < 5000000;
+        if (f === '₹50L+') return min >= 5000000;
+        return false;
+      });
+      if (!matchedSalary) return false;
+    }
+
     return true;
   });
 
@@ -98,7 +235,9 @@ export default function JobsPage() {
           {/* Search Header */}
           <div className="mb-4 lg:mb-6">
             <h1 className="text-xl sm:text-2xl font-bold mb-1" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Find Your Next Role</h1>
-            <p className="text-muted-foreground text-sm">Showing {filteredJobs.length} AI-matched opportunities</p>
+            <p className="text-muted-foreground text-sm">
+              {loading ? 'Searching opportunities...' : `Showing ${filteredJobs.length} AI-matched opportunities`}
+            </p>
           </div>
 
           {/* Search Bar */}
@@ -162,7 +301,7 @@ export default function JobsPage() {
               {/* Toolbar */}
               <div className="flex items-center justify-between mb-4">
                 <p className="text-sm text-muted-foreground">
-                  <strong className="text-foreground">{filteredJobs.length}</strong> jobs found
+                  <strong className="text-foreground">{loading ? 0 : filteredJobs.length}</strong> jobs found
                 </p>
                 <div className="flex items-center gap-2">
                   <Button variant="ghost" size="icon" className={cn('rounded-xl', viewMode === 'grid' && 'bg-accent')} onClick={() => setViewMode('grid')}>
@@ -180,21 +319,30 @@ export default function JobsPage() {
               </div>
 
               <div className={cn('grid gap-4', viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1')}>
-                {filteredJobs.map((job, i) => (
-                  <JobCard key={job.id} job={job} index={i} />
-                ))}
-              </div>
-
-              {filteredJobs.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-20 text-center">
-                  <div className="w-20 h-20 rounded-3xl bg-muted flex items-center justify-center mb-4">
-                    <Search className="w-8 h-8 text-muted-foreground" />
+                {loading ? (
+                  Array.from({ length: 4 }).map((_, i) => <JobCardSkeleton key={i} />)
+                ) : filteredJobs.length === 0 ? (
+                  <div className="col-span-full flex flex-col items-center justify-center py-20 text-center">
+                    <div className="w-20 h-20 rounded-3xl bg-muted flex items-center justify-center mb-4">
+                      <Search className="w-8 h-8 text-muted-foreground" />
+                    </div>
+                    <h3 className="font-semibold mb-2">No jobs found</h3>
+                    <p className="text-muted-foreground text-sm mb-4">Try adjusting your search or clearing filters</p>
+                    <Button onClick={clearAll} variant="outline" className="rounded-xl">Clear Filters</Button>
                   </div>
-                  <h3 className="font-semibold mb-2">No jobs found</h3>
-                  <p className="text-muted-foreground text-sm mb-4">Try adjusting your search or clearing filters</p>
-                  <Button onClick={clearAll} variant="outline" className="rounded-xl">Clear Filters</Button>
-                </div>
-              )}
+                ) : (
+                  filteredJobs.map((job, i) => (
+                    <JobCard
+                      key={job._id}
+                      job={job}
+                      index={i}
+                      userId={user?._id}
+                      initialIsSaved={savedJobIds.has(job._id)}
+                      onSavedToggle={handleSavedToggle}
+                    />
+                  ))
+                )}
+              </div>
             </div>
           </div>
         </main>

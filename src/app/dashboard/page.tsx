@@ -1,25 +1,36 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import {
   TrendingUp, Briefcase, Bookmark, Eye, MessageSquare,
-  Sparkles, ArrowRight, Clock, CheckCircle2, XCircle,
-  Calendar, Bell, Star, ChevronRight, Zap, BarChart3
+  Sparkles, ArrowRight, CheckCircle2, XCircle,
+  Calendar, Star, ChevronRight, Zap
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import Sidebar from '@/components/sidebar';
 import Navbar from '@/components/navbar';
 import {
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  BarChart, Bar, Cell
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer
 } from 'recharts';
-import { dashboardStats, activities, notifications } from '@/lib/data';
+import { notifications } from '@/lib/data';
 import { cn } from '@/lib/utils';
+import { useRouter } from 'next/navigation';
+import { calculateCompletion } from '@/lib/profile-completion';
+import {
+  fetchCurrentUser,
+  fetchProfile,
+  fetchApplications,
+  fetchSavedJobs,
+  DbUser,
+  DbProfile,
+  DbApplication,
+  DbSavedJob
+} from '@/lib/api-helper';
 
 const activityChartData = [
   { day: 'Mon', applications: 3, views: 12 },
@@ -48,7 +59,7 @@ function StatCard({ icon: Icon, label, value, change, color }: {
       className="card-premium p-5 group"
     >
       <div className="flex items-start justify-between mb-4">
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center`} style={{ backgroundColor: `${color}15` }}>
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${color}15` }}>
           <Icon className="w-5 h-5" style={{ color }} />
         </div>
         {change && (
@@ -64,6 +75,34 @@ function StatCard({ icon: Icon, label, value, change, color }: {
   );
 }
 
+function StatCardSkeleton() {
+  return (
+    <div className="card-premium p-5 flex flex-col justify-between h-32">
+      <div className="flex justify-between items-center">
+        <Skeleton className="w-10 h-10 rounded-xl animate-pulse" />
+        <Skeleton className="w-12 h-4 animate-pulse" />
+      </div>
+      <div className="space-y-2">
+        <Skeleton className="w-16 h-8 animate-pulse" />
+        <Skeleton className="w-24 h-4 animate-pulse" />
+      </div>
+    </div>
+  );
+}
+
+function ActivitySkeleton() {
+  return (
+    <div className="flex items-center gap-3">
+      <Skeleton className="w-8 h-8 rounded-xl flex-shrink-0 animate-pulse" />
+      <div className="flex-1 space-y-2">
+        <Skeleton className="w-2/3 h-4 animate-pulse" />
+        <Skeleton className="w-1/3 h-3 animate-pulse" />
+      </div>
+      <Skeleton className="w-16 h-4 animate-pulse" />
+    </div>
+  );
+}
+
 const activityConfig = {
   applied: { icon: Briefcase, color: '#6366f1', label: 'Applied' },
   interview: { icon: Calendar, color: '#10b981', label: 'Interview' },
@@ -73,7 +112,89 @@ const activityConfig = {
   rejected: { icon: XCircle, color: '#ef4444', label: 'Rejected' },
 };
 
+function formatTime(dateStr?: string) {
+  if (!dateStr) return 'Recently';
+  const d = new Date(dateStr);
+  const diffMs = Date.now() - d.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays === 1) return 'Yesterday';
+  return `${diffDays}d ago`;
+}
+
 export default function DashboardPage() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<DbUser | null>(null);
+  const [profile, setProfile] = useState<DbProfile | null>(null);
+  const [applications, setApplications] = useState<DbApplication[]>([]);
+  const [savedJobs, setSavedJobs] = useState<DbSavedJob[]>([]);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const currentUser = await fetchCurrentUser();
+        if (currentUser) {
+          setUser(currentUser);
+          const [prof, apps, saved] = await Promise.all([
+            fetchProfile(currentUser._id),
+            fetchApplications(currentUser._id),
+            fetchSavedJobs(currentUser._id)
+          ]);
+          
+          if (prof && prof.isOnboarded === false) {
+            router.push('/onboarding');
+            return;
+          }
+
+          setProfile(prof);
+          setApplications(apps);
+          setSavedJobs(saved);
+        } else {
+          router.push('/sign-in');
+        }
+      } catch (err) {
+        console.error("Error loading dashboard data:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, [router]);
+
+  // Compute stats
+  const appliedCount = applications.length;
+  const interviewCount = applications.filter(a => a.status === 'Interview').length;
+  const offerCount = applications.filter(a => a.status === 'Offer').length;
+  const savedCount = savedJobs.length;
+
+  const matchScore = profile?.skills && profile.skills.length > 0 ? 94 : 80;
+
+  // Build merged activity list
+  const mergedActivities = [
+    ...applications.map(app => ({
+      id: app._id,
+      type: app.status === 'Interview' ? 'interview' as const : app.status === 'Offer' ? 'offer' as const : app.status === 'Rejected' ? 'rejected' as const : 'applied' as const,
+      jobTitle: app.jobId?.title || 'Unknown Position',
+      company: app.jobId?.company || 'Unknown Company',
+      time: formatTime(app.appliedAt),
+      timeMs: new Date(app.appliedAt).getTime(),
+      status: app.status
+    })),
+    ...savedJobs.map(saved => ({
+      id: saved._id,
+      type: 'saved' as const,
+      jobTitle: saved.jobId?.title || 'Unknown Position',
+      company: saved.jobId?.company || 'Unknown Company',
+      time: formatTime(saved.savedAt),
+      timeMs: new Date(saved.savedAt).getTime(),
+      status: 'Saved'
+    }))
+  ].sort((a, b) => b.timeMs - a.timeMs);
+
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
@@ -87,11 +208,11 @@ export default function DashboardPage() {
             className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
           >
             <div>
-              <h1 className="text-2xl font-bold" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-                Good morning, Rahul!
+              <h1 className="text-2xl font-bold flex items-center gap-1.5" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                Welcome back, {loading ? <Skeleton className="w-24 h-6 inline-block animate-pulse" /> : (user?.fullName.split(' ')[0] || 'User')} 👋
               </h1>
               <p className="text-muted-foreground text-sm mt-1">
-                You have <strong className="text-foreground">12 new job matches</strong> and <strong className="text-foreground">3 unread messages</strong> today.
+                You have <strong className="text-foreground">{loading ? '...' : (profile?.skills?.length ? '12 new job matches' : 'no job matches yet')}</strong> and <strong className="text-foreground">3 unread messages</strong> today.
               </p>
             </div>
             <div className="flex gap-2">
@@ -109,7 +230,7 @@ export default function DashboardPage() {
             </div>
           </motion.div>
 
-          {/* AI Match Score Banner */}
+          {/* Profile Completion & Match Score Banner */}
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -120,36 +241,94 @@ export default function DashboardPage() {
             <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur flex flex-col items-center justify-center">
-                  <span className="text-xl font-extrabold">{dashboardStats.matchScore}</span>
-                  <span className="text-[10px] text-white/70">/ 100</span>
+                  <span className="text-xl font-extrabold">{loading ? '...' : calculateCompletion(profile, user)}</span>
+                  <span className="text-[10px] text-white/70">% Done</span>
                 </div>
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <Sparkles className="w-4 h-4 text-white/80" />
-                    <span className="font-semibold">AI Match Score</span>
-                    <Badge className="border-white/30 bg-white/20 text-white text-[10px]">87th percentile</Badge>
+                    <span className="font-semibold">Profile Completion Status</span>
+                    {calculateCompletion(profile, user) === 100 ? (
+                      <Badge className="border-white/30 bg-emerald-500/30 text-white text-[10px]">Complete</Badge>
+                    ) : (
+                      <Badge className="border-white/30 bg-white/20 text-white text-[10px]">In Progress</Badge>
+                    )}
                   </div>
-                  <p className="text-white/70 text-sm">Complete your profile to boost your match score by 15%</p>
+                  <p className="text-white/70 text-sm">
+                    {calculateCompletion(profile, user) === 100 
+                      ? 'Congratulations! Your profile is 100% complete. You are ready for top matches!' 
+                      : 'Complete your profile details to stand out to recruiters and get matched with relevant jobs.'}
+                  </p>
                   <div className="mt-2 w-full max-w-[16rem] bg-white/20 rounded-full h-1.5">
-                    <div className="h-1.5 rounded-full bg-white" style={{ width: `${dashboardStats.matchScore}%` }} />
+                    <div className="h-1.5 rounded-full bg-white transition-all duration-500" style={{ width: `${loading ? 0 : calculateCompletion(profile, user)}%` }} />
                   </div>
                 </div>
               </div>
               <Link href="/profile">
                 <Button size="sm" className="bg-white text-primary hover:bg-white/90 rounded-xl font-semibold">
-                  Boost Score
+                  Complete Profile
                   <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
                 </Button>
               </Link>
             </div>
           </motion.div>
 
+          {/* Empty State Banner for New/Incomplete Profiles */}
+          {!loading && !profile?.resumeUrl && (!profile?.skills || profile.skills.length === 0) && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="card-premium p-6 border-dashed border-2 border-primary/30 flex flex-col md:flex-row items-center justify-between gap-6"
+            >
+              <div className="space-y-2 text-center md:text-left">
+                <div className="flex items-center gap-2 justify-center md:justify-start">
+                  <Sparkles className="w-5 h-5 text-primary animate-pulse" />
+                  <h3 className="font-bold text-lg">Complete your profile to get better job recommendations</h3>
+                </div>
+                <p className="text-sm text-muted-foreground max-w-xl">
+                  JobFusion uses AI to match you with opportunities. Without a resume or skills, we cannot match you with your ideal roles.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2.5 justify-center">
+                <Link href="/resume">
+                  <Button size="sm" className="rounded-xl gradient-brand text-white border-0 shadow-md">
+                    Upload Resume
+                  </Button>
+                </Link>
+                <Link href="/profile">
+                  <Button size="sm" variant="secondary" className="rounded-xl">
+                    Add Skills
+                  </Button>
+                </Link>
+                <Link href="/profile">
+                  <Button size="sm" variant="outline" className="rounded-xl">
+                    Complete Profile
+                  </Button>
+                </Link>
+              </div>
+            </motion.div>
+          )}
+
           {/* Stats Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            <StatCard icon={Briefcase} label="Applications Sent" value={dashboardStats.applied} change="+4 this week" color="#6366f1" />
-            <StatCard icon={Calendar} label="Interviews" value={dashboardStats.interviews} change="+2 scheduled" color="#10b981" />
-            <StatCard icon={Star} label="Offers Received" value={dashboardStats.offers} color="#f59e0b" />
-            <StatCard icon={Bookmark} label="Saved Jobs" value={dashboardStats.savedJobs} color="#8b5cf6" />
+            {loading ? (
+              Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)
+            ) : (
+              <>
+                <Link href="/applications" className="block cursor-pointer">
+                  <StatCard icon={Briefcase} label="Applications Sent" value={appliedCount} change="+2 this week" color="#6366f1" />
+                </Link>
+                <Link href="/applications" className="block cursor-pointer">
+                  <StatCard icon={Calendar} label="Interviews" value={interviewCount} change="scheduled" color="#10b981" />
+                </Link>
+                <Link href="/applications" className="block cursor-pointer">
+                  <StatCard icon={Star} label="Offers Received" value={offerCount} color="#f59e0b" />
+                </Link>
+                <Link href="/jobs/saved" className="block cursor-pointer">
+                  <StatCard icon={Bookmark} label="Saved Jobs" value={savedCount} color="#8b5cf6" />
+                </Link>
+              </>
+            )}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
@@ -183,32 +362,73 @@ export default function DashboardPage() {
               </ResponsiveContainer>
             </div>
 
-            {/* Match Distribution */}
-            <div className="card-premium p-5">
-              <h3 className="font-semibold mb-1">Match Distribution</h3>
-              <p className="text-xs text-muted-foreground mb-5">Jobs by match score range</p>
-              <div className="space-y-4">
-                {matchDistData.map((d) => (
-                  <div key={d.range}>
-                    <div className="flex items-center justify-between text-xs mb-1.5">
-                      <span className="font-medium">{d.range}</span>
-                      <span className="text-muted-foreground">{d.count} jobs</span>
+            {/* Resume & Skills Insight */}
+            <div className="card-premium p-5 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-sm">Resume & Skills AI</h3>
+                  <Link href="/resume" className="text-xs text-primary hover:underline flex items-center gap-1">
+                    Manage <ChevronRight className="w-3 h-3" />
+                  </Link>
+                </div>
+                
+                {loading ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-20 w-full" />
+                  </div>
+                ) : !profile?.resumeUrl ? (
+                  <div className="text-center py-6 space-y-3">
+                    <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto text-amber-500">
+                      <Zap className="w-5 h-5" />
                     </div>
-                    <div className="h-2 rounded-full bg-muted overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${(d.count / 80) * 100}%` }}
-                        transition={{ duration: 0.8, delay: 0.3 }}
-                        className="h-full rounded-full"
-                        style={{ backgroundColor: d.color }}
-                      />
+                    <div>
+                      <p className="text-xs font-semibold">No Resume Uploaded</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">Upload a resume to automatically extract skills and boost your match score.</p>
+                    </div>
+                    <Link href="/resume" className="inline-block">
+                      <Button size="sm" className="rounded-xl text-[11px] h-8 gradient-brand border-0 text-white">Upload Resume</Button>
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="space-y-3.5">
+                    {/* Status row */}
+                    <div className="flex items-center justify-between text-xs p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 animate-pulse" />
+                        <span className="font-medium">Resume Active</span>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground">Updated {formatTime(profile.resumeUpdatedAt?.toString())}</span>
+                    </div>
+
+                    {/* Total skills */}
+                    <div className="flex justify-between items-center text-xs py-1">
+                      <span className="text-muted-foreground">Total Skills Extracted</span>
+                      <Badge variant="secondary" className="rounded-lg font-semibold">{profile.skills?.length || 0} Skills</Badge>
+                    </div>
+
+                    {/* Top skills */}
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Top Profile Skills</p>
+                      {(!profile.skills || profile.skills.length === 0) ? (
+                        <p className="text-xs text-muted-foreground">No skills found.</p>
+                      ) : (
+                        profile.skills.slice(0, 4).map((skill) => (
+                          <div key={skill.name}>
+                            <div className="flex justify-between text-[11px] mb-1">
+                              <span className="font-medium">{skill.name}</span>
+                              <span className="text-muted-foreground">{skill.level}%</span>
+                            </div>
+                            <div className="h-1 bg-muted rounded-full overflow-hidden">
+                              <div className="h-full rounded-full gradient-brand" style={{ width: `${skill.level}%` }} />
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
-                ))}
-              </div>
-              <div className="mt-5 pt-4 border-t border-border flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Total matches</span>
-                <span className="font-bold">80 jobs</span>
+                )}
               </div>
             </div>
           </div>
@@ -218,32 +438,40 @@ export default function DashboardPage() {
             <div className="card-premium p-5">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold">Recent Activity</h3>
-                <Link href="/jobs" className="text-xs text-primary hover:underline flex items-center gap-1">
+                <Link href="/applications" className="text-xs text-primary hover:underline flex items-center gap-1">
                   View all <ChevronRight className="w-3 h-3" />
                 </Link>
               </div>
               <div className="space-y-3">
-                {activities.slice(0, 5).map((act) => {
-                  const config = activityConfig[act.type];
-                  const Icon = config.icon;
-                  return (
-                    <div key={act.id} className="flex items-center gap-3 group">
-                      <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${config.color}15` }}>
-                        <Icon className="w-4 h-4" style={{ color: config.color }} />
+                {loading ? (
+                  Array.from({ length: 3 }).map((_, i) => <ActivitySkeleton key={i} />)
+                ) : mergedActivities.length === 0 ? (
+                  <div className="text-center py-6 text-xs text-muted-foreground">
+                    No recent activity found.
+                  </div>
+                ) : (
+                  mergedActivities.slice(0, 5).map((act) => {
+                    const config = activityConfig[act.type];
+                    const Icon = config.icon;
+                    return (
+                      <div key={act.id} className="flex items-center gap-3 group">
+                        <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${config.color}15` }}>
+                          <Icon className="w-4 h-4" style={{ color: config.color }} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{act.jobTitle}</p>
+                          <p className="text-xs text-muted-foreground">{act.company}</p>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          {act.status && (
+                            <Badge variant="secondary" className="text-[10px] rounded-lg mb-0.5">{act.status}</Badge>
+                          )}
+                          <p className="text-[11px] text-muted-foreground">{act.time}</p>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{act.jobTitle}</p>
-                        <p className="text-xs text-muted-foreground">{act.company}</p>
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                        {act.status && (
-                          <Badge variant="secondary" className="text-[10px] rounded-lg mb-0.5">{act.status}</Badge>
-                        )}
-                        <p className="text-[11px] text-muted-foreground">{act.time}</p>
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </div>
 

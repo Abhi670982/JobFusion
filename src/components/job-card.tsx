@@ -1,21 +1,24 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import {
   MapPin, Clock, Bookmark, BookmarkCheck, Zap, Building2,
-  ChevronRight, Wifi, Home, Users
+  Wifi, Home, Users
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import type { Job } from '@/lib/data';
+import { DbJob, saveJob, unsaveJob } from '@/lib/api-helper';
 
 interface JobCardProps {
-  job: Job;
+  job: DbJob;
   index?: number;
   variant?: 'default' | 'compact';
+  userId?: string;
+  initialIsSaved?: boolean;
+  onSavedToggle?: (jobId: string, nowSaved: boolean) => void;
 }
 
 const locationTypeConfig = {
@@ -31,10 +34,56 @@ const matchColor = (score: number) => {
   return 'text-muted-foreground';
 };
 
-export default function JobCard({ job, index = 0, variant = 'default' }: JobCardProps) {
-  const [saved, setSaved] = useState(job.saved);
-  const locType = locationTypeConfig[job.locationType];
+export default function JobCard({
+  job,
+  index = 0,
+  variant = 'default',
+  userId,
+  initialIsSaved = false,
+  onSavedToggle
+}: JobCardProps) {
+  const [saved, setSaved] = useState(initialIsSaved);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setSaved(initialIsSaved);
+  }, [initialIsSaved]);
+
+  const locType = locationTypeConfig[job.locationType] || locationTypeConfig.remote;
   const LocIcon = locType.icon;
+
+  const handleSaveToggle = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!userId || loading) return;
+
+    setLoading(true);
+    const nextSaved = !saved;
+    setSaved(nextSaved); // Optimistic UI update
+
+    try {
+      if (nextSaved) {
+        const result = await saveJob(userId, job._id);
+        if (!result) {
+          setSaved(saved); // Revert on failure
+        } else if (onSavedToggle) {
+          onSavedToggle(job._id, true);
+        }
+      } else {
+        const success = await unsaveJob(userId, job._id);
+        if (!success) {
+          setSaved(saved); // Revert on failure
+        } else if (onSavedToggle) {
+          onSavedToggle(job._id, false);
+        }
+      }
+    } catch (err) {
+      console.error("Error toggling save state:", err);
+      setSaved(saved); // Revert on error
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <motion.div
@@ -50,9 +99,9 @@ export default function JobCard({ job, index = 0, variant = 'default' }: JobCard
             {/* Company Logo */}
             <div
               className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-md flex-shrink-0"
-              style={{ backgroundColor: job.companyColor }}
+              style={{ backgroundColor: job.companyColor || '#6366f1' }}
             >
-              {job.companyLogo}
+              {job.companyLogo || job.company.charAt(0)}
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -73,20 +122,24 @@ export default function JobCard({ job, index = 0, variant = 'default' }: JobCard
           </div>
 
           {/* Save button */}
-          <button
-            onClick={(e) => { e.preventDefault(); setSaved(!saved); }}
-            className={cn(
-              'rounded-xl p-2 transition-all duration-200 flex-shrink-0',
-              saved
-                ? 'text-primary bg-primary/10 hover:bg-primary/20'
-                : 'text-muted-foreground hover:text-primary hover:bg-primary/10'
-            )}
-          >
-            {saved
-              ? <BookmarkCheck className="w-4 h-4" />
-              : <Bookmark className="w-4 h-4" />
-            }
-          </button>
+          {userId && (
+            <button
+              onClick={handleSaveToggle}
+              disabled={loading}
+              className={cn(
+                'rounded-xl p-2 transition-all duration-200 flex-shrink-0',
+                saved
+                  ? 'text-primary bg-primary/10 hover:bg-primary/20'
+                  : 'text-muted-foreground hover:text-primary hover:bg-primary/10',
+                loading && 'opacity-50 cursor-not-allowed'
+              )}
+            >
+              {saved
+                ? <BookmarkCheck className="w-4 h-4" />
+                : <Bookmark className="w-4 h-4" />
+              }
+            </button>
+          )}
         </div>
 
         {/* Tags */}
@@ -147,7 +200,7 @@ export default function JobCard({ job, index = 0, variant = 'default' }: JobCard
             </div>
           </div>
 
-          <Link href={`/jobs/${job.id}`}>
+          <Link href={`/jobs/${job._id}`}>
             <Button
               size="sm"
               className="h-7 px-3 text-xs rounded-lg gradient-brand text-white border-0 hover:opacity-90"
