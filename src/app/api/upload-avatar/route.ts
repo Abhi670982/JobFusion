@@ -4,6 +4,9 @@ import cloudinary from "@/lib/cloudinary";
 import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import User from "@/models/User";
 
+export const dynamic = "force-dynamic";
+
+
 export async function POST(req: NextRequest) {
   try {
     await connectDB();

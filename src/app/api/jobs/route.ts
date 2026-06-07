@@ -3,6 +3,9 @@ import mongoose from "mongoose";
 import { connectDB } from "@/lib/mongodb";
 import Job from "@/models/Job";
 
+export const dynamic = "force-dynamic";
+
+
 const isValidObjectId = (id: string | null | undefined): boolean => {
   if (!id) return false;
   return mongoose.Types.ObjectId.isValid(id);

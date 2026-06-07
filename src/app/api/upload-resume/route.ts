@@ -7,6 +7,9 @@ import { parsePdf, parseDocx } from "@/lib/parser";
 import { extractSkills } from "@/lib/skills-extractor";
 import { getOrCreateMongoUser } from "@/lib/auth-sync";
 
+export const dynamic = "force-dynamic";
+
+
 export async function POST(req: NextRequest) {
   try {
     await connectDB();

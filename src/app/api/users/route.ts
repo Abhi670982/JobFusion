@@ -3,6 +3,9 @@ import { connectDB } from "@/lib/mongodb";
 import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import User from "@/models/User";
 
+export const dynamic = "force-dynamic";
+
+
 export async function GET() {
   try {
     await connectDB();

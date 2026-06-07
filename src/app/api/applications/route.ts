@@ -5,6 +5,8 @@ import Application from "@/models/Application";
 import User from "@/models/User";
 import Job from "@/models/Job";
 
+export const dynamic = "force-dynamic";
+
 const isValidObjectId = (id: string | null | undefined): boolean => {
   if (!id) return false;
   return mongoose.Types.ObjectId.isValid(id);

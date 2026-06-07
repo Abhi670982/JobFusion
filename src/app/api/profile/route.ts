@@ -4,6 +4,9 @@ import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import Profile from "@/models/Profile";
 import User from "@/models/User";
 
+export const dynamic = "force-dynamic";
+
+
 // 1. POST - Create a Profile (Normally handled by auto-sync, but kept secure)
 export async function POST(req: NextRequest) {
   try {
