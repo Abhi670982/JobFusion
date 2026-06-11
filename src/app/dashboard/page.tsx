@@ -360,13 +360,11 @@ export default function DashboardPage() {
                   <Area type="monotone" dataKey="applications" stroke="#6366f1" fill="url(#colorApps)" strokeWidth={2} name="Applications" />
                 </AreaChart>
               </ResponsiveContainer>
-            </div>
-
-            {/* Resume & Skills Insight */}
+            </div>            {/* Resume Analytics Insight */}
             <div className="card-premium p-5 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-sm">Resume & Skills AI</h3>
+                  <h3 className="font-semibold text-sm">Resume Analytics</h3>
                   <Link href="/resume" className="text-xs text-primary hover:underline flex items-center gap-1">
                     Manage <ChevronRight className="w-3 h-3" />
                   </Link>
@@ -385,47 +383,82 @@ export default function DashboardPage() {
                     </div>
                     <div>
                       <p className="text-xs font-semibold">No Resume Uploaded</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">Upload a resume to automatically extract skills and boost your match score.</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">Upload a resume to automatically extract skills and analyze your ATS performance.</p>
                     </div>
                     <Link href="/resume" className="inline-block">
                       <Button size="sm" className="rounded-xl text-[11px] h-8 gradient-brand border-0 text-white">Upload Resume</Button>
                     </Link>
                   </div>
                 ) : (
-                  <div className="space-y-3.5">
-                    {/* Status row */}
-                    <div className="flex items-center justify-between text-xs p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 animate-pulse" />
-                        <span className="font-medium">Resume Active</span>
+                  <div className="space-y-4">
+                    {/* Dynamic ATS Score & Strength Row */}
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-card border border-border shadow-sm">
+                      <div className="text-left">
+                        <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">ATS Score</span>
+                        <div className="text-xl font-extrabold text-foreground">{profile.atsScore || 0}/100</div>
                       </div>
-                      <span className="text-[10px] text-muted-foreground">Updated {formatTime(profile.resumeUpdatedAt?.toString())}</span>
+                      <div className="text-right">
+                        <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Strength</span>
+                        <div>
+                          <Badge className={cn(
+                            "text-[10px] border-0 rounded-full font-bold",
+                            (profile.atsScore || 0) >= 80 
+                              ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" 
+                              : (profile.atsScore || 0) >= 60 
+                                ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" 
+                                : "bg-red-500/15 text-red-600 dark:text-red-400"
+                          )}>
+                            {(profile.atsScore || 0) >= 80 ? "Excellent" : (profile.atsScore || 0) >= 60 ? "Good" : "Needs Work"}
+                          </Badge>
+                        </div>
+                      </div>
                     </div>
 
-                    {/* Total skills */}
-                    <div className="flex justify-between items-center text-xs py-1">
-                      <span className="text-muted-foreground">Total Skills Extracted</span>
+                    {/* Metadata details */}
+                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                      <div className="p-2.5 rounded-xl bg-muted/40">
+                        <div className="text-muted-foreground">Uploaded Date</div>
+                        <div className="font-semibold mt-0.5 text-foreground truncate">
+                          {profile.resumeUpdatedAt ? new Date(profile.resumeUpdatedAt).toLocaleDateString('en-IN') : 'N/A'}
+                        </div>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-muted/40">
+                        <div className="text-muted-foreground">Last Analyzed</div>
+                        <div className="font-semibold mt-0.5 text-foreground truncate">
+                          {profile.lastAnalyzedAt ? new Date(profile.lastAnalyzedAt).toLocaleDateString('en-IN') : 'N/A'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Skill Count */}
+                    <div className="flex justify-between items-center text-xs py-0.5">
+                      <span className="text-muted-foreground">Skills Extracted</span>
                       <Badge variant="secondary" className="rounded-lg font-semibold">{profile.skills?.length || 0} Skills</Badge>
                     </div>
 
-                    {/* Top skills */}
-                    <div className="space-y-2">
-                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Top Profile Skills</p>
-                      {(!profile.skills || profile.skills.length === 0) ? (
-                        <p className="text-xs text-muted-foreground">No skills found.</p>
-                      ) : (
-                        profile.skills.slice(0, 4).map((skill) => (
-                          <div key={skill.name}>
-                            <div className="flex justify-between text-[11px] mb-1">
-                              <span className="font-medium">{skill.name}</span>
-                              <span className="text-muted-foreground">{skill.level}%</span>
-                            </div>
-                            <div className="h-1 bg-muted rounded-full overflow-hidden">
-                              <div className="h-full rounded-full gradient-brand" style={{ width: `${skill.level}%` }} />
-                            </div>
-                          </div>
-                        ))
-                      )}
+                    {/* Mini ATS History Chart */}
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">ATS Score History</p>
+                      <div className="h-16 w-full bg-muted/20 border border-border/50 rounded-xl overflow-hidden pt-2 px-1">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart 
+                            data={
+                              profile.atsHistory && profile.atsHistory.length > 0
+                                ? profile.atsHistory.map((h, i) => ({ name: `Run ${i+1}`, score: h.score }))
+                                : [{ name: 'Current', score: profile.atsScore || 0 }]
+                            }
+                          >
+                            <defs>
+                              <linearGradient id="colorHistory" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.25} />
+                                <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                              </linearGradient>
+                            </defs>
+                            <Tooltip contentStyle={{ borderRadius: '8px', fontSize: 10, padding: '4px 8px' }} />
+                            <Area type="monotone" dataKey="score" stroke="#6366f1" fill="url(#colorHistory)" strokeWidth={2} name="Score" />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
                     </div>
                   </div>
                 )}

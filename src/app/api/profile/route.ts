@@ -175,22 +175,23 @@ export async function PUT(req: NextRequest) {
     const { _id, userId: uId, fullName, email, profileImage, role, ...profileUpdateData } = body;
     console.log(`[API] PUT /api/profile - Updating Profile model for user ${mongoUser._id}`);
 
-    const updatedProfile = await Profile.findOneAndUpdate(
-      { userId: mongoUser._id },
-      profileUpdateData,
-      {
-        new: true,
-        runValidators: true,
-      }
-    ).populate("userId");
-
-    if (!updatedProfile) {
+    let profileDoc = await Profile.findOne({ userId: mongoUser._id });
+    if (!profileDoc) {
       console.error(`[API] PUT /api/profile - Profile not found to update for user ${mongoUser._id}`);
       return NextResponse.json(
         { success: false, error: "Profile not found to update" },
         { status: 404 }
       );
     }
+
+    // Apply updates
+    Object.assign(profileDoc, profileUpdateData);
+    
+    // Save to trigger pre-save hook
+    await profileDoc.save();
+
+    // Re-query to get populated userId fields for frontend compatibility
+    const updatedProfile = await Profile.findOne({ userId: mongoUser._id }).populate("userId");
 
     console.log(`[API] PUT /api/profile - Success: Updated profile for user ${mongoUser._id}`);
     return NextResponse.json({ success: true, data: updatedProfile });

@@ -236,24 +236,11 @@ export default function ResumePage() {
   // Compute dynamic stats for resume
   const skillsCount = profile?.skills?.length || 0;
   
-  // Calculate dynamic ATS score
-  const hasHeadline = !!profile?.headline;
-  const hasBio = !!profile?.bio;
-  const hasExperiences = (profile?.experiences?.length || 0) > 0;
-  const hasEducation = (profile?.education?.length || 0) > 0;
-  
-  const atsScore = Math.min(
-    40 + 
-    (skillsCount * 2) + 
-    (hasHeadline ? 10 : 0) + 
-    (hasBio ? 10 : 0) + 
-    (hasExperiences ? 15 : 0) + 
-    (hasEducation ? 10 : 0),
-    100
-  );
+  // Retrieve dynamic ATS score from backend
+  const atsScore = profile?.atsScore || 0;
 
-  const atsCompatibility = Math.min(60 + (skillsCount > 5 ? 20 : skillsCount * 3) + (profile?.resumeUrl ? 20 : 0), 100);
-  const keywordScore = Math.min(50 + (skillsCount * 3), 100);
+  const atsCompatibility = profile?.resumeUrl ? Math.max(70, Math.min(100, atsScore + 5)) : 30;
+  const keywordScore = Math.min(100, Math.max(40, skillsCount * 8));
   const formattingScore = profile?.resumeUrl ? 95 : 30;
 
   const analysisItems = [
@@ -263,12 +250,13 @@ export default function ResumePage() {
     { label: 'Completeness', score: atsScore, color: '#eab308' },
   ];
 
+  // Dynamic recommendations generated from the database audit details
   const suggestions = [
-    ...(skillsCount < 8 ? [{ type: 'warning', text: 'Add more technical skills to improve ATS keyword indexing.' }] : []),
-    ...(!profile?.resumeUrl ? [{ type: 'error', text: 'Please upload a PDF or DOCX resume to extract skills.' }] : []),
-    ...(profile?.resumeUrl ? [{ type: 'success', text: 'Resume file uploaded and formatted properly.' }] : []),
-    ...(hasExperiences ? [{ type: 'success', text: 'Work history is fully structured for ATS readers.' }] : [{ type: 'warning', text: 'Add your professional experiences under My Profile.' }]),
-  ];
+    ...(profile?.atsDetails?.weaknesses?.map(text => ({ type: 'error', text })) || []),
+    ...(profile?.atsDetails?.missingSections?.map(text => ({ type: 'warning', text: `Missing section: ${text}` })) || []),
+    ...(profile?.atsDetails?.suggestions?.map(text => ({ type: 'warning', text })) || []),
+    ...(profile?.atsDetails?.strengths?.map(text => ({ type: 'success', text })) || []),
+  ].slice(0, 8); // Limit to top 8 items to fit UI nicely
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -276,23 +264,51 @@ export default function ResumePage() {
       <div className="flex-1 flex flex-col min-w-0 mobile-header-offset page-content">
         <Navbar />
         <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-6xl mx-auto w-full">
-          <div className="mb-6 flex justify-between items-start">
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold mb-1" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Resume Manager</h1>
               <p className="text-muted-foreground text-sm">Upload, parse, and extract technical skills dynamically with local pipelines</p>
             </div>
-            {profile?.resumeUrl && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleManualParse}
-                disabled={parsing}
-                className="rounded-xl gap-1.5 text-xs border-border bg-card shadow-sm"
-              >
-                <RefreshCw className={cn("w-3.5 h-3.5", parsing && "animate-spin")} />
-                {parsing ? 'Parsing...' : 'Re-parse Resume'}
-              </Button>
-            )}
+            
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-1.5 bg-card border border-border px-3 py-1.5 rounded-xl shadow-sm">
+                <span className="text-xs font-medium text-muted-foreground">Skill Mode:</span>
+                <select
+                  value={profile?.resumeSkillMode || 'merge'}
+                  onChange={async (e) => {
+                    const mode = e.target.value as 'merge' | 'replace';
+                    if (user) {
+                      try {
+                        const updated = await updateProfile(user._id, { resumeSkillMode: mode });
+                        if (updated) {
+                          setProfile(updated);
+                          setSuccessMessage(`Skills will now be ${mode}d on upload.`);
+                        }
+                      } catch (err) {
+                        setError('Failed to update skill mode configuration.');
+                      }
+                    }
+                  }}
+                  className="text-xs bg-transparent border-0 font-semibold focus:ring-0 cursor-pointer focus-visible:outline-none"
+                >
+                  <option value="merge">Merge</option>
+                  <option value="replace">Replace</option>
+                </select>
+              </div>
+
+              {profile?.resumeUrl && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleManualParse}
+                  disabled={parsing}
+                  className="rounded-xl gap-1.5 text-xs border-border bg-card shadow-sm h-9"
+                >
+                  <RefreshCw className={cn("w-3.5 h-3.5", parsing && "animate-spin")} />
+                  {parsing ? 'Parsing...' : 'Re-parse Resume'}
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Success / Error Alerts */}
