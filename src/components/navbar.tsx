@@ -89,11 +89,11 @@ export default function Navbar() {
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
             <Link href={isLoggedIn ? "/dashboard" : "/"} className="flex items-center gap-2 group flex-shrink-0">
               <Image
-                src="/logo.png"
+                src="/logo-circle.png"
                 alt="JobFusion Logo"
                 width={32}
                 height={32}
-                className="rounded-xl object-contain group-hover:scale-105 transition-transform"
+                className="rounded-full object-cover group-hover:scale-105 transition-transform border border-border/40"
               />
               <span
                 className="font-bold text-lg sm:text-xl tracking-tight"

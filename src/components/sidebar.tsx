@@ -174,11 +174,11 @@ export default function Sidebar({ isRecruiter = false }: SidebarProps) {
       )}>
         <Link href="/" className="flex items-center gap-2 min-w-0">
           <Image
-            src="/logo.png"
+            src="/logo-circle.png"
             alt="JobFusion Logo"
             width={36}
             height={36}
-            className="rounded-xl flex-shrink-0 object-contain"
+            className="rounded-full flex-shrink-0 object-cover border border-sidebar-border"
           />
           <AnimatePresence>
             {!collapsed && (

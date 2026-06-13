@@ -13,8 +13,6 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import Sidebar from '@/components/sidebar';
-import Navbar from '@/components/navbar';
 import {
   fetchCurrentUser,
   fetchProfile,
@@ -135,11 +133,7 @@ export default function ResumePage() {
   const insights = profile?.resumeInsights;
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0 mobile-header-offset page-content">
-        <Navbar />
-        <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-6xl mx-auto w-full">
+    <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-6xl mx-auto w-full">
 
           {/* Header */}
           <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -460,8 +454,6 @@ export default function ResumePage() {
             </DialogContent>
           </Dialog>
 
-        </main>
-      </div>
-    </div>
+    </main>
   );
 }

@@ -25,8 +25,8 @@ export const metadata: Metadata = {
   description: 'AI-powered job aggregation platform that finds your perfect role from 2.4M+ opportunities across 500+ sources.',
   keywords: ['jobs', 'AI job search', 'job aggregator', 'career', 'employment', 'remote jobs'],
   icons: {
-    icon: '/logo.png',
-    apple: '/logo.png',
+    icon: '/logo-circle.png',
+    apple: '/logo-circle.png',
   },
 };
 
