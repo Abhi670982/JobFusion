@@ -5,6 +5,7 @@ import User from "@/models/User";
 import cloudinary from "@/lib/cloudinary";
 import { parsePdf, parseDocx } from "@/lib/parser";
 import { extractSkills } from "@/lib/skills-extractor";
+import { analyzeResume } from "@/lib/resume-intelligence";
 import { getOrCreateMongoUser } from "@/lib/auth-sync";
 
 export const dynamic = "force-dynamic";
@@ -12,9 +13,9 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   let currentStep = "file_validation";
   try {
-    console.log("[Resume Upload Step] Upload request received");
+    console.log("[Resume Upload] Request received");
 
-    // 1. Database Connection and Authentication
+    // ── 1. DB Connection ────────────────────────────────────────
     try {
       await connectDB();
     } catch (dbErr: any) {
@@ -25,85 +26,39 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // ── 2. Parse form data ──────────────────────────────────────
     const formData = await req.formData();
-    const file = formData.get("file") as File;
-    const userId = formData.get("userId") as string;
+    const file     = formData.get("file") as File;
+    const userId   = formData.get("userId") as string;
 
-    if (!file) {
-      console.warn("[Resume Upload] File missing in request body");
-      return NextResponse.json(
-        { success: false, step: "file_validation", error: "No file uploaded" },
-        { status: 400 }
-      );
-    }
+    if (!file)   return NextResponse.json({ success: false, step: "file_validation", error: "No file uploaded" }, { status: 400 });
+    if (!userId) return NextResponse.json({ success: false, step: "file_validation", error: "userId is required" }, { status: 400 });
 
-    if (!userId) {
-      console.warn("[Resume Upload] userId missing in request body");
-      return NextResponse.json(
-        { success: false, step: "file_validation", error: "userId is required to associate resume" },
-        { status: 400 }
-      );
-    }
-
+    // ── 3. Auth ─────────────────────────────────────────────────
     const mongoUser = await getOrCreateMongoUser();
-    if (!mongoUser) {
-      console.warn("[Resume Upload] Unauthorized access attempt");
-      return NextResponse.json(
-        { success: false, step: "authentication", error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    if (!mongoUser) return NextResponse.json({ success: false, step: "authentication", error: "Unauthorized" }, { status: 401 });
+    if (userId !== mongoUser._id.toString()) return NextResponse.json({ success: false, step: "authorization", error: "Forbidden" }, { status: 403 });
 
-    if (userId !== mongoUser._id.toString()) {
-      console.warn(`[Resume Upload] Forbidden: UserId mismatch (Request: ${userId}, Session: ${mongoUser._id})`);
-      return NextResponse.json(
-        { success: false, step: "authorization", error: "Forbidden: You can only upload your own resume" },
-        { status: 403 }
-      );
-    }
-
-    // Verify user profile exists or create it
+    // ── 4. Find / create profile ────────────────────────────────
     let profile = await Profile.findOne({ userId });
     if (!profile) {
       const userExists = await User.findById(userId);
-      if (!userExists) {
-        console.error(`[Resume Upload] User record not found in DB: ${userId}`);
-        return NextResponse.json(
-          { success: false, step: "file_validation", error: "User not found in database" },
-          { status: 404 }
-        );
-      }
-      profile = await Profile.create({
-        userId,
-        skills: [],
-        experiences: [],
-        education: [],
-        certifications: [],
-        projects: [],
-      });
+      if (!userExists) return NextResponse.json({ success: false, step: "file_validation", error: "User not found" }, { status: 404 });
+      profile = await Profile.create({ userId, skills: [], experiences: [], education: [], certifications: [], projects: [] });
     }
 
-    const fileName = file.name;
+    // ── 5. Validate file ────────────────────────────────────────
+    const fileName  = file.name;
     const extension = fileName.split(".").pop()?.toLowerCase();
-    const mimeType = file.type;
-    const fileSize = file.size;
-
-    const allowedExtensions = ["pdf", "docx"];
-    if (!extension || !allowedExtensions.includes(extension)) {
-      console.warn(`[Resume Upload] Blocked upload for invalid extension: ${extension}`);
-      return NextResponse.json(
-        { success: false, step: "file_validation", error: "Only PDF and DOCX files are allowed." },
-        { status: 400 }
-      );
+    if (!extension || !["pdf", "docx"].includes(extension)) {
+      return NextResponse.json({ success: false, step: "file_validation", error: "Only PDF and DOCX files are allowed." }, { status: 400 });
     }
+    console.log(`[Resume Upload] File: ${fileName} (${file.size} bytes)`);
 
-    console.log(`[Resume Upload] Received file: ${fileName} (${fileSize} bytes), Type: ${mimeType}, Extension: ${extension}`);
-    console.log("[Resume Upload Step] File validation passed");
-
-    // 2. Cloudinary Upload
+    // ── 6. Cloudinary Upload ────────────────────────────────────
     currentStep = "cloudinary_upload";
     console.log("[Resume Upload Step] Cloudinary upload started");
-    const bytes = await file.arrayBuffer();
+    const bytes  = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
     let cloudinaryResult: any;
@@ -111,112 +66,96 @@ export async function POST(req: NextRequest) {
       cloudinaryResult = await new Promise<any>((resolve, reject) => {
         cloudinary.uploader
           .upload_stream(
-            {
-              resource_type: "raw",
-              folder: "jobfusion-resumes",
-              public_id: `${userId}_resume_${Date.now()}.${extension}`,
-            },
-            (error, result) => {
-              if (error) {
-                reject(error);
-              } else {
-                resolve(result);
-              }
-            }
+            { resource_type: "raw", folder: "jobfusion-resumes", public_id: `${userId}_resume_${Date.now()}.${extension}` },
+            (error, result) => { if (error) reject(error); else resolve(result); }
           )
           .end(buffer);
       });
     } catch (cloudErr: any) {
-      console.error("[Resume Upload] Cloudinary SDK error:", cloudErr);
-      return NextResponse.json(
-        { success: false, step: "cloudinary_upload", error: cloudErr.message || "Failed to upload to Cloudinary storage" },
-        { status: 500 }
-      );
+      console.error("[Resume Upload] Cloudinary error:", cloudErr);
+      return NextResponse.json({ success: false, step: "cloudinary_upload", error: cloudErr.message || "Cloudinary upload failed" }, { status: 500 });
     }
-
     const resumeUrl = cloudinaryResult.secure_url;
-    console.log(`[Resume Upload] Cloudinary URL: ${resumeUrl}`);
-    console.log("[Resume Upload Step] Cloudinary upload success");
+    console.log("[Resume Upload Step] Cloudinary upload success:", resumeUrl);
 
-    // 3. Text Extraction
+    // ── 7. Text Extraction ──────────────────────────────────────
     currentStep = "parser";
-    console.log("[Resume Upload Step] Parser started");
+    console.log("[Resume Upload Step] Text extraction started");
     let extractedText = "";
     try {
-      if (extension === "pdf") {
-        extractedText = await parsePdf(buffer);
-      } else {
-        extractedText = await parseDocx(buffer);
-      }
+      extractedText = extension === "pdf" ? await parsePdf(buffer) : await parseDocx(buffer);
     } catch (parseErr: any) {
-      console.error("[Resume Upload] Parser failed:", parseErr);
-      return NextResponse.json(
-        { success: false, step: "parser", error: parseErr.message || "Failed to extract text from resume document" },
-        { status: 500 }
-      );
+      console.error("[Resume Upload] Parser error:", parseErr);
+      return NextResponse.json({ success: false, step: "parser", error: parseErr.message || "Failed to extract text from resume" }, { status: 500 });
     }
-    console.log(`[Resume Upload] Extracted text length: ${extractedText.length} characters`);
-    console.log("[Resume Upload Step] Parser success");
+    console.log(`[Resume Upload Step] Extracted ${extractedText.length} characters`);
 
-    // 4. Skills Extraction
+    // ── 8. Skill Extraction ─────────────────────────────────────
     currentStep = "skills_extraction";
     console.log("[Resume Upload Step] Skills extraction started");
     let newSkills: { name: string; level: number }[] = [];
     try {
       newSkills = extractSkills(extractedText);
     } catch (skillsErr: any) {
-      console.error("[Resume Upload] Skills extraction failed:", skillsErr);
-      return NextResponse.json(
-        { success: false, step: "skills_extraction", error: skillsErr.message || "Failed to parse skills from resume text" },
-        { status: 500 }
-      );
+      console.error("[Resume Upload] Skills error:", skillsErr);
+      return NextResponse.json({ success: false, step: "skills_extraction", error: skillsErr.message || "Skills extraction failed" }, { status: 500 });
     }
-    console.log(`[Resume Upload] Skills extracted: ${newSkills.length} matches`);
-    console.log("[Resume Upload Step] Skills extraction success");
+    console.log(`[Resume Upload Step] ${newSkills.length} skills extracted`);
 
-    // 5. MongoDB Update
+    // ── 9. Resume Intelligence Analysis ────────────────────────
+    currentStep = "intelligence";
+    console.log("[Resume Upload Step] Resume intelligence analysis started");
+    let intelligence;
+    try {
+      intelligence = analyzeResume(extractedText, newSkills.map(s => s.name));
+    } catch (intErr: any) {
+      console.error("[Resume Upload] Intelligence error:", intErr);
+      // Non-fatal — continue with defaults
+      intelligence = {
+        category: "General Professional",
+        suggestedRoles: [],
+        resumeSummary: "",
+        insights: { found: [], missing: [], tips: [] },
+      };
+    }
+    console.log(`[Resume Upload Step] Category: ${intelligence.category}, Roles: ${intelligence.suggestedRoles.join(", ")}`);
+
+    // ── 10. MongoDB Update ──────────────────────────────────────
     currentStep = "mongodb_update";
     console.log("[Resume Upload Step] MongoDB update started");
     try {
-      // Determine skills resolution mode (replace or merge)
       const skillMode = profile.resumeSkillMode || "merge";
-      let finalSkills = [];
+      let finalSkills: { name: string; level: number }[] = [];
 
       if (skillMode === "replace") {
-        console.log("[Resume Upload] Overwriting old skills with extracted ones (replace mode)");
+        console.log("[Resume Upload] Replace mode: overwriting skills");
         finalSkills = newSkills;
       } else {
-        console.log("[Resume Upload] Merging extracted skills into profile (merge mode)");
+        console.log("[Resume Upload] Merge mode: merging skills");
         const existingSkills = profile.skills || [];
         finalSkills = [...existingSkills];
-
-        for (const newSkill of newSkills) {
-          const exists = finalSkills.some(
-            (s: any) => s.name.toLowerCase() === newSkill.name.toLowerCase()
-          );
-          if (!exists) {
-            finalSkills.push(newSkill);
+        for (const s of newSkills) {
+          if (!finalSkills.some((e: any) => e.name.toLowerCase() === s.name.toLowerCase())) {
+            finalSkills.push(s);
           }
         }
       }
 
-      // Populate metadata and trigger hook recalculations
-      profile.resumeUrl = resumeUrl;
-      profile.resumeName = fileName;
+      profile.resumeUrl       = resumeUrl;
+      profile.resumeName      = fileName;
       profile.resumeUpdatedAt = new Date();
-      profile.resumeText = extractedText;
-      profile.skills = finalSkills;
+      profile.resumeText      = extractedText;
+      profile.skills          = finalSkills;
+      profile.lastAnalyzedAt  = new Date();
+      profile.resumeCategory  = intelligence.category;
+      profile.resumeSummary   = intelligence.resumeSummary;
+      profile.suggestedRoles  = intelligence.suggestedRoles;
+      profile.resumeInsights  = intelligence.insights;
 
-      // Note: Calling profile.save() triggers our pre-save hook,
-      // which automatically recalculates the ATS score, adds it to the
-      // history, updates weaknesses/strengths/missing sections, and updates lastAnalyzedAt!
       await profile.save();
-    } catch (dbUpdateErr: any) {
-      console.error("[Resume Upload] MongoDB save error:", dbUpdateErr);
-      return NextResponse.json(
-        { success: false, step: "mongodb_update", error: dbUpdateErr.message || "Failed to update profile document in MongoDB" },
-        { status: 500 }
-      );
+    } catch (dbErr: any) {
+      console.error("[Resume Upload] MongoDB save error:", dbErr);
+      return NextResponse.json({ success: false, step: "mongodb_update", error: dbErr.message || "Failed to save profile" }, { status: 500 });
     }
     console.log("[Resume Upload Step] MongoDB update success");
 
@@ -224,20 +163,21 @@ export async function POST(req: NextRequest) {
       success: true,
       data: {
         resumeUrl,
-        resumeName: fileName,
+        resumeName:      fileName,
         resumeUpdatedAt: profile.resumeUpdatedAt,
         skillsExtracted: newSkills.length,
-        skills: profile.skills,
-        atsScore: profile.atsScore,
-        atsDetails: profile.atsDetails,
-        lastAnalyzedAt: profile.lastAnalyzedAt,
-        atsHistory: profile.atsHistory,
-      }
+        skills:          profile.skills,
+        resumeCategory:  profile.resumeCategory,
+        resumeSummary:   profile.resumeSummary,
+        suggestedRoles:  profile.suggestedRoles,
+        resumeInsights:  profile.resumeInsights,
+        lastAnalyzedAt:  profile.lastAnalyzedAt,
+      },
     });
   } catch (err: any) {
     console.error("[Resume Upload] Unhandled error:", err);
     return NextResponse.json(
-      { success: false, step: currentStep, error: err.message || "An unexpected error occurred" },
+      { success: false, step: currentStep, error: err.message || "Unexpected error" },
       { status: 500 }
     );
   }

@@ -76,15 +76,16 @@ export interface DbProfile {
     weeklyDigest: boolean;
     marketingEmails: boolean;
   };
-  atsScore?: number;
-  atsDetails?: {
-    strengths: string[];
-    weaknesses: string[];
-    missingSections: string[];
-    suggestions: string[];
-  };
+  // Resume Intelligence fields
+  resumeCategory?: string;
+  resumeSummary?: string;
+  suggestedRoles?: string[];
   lastAnalyzedAt?: string | Date;
-  atsHistory?: { score: number; date: string | Date }[];
+  resumeInsights?: {
+    found: string[];
+    missing: string[];
+    tips: string[];
+  };
   resumeSkillMode?: 'merge' | 'replace';
 }
 
