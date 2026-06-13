@@ -5,36 +5,42 @@ export function calculateCompletion(profile: DbProfile | null, user: DbUser | nu
   
   let score = 0;
   
-  // 1. Profile photo (15%)
-  const hasPhoto = !!user?.profileImage;
-  if (hasPhoto) score += 15;
+  // 1. Profile photo (10%)
+  if (user?.profileImage) score += 10;
   
-  // 2. Headline (15%)
-  const hasHeadline = !!profile.headline && profile.headline.trim().length > 0;
-  if (hasHeadline) score += 15;
+  // 2. Name (5%)
+  if (user?.fullName && user.fullName.trim().length > 0) score += 5;
   
-  // 3. Skills (15%) - has at least one skill
-  const hasSkills = profile.skills && profile.skills.length > 0;
-  if (hasSkills) score += 15;
+  // 3. Email (5%)
+  if (user?.email && user.email.trim().length > 0) score += 5;
   
-  // 4. Resume (15%)
-  const hasResume = !!profile.resumeUrl && profile.resumeUrl.trim().length > 0;
-  if (hasResume) score += 15;
+  // 4. Phone (5%)
+  if (profile.phone && profile.phone.trim().length > 0) score += 5;
   
-  // 5. Education (15%) - has at least one education entry
-  const hasEducation = profile.education && profile.education.length > 0;
-  if (hasEducation) score += 15;
+  // 5. Location (10%)
+  if (profile.location && profile.location.trim().length > 0) score += 10;
   
-  // 6. Experience (15%) - has at least one experience entry or overall experience level set
-  const hasExperience = (profile.experiences && profile.experiences.length > 0) || (!!profile.experience && profile.experience.trim().length > 0);
+  // 6. Education (15%) - has at least one education entry
+  if (profile.education && profile.education.length > 0) score += 15;
+  
+  // 7. Experience (15%) - has at least one experience entry or experience set
+  const hasExperience = (profile.experiences && profile.experiences.length > 0) || (profile.experience && profile.experience.trim().length > 0);
   if (hasExperience) score += 15;
   
-  // 7. Social links (10%) - at least one social link provided
-  const hasSocials = 
-    (!!profile.githubUrl && profile.githubUrl.trim().length > 0) || 
-    (!!profile.linkedinUrl && profile.linkedinUrl.trim().length > 0) || 
-    (!!profile.portfolioUrl && profile.portfolioUrl.trim().length > 0);
-  if (hasSocials) score += 10;
+  // 8. Skills (10%) - has at least one skill
+  if (profile.skills && profile.skills.length > 0) score += 10;
+  
+  // 9. Resume uploaded (15%)
+  if (profile.resumeUrl && profile.resumeUrl.trim().length > 0) score += 15;
+  
+  // 10. LinkedIn (4%)
+  if (profile.linkedinUrl && profile.linkedinUrl.trim().length > 0) score += 4;
+  
+  // 11. Portfolio (3%)
+  if (profile.portfolioUrl && profile.portfolioUrl.trim().length > 0) score += 3;
+  
+  // 12. Certifications (4%) - has at least one certification
+  if (profile.certifications && profile.certifications.length > 0) score += 4;
   
   return score;
 }

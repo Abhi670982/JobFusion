@@ -24,11 +24,11 @@ export default function SignInPage() {
 
         <Link href="/" className="flex items-center gap-2.5 relative z-10">
           <Image
-            src="/logo.png"
+            src="/logo-circle.png"
             alt="JobFusion Logo"
             width={36}
             height={36}
-            className="rounded-xl object-contain"
+            className="rounded-full object-cover border border-white/20"
           />
           <span className="font-bold text-xl text-white" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>JobFusion</span>
         </Link>
@@ -76,11 +76,11 @@ export default function SignInPage() {
         >
           <div className="lg:hidden flex items-center gap-2 mb-8">
             <Image
-              src="/logo.png"
+              src="/logo-circle.png"
               alt="JobFusion Logo"
               width={32}
               height={32}
-              className="rounded-xl object-contain"
+              className="rounded-full object-cover border border-border/40"
             />
             <span className="font-bold text-xl gradient-brand-text" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>JobFusion</span>
           </div>

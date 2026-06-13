@@ -43,11 +43,11 @@ export default function Footer() {
           <div className="lg:col-span-2">
             <Link href="/" className="flex items-center gap-2.5 mb-4">
               <Image
-                src="/logo.png"
+                src="/logo-circle.png"
                 alt="JobFusion Logo"
                 width={32}
                 height={32}
-                className="rounded-xl object-contain"
+                className="rounded-full object-cover border border-border/40"
               />
               <span className="font-bold text-xl" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
                 <span className="gradient-brand-text">Job</span>

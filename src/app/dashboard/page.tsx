@@ -12,42 +12,20 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import Sidebar from '@/components/sidebar';
-import Navbar from '@/components/navbar';
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer
 } from 'recharts';
-import { notifications } from '@/lib/data';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { calculateCompletion } from '@/lib/profile-completion';
 import {
-  fetchCurrentUser,
-  fetchProfile,
-  fetchApplications,
-  fetchSavedJobs,
+  fetchDashboardData,
+  fetchDashboardActivity,
+  fetchDashboardNotifications,
+  fetchDashboardMatches,
   DbUser,
-  DbProfile,
-  DbApplication,
-  DbSavedJob
+  DbProfile
 } from '@/lib/api-helper';
-
-const activityChartData = [
-  { day: 'Mon', applications: 3, views: 12 },
-  { day: 'Tue', applications: 5, views: 18 },
-  { day: 'Wed', applications: 2, views: 8 },
-  { day: 'Thu', applications: 7, views: 25 },
-  { day: 'Fri', applications: 4, views: 15 },
-  { day: 'Sat', applications: 1, views: 5 },
-  { day: 'Sun', applications: 2, views: 10 },
-];
-
-const matchDistData = [
-  { range: '90-100%', count: 8, color: '#10b981' },
-  { range: '75-90%', count: 22, color: '#6366f1' },
-  { range: '60-75%', count: 35, color: '#8b5cf6' },
-  { range: '<60%', count: 15, color: '#94a3b8' },
-];
 
 function StatCard({ icon: Icon, label, value, change, color }: {
   icon: React.ElementType; label: string; value: string | number; change?: string; color: string;
@@ -110,6 +88,8 @@ const activityConfig = {
   viewed: { icon: Eye, color: '#94a3b8', label: 'Viewed' },
   offer: { icon: Star, color: '#f59e0b', label: 'Offer' },
   rejected: { icon: XCircle, color: '#ef4444', label: 'Rejected' },
+  updated_resume: { icon: Sparkles, color: '#8b5cf6', label: 'Resume Updated' },
+  updated_profile: { icon: CheckCircle2, color: '#10b981', label: 'Profile Updated' },
 };
 
 function formatTime(dateStr?: string) {
@@ -130,29 +110,51 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<DbUser | null>(null);
   const [profile, setProfile] = useState<DbProfile | null>(null);
-  const [applications, setApplications] = useState<DbApplication[]>([]);
-  const [savedJobs, setSavedJobs] = useState<DbSavedJob[]>([]);
+  const [stats, setStats] = useState<any>({
+    appliedCount: 0,
+    appliedThisWeek: 0,
+    appliedThisMonth: 0,
+    interviewCount: 0,
+    offerCount: 0,
+    savedCount: 0,
+  });
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [activities, setActivities] = useState<any[]>([]);
+  const [chartData, setChartData] = useState<any[]>([]);
+  const [notifs, setNotifs] = useState<any[]>([]);
+  const [matchesCount, setMatchesCount] = useState(0);
 
   useEffect(() => {
     async function loadData() {
       try {
-        const currentUser = await fetchCurrentUser();
-        if (currentUser) {
-          setUser(currentUser);
-          const [prof, apps, saved] = await Promise.all([
-            fetchProfile(currentUser._id),
-            fetchApplications(currentUser._id),
-            fetchSavedJobs(currentUser._id)
-          ]);
-          
-          if (prof && prof.isOnboarded === false) {
+        const dash = await fetchDashboardData();
+        if (dash && dash.user) {
+          setUser(dash.user);
+          if (dash.profile && dash.profile.isOnboarded === false) {
             router.push('/onboarding');
             return;
           }
+          setProfile(dash.profile);
+          setStats(dash.stats);
+          setUnreadCount(dash.unreadNotificationsCount);
 
-          setProfile(prof);
-          setApplications(apps);
-          setSavedJobs(saved);
+          // Load other sub-widgets concurrently
+          const [actRes, notifRes, matchRes] = await Promise.all([
+            fetchDashboardActivity(),
+            fetchDashboardNotifications(),
+            fetchDashboardMatches()
+          ]);
+
+          if (actRes) {
+            setActivities(actRes.recentActivities || []);
+            setChartData(actRes.chartData || []);
+          }
+          if (notifRes) {
+            setNotifs(notifRes);
+          }
+          if (matchRes) {
+            setMatchesCount(matchRes.totalMatches || 0);
+          }
         } else {
           router.push('/sign-in');
         }
@@ -165,42 +167,8 @@ export default function DashboardPage() {
     loadData();
   }, [router]);
 
-  // Compute stats
-  const appliedCount = applications.length;
-  const interviewCount = applications.filter(a => a.status === 'Interview').length;
-  const offerCount = applications.filter(a => a.status === 'Offer').length;
-  const savedCount = savedJobs.length;
-
-  const matchScore = profile?.skills && profile.skills.length > 0 ? 94 : 80;
-
-  // Build merged activity list
-  const mergedActivities = [
-    ...applications.map(app => ({
-      id: app._id,
-      type: app.status === 'Interview' ? 'interview' as const : app.status === 'Offer' ? 'offer' as const : app.status === 'Rejected' ? 'rejected' as const : 'applied' as const,
-      jobTitle: app.jobId?.title || 'Unknown Position',
-      company: app.jobId?.company || 'Unknown Company',
-      time: formatTime(app.appliedAt),
-      timeMs: new Date(app.appliedAt).getTime(),
-      status: app.status
-    })),
-    ...savedJobs.map(saved => ({
-      id: saved._id,
-      type: 'saved' as const,
-      jobTitle: saved.jobId?.title || 'Unknown Position',
-      company: saved.jobId?.company || 'Unknown Company',
-      time: formatTime(saved.savedAt),
-      timeMs: new Date(saved.savedAt).getTime(),
-      status: 'Saved'
-    }))
-  ].sort((a, b) => b.timeMs - a.timeMs);
-
   return (
-    <div className="flex min-h-screen bg-background">
-      <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0 mobile-header-offset page-content">
-        <Navbar />
-        <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-[1400px] w-full mx-auto space-y-4 lg:space-y-6">
+    <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-[1400px] w-full mx-auto space-y-4 lg:space-y-6">
           {/* Welcome */}
           <motion.div
             initial={{ opacity: 0, y: -10 }}
@@ -212,7 +180,7 @@ export default function DashboardPage() {
                 Welcome back, {loading ? <Skeleton className="w-24 h-6 inline-block animate-pulse" /> : (user?.fullName.split(' ')[0] || 'User')} 👋
               </h1>
               <p className="text-muted-foreground text-sm mt-1">
-                You have <strong className="text-foreground">{loading ? '...' : (profile?.skills?.length ? '12 new job matches' : 'no job matches yet')}</strong> and <strong className="text-foreground">3 unread messages</strong> today.
+                You have <strong className="text-foreground">{loading ? '...' : (matchesCount > 0 ? `${matchesCount} new job matches` : 'no job matches yet')}</strong> and <strong className="text-foreground">{unreadCount} unread notification{unreadCount === 1 ? '' : 's'}</strong> today.
               </p>
             </div>
             <div className="flex gap-2">
@@ -316,16 +284,16 @@ export default function DashboardPage() {
             ) : (
               <>
                 <Link href="/applications" className="block cursor-pointer">
-                  <StatCard icon={Briefcase} label="Applications Sent" value={appliedCount} change="+2 this week" color="#6366f1" />
+                  <StatCard icon={Briefcase} label="Applications Sent" value={stats.appliedCount} change={stats.appliedThisWeek > 0 ? `+${stats.appliedThisWeek} this week` : "0 this week"} color="#6366f1" />
                 </Link>
                 <Link href="/applications" className="block cursor-pointer">
-                  <StatCard icon={Calendar} label="Interviews" value={interviewCount} change="scheduled" color="#10b981" />
+                  <StatCard icon={Calendar} label="Interviews" value={stats.interviewCount} change="scheduled" color="#10b981" />
                 </Link>
                 <Link href="/applications" className="block cursor-pointer">
-                  <StatCard icon={Star} label="Offers Received" value={offerCount} color="#f59e0b" />
+                  <StatCard icon={Star} label="Offers Received" value={stats.offerCount} color="#f59e0b" />
                 </Link>
                 <Link href="/jobs/saved" className="block cursor-pointer">
-                  <StatCard icon={Bookmark} label="Saved Jobs" value={savedCount} color="#8b5cf6" />
+                  <StatCard icon={Bookmark} label="Saved Jobs" value={stats.savedCount} color="#8b5cf6" />
                 </Link>
               </>
             )}
@@ -342,7 +310,7 @@ export default function DashboardPage() {
                 <Badge variant="secondary" className="rounded-lg text-xs">Last 7 days</Badge>
               </div>
               <ResponsiveContainer width="100%" height={200}>
-                <AreaChart data={activityChartData}>
+                <AreaChart data={chartData}>
                   <defs>
                     <linearGradient id="colorApps" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
@@ -360,7 +328,9 @@ export default function DashboardPage() {
                   <Area type="monotone" dataKey="applications" stroke="#6366f1" fill="url(#colorApps)" strokeWidth={2} name="Applications" />
                 </AreaChart>
               </ResponsiveContainer>
-            </div>            {/* Resume Intelligence Widget */}
+            </div>
+
+            {/* Resume Intelligence Widget */}
             <div className="card-premium p-5 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-4">
@@ -450,28 +420,37 @@ export default function DashboardPage() {
               <div className="space-y-3">
                 {loading ? (
                   Array.from({ length: 3 }).map((_, i) => <ActivitySkeleton key={i} />)
-                ) : mergedActivities.length === 0 ? (
+                ) : activities.length === 0 ? (
                   <div className="text-center py-6 text-xs text-muted-foreground">
                     No recent activity found.
                   </div>
                 ) : (
-                  mergedActivities.slice(0, 5).map((act) => {
-                    const config = activityConfig[act.type];
+                  activities.slice(0, 5).map((act) => {
+                    const config = activityConfig[act.type as keyof typeof activityConfig] || { icon: Sparkles, color: '#6366f1', label: 'Activity' };
                     const Icon = config.icon;
+                    const titleText = act.jobTitle || act.details || config.label;
+                    const subText = act.company || (act.jobTitle ? '' : 'JobFusion');
+                    
                     return (
-                      <div key={act.id} className="flex items-center gap-3 group">
+                      <div key={act._id || act.id} className="flex items-center gap-3 group">
                         <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${config.color}15` }}>
                           <Icon className="w-4 h-4" style={{ color: config.color }} />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{act.jobTitle}</p>
-                          <p className="text-xs text-muted-foreground">{act.company}</p>
+                          <p className="text-sm font-medium truncate">{titleText}</p>
+                          {subText && <p className="text-xs text-muted-foreground">{subText}</p>}
                         </div>
                         <div className="text-right flex-shrink-0">
-                          {act.status && (
-                            <Badge variant="secondary" className="text-[10px] rounded-lg mb-0.5">{act.status}</Badge>
+                          {act.type === 'applied' && (
+                            <Badge variant="secondary" className="text-[10px] rounded-lg mb-0.5">Applied</Badge>
                           )}
-                          <p className="text-[11px] text-muted-foreground">{act.time}</p>
+                          {act.type === 'interview' && (
+                            <Badge variant="secondary" className="text-[10px] rounded-lg mb-0.5 bg-emerald-500/10 text-emerald-500 border-emerald-500/20">Interview</Badge>
+                          )}
+                          {act.type === 'offer' && (
+                            <Badge variant="secondary" className="text-[10px] rounded-lg mb-0.5 bg-amber-500/10 text-amber-500 border-amber-500/20">Offer</Badge>
+                          )}
+                          <p className="text-[11px] text-muted-foreground">{formatTime(act.createdAt)}</p>
                         </div>
                       </div>
                     );
@@ -485,28 +464,45 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold">Notifications</h3>
-                  <Badge className="h-5 px-1.5 text-[10px] gradient-brand text-white border-0">3 new</Badge>
+                  {unreadCount > 0 && (
+                    <Badge className="h-5 px-1.5 text-[10px] gradient-brand text-white border-0">{unreadCount} new</Badge>
+                  )}
                 </div>
                 <Link href="/notifications" className="text-xs text-primary hover:underline flex items-center gap-1">
                   See all <ChevronRight className="w-3 h-3" />
                 </Link>
               </div>
               <div className="space-y-3">
-                {notifications.slice(0, 5).map((notif) => (
-                  <div key={notif.id} className={cn('flex items-start gap-3 p-2.5 rounded-xl transition-colors', !notif.read && 'bg-primary/5 border border-primary/10')}>
-                    <div className={cn('w-2 h-2 rounded-full mt-1.5 flex-shrink-0', !notif.read ? 'bg-primary' : 'bg-transparent')} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">{notif.title}</p>
-                      <p className="text-xs text-muted-foreground leading-relaxed">{notif.message}</p>
-                      <p className="text-[11px] text-muted-foreground mt-1">{notif.time}</p>
+                {loading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <Skeleton className="w-2 h-2 rounded-full animate-pulse" />
+                      <div className="flex-1 space-y-1">
+                        <Skeleton className="h-3.5 w-1/3 animate-pulse" />
+                        <Skeleton className="h-3 w-2/3 animate-pulse" />
+                      </div>
                     </div>
+                  ))
+                ) : notifs.length === 0 ? (
+                  <div className="text-center py-6 text-xs text-muted-foreground">
+                    No new notifications.
                   </div>
-                ))}
+                ) : (
+                  notifs.slice(0, 5).map((notif) => (
+                    <div key={notif._id || notif.id} className={cn('flex items-start gap-3 p-2.5 rounded-xl transition-colors', !notif.read && 'bg-primary/5 border border-primary/10')}>
+                      <div className={cn('w-2 h-2 rounded-full mt-1.5 flex-shrink-0', !notif.read ? 'bg-primary' : 'bg-transparent')} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{notif.title}</p>
+                        <p className="text-xs text-muted-foreground leading-relaxed">{notif.message}</p>
+                        <p className="text-[11px] text-muted-foreground mt-1">{formatTime(notif.createdAt)}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
-        </main>
-      </div>
-    </div>
+    </main>
   );
+
 }

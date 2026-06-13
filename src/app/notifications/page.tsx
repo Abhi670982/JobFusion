@@ -10,13 +10,20 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
-import { fetchJobs } from '@/lib/api-helper';
+import {
+  fetchDashboardNotifications,
+  markNotificationRead,
+  dismissNotification
+} from '@/lib/api-helper';
 import { cn } from '@/lib/utils';
 
 const typeConfig = {
-  job_match: { icon: Briefcase, color: '#6366f1', bg: 'bg-indigo-500/10' },
-  ai_recommendation: { icon: Sparkles, color: '#f59e0b', bg: 'bg-amber-500/10' },
-  system: { icon: Bell, color: '#64748b', bg: 'bg-slate-500/10' },
+  match: { icon: Briefcase, color: '#6366f1', bg: 'bg-indigo-500/10' },
+  application: { icon: Briefcase, color: '#10b981', bg: 'bg-emerald-500/10' },
+  reminder: { icon: Bell, color: '#ef4444', bg: 'bg-rose-500/10' },
+  resume: { icon: Sparkles, color: '#8b5cf6', bg: 'bg-purple-500/10' },
+  recruiter: { icon: Sparkles, color: '#f59e0b', bg: 'bg-amber-500/10' },
+  general: { icon: Bell, color: '#64748b', bg: 'bg-slate-500/10' },
 };
 
 function formatTime(dateStr?: string) {
@@ -38,81 +45,55 @@ export default function NotificationsPage() {
   const [notifs, setNotifs] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('all');
 
-  useEffect(() => {
-    async function loadNotifications() {
-      try {
-        const allJobs = await fetchJobs();
-        if (allJobs && allJobs.length > 0) {
-          // Sort by posting date (newest first)
-          const sortedJobs = [...allJobs].sort((a, b) => 
-            new Date(b.createdAt || b.postedAt).getTime() - new Date(a.createdAt || a.postedAt).getTime()
-          );
-
-          // Get read and dismissed IDs from localStorage
-          const readIds = JSON.parse(localStorage.getItem('jobfusion_read_notifs') || '[]');
-          const dismissedIds = JSON.parse(localStorage.getItem('jobfusion_dismissed_notifs') || '[]');
-
-          // Filter out dismissed
-          const filteredJobs = sortedJobs.filter(j => !dismissedIds.includes(j._id));
-
-          // Map to notifications
-          const formatted = filteredJobs.map((job, idx) => ({
-            id: job._id,
-            // Vary type slightly between job_match and ai_recommendation for visual diversity
-            type: idx % 3 === 0 ? 'ai_recommendation' : 'job_match',
-            title: `New Job: ${job.title}`,
-            message: `${job.company} is hiring for ${job.title} in ${job.location}. Skills: ${job.skills.slice(0, 3).join(', ')}`,
-            time: formatTime(job.createdAt || job.postedAt),
-            read: readIds.includes(job._id)
-          }));
-          setNotifs(formatted);
-        } else {
-          setNotifs([]);
-        }
-      } catch (err) {
-        console.error("Error loading notifications:", err);
-      } finally {
-        setLoading(false);
-      }
+  async function loadNotifications() {
+    try {
+      const data = await fetchDashboardNotifications();
+      const formatted = data.map((notif: any) => ({
+        id: notif._id,
+        type: notif.type,
+        title: notif.title,
+        message: notif.message,
+        time: formatTime(notif.createdAt),
+        read: notif.read
+      }));
+      setNotifs(formatted);
+    } catch (err) {
+      console.error("Error loading notifications:", err);
+    } finally {
+      setLoading(false);
     }
+  }
+
+  useEffect(() => {
     loadNotifications();
   }, []);
 
   const unreadCount = notifs.filter(n => !n.read).length;
 
-  const markAllRead = () => {
-    setNotifs(prev => {
-      const next = prev.map(n => ({ ...n, read: true }));
-      const allIds = next.map(n => n.id);
-      localStorage.setItem('jobfusion_read_notifs', JSON.stringify(allIds));
-      return next;
-    });
+  const markAllRead = async () => {
+    const success = await markNotificationRead('', true);
+    if (success) {
+      setNotifs(prev => prev.map(n => ({ ...n, read: true })));
+    }
   };
 
-  const dismiss = (id: string) => {
-    setNotifs(prev => {
-      const next = prev.filter(n => n.id !== id);
-      const dismissedIds = JSON.parse(localStorage.getItem('jobfusion_dismissed_notifs') || '[]');
-      if (!dismissedIds.includes(id)) {
-        dismissedIds.push(id);
-      }
-      localStorage.setItem('jobfusion_dismissed_notifs', JSON.stringify(dismissedIds));
-      return next;
-    });
+  const dismiss = async (id: string) => {
+    const success = await dismissNotification(id);
+    if (success) {
+      setNotifs(prev => prev.filter(n => n.id !== id));
+    }
   };
 
-  const markRead = (id: string) => {
-    setNotifs(prev => {
-      const next = prev.map(n => n.id === id ? { ...n, read: true } : n);
-      const readIds = next.filter(n => n.read).map(n => n.id);
-      localStorage.setItem('jobfusion_read_notifs', JSON.stringify(readIds));
-      return next;
-    });
+  const markRead = async (id: string) => {
+    const success = await markNotificationRead(id);
+    if (success) {
+      setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    }
   };
 
   const filtered = notifs.filter(n => {
     if (activeTab === 'unread') return !n.read;
-    if (activeTab === 'jobs') return n.type === 'job_match' || n.type === 'ai_recommendation';
+    if (activeTab === 'jobs') return n.type === 'match';
     return true;
   });
 
@@ -191,7 +172,7 @@ export default function NotificationsPage() {
                 </motion.div>
               ) : (
                 filtered.map((notif) => {
-                  const config = typeConfig[notif.type as keyof typeof typeConfig] || typeConfig.system;
+                  const config = typeConfig[notif.type as keyof typeof typeConfig] || typeConfig.general;
                   const Icon = config.icon;
                   return (
                     <motion.div

@@ -22,11 +22,11 @@ export default function ForgotPasswordPage() {
       >
         <Link href="/" className="flex items-center gap-2 mb-10 justify-center">
           <Image
-            src="/logo.png"
+            src="/logo-circle.png"
             alt="JobFusion Logo"
             width={36}
             height={36}
-            className="rounded-xl object-contain"
+            className="rounded-full object-cover border border-border/40"
           />
           <span className="font-bold text-xl" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
             <span className="gradient-brand-text">Job</span>Fusion
