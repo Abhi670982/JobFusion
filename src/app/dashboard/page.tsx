@@ -1,23 +1,22 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import {
   TrendingUp, Briefcase, Bookmark, Eye, MessageSquare,
   Sparkles, ArrowRight, CheckCircle2, XCircle,
-  Calendar, Star, ChevronRight, Zap
+  Calendar, Star, ChevronRight, Zap, History,
+  LayoutDashboard, BellOff
 } from 'lucide-react';
+import { getVisitedJobs, clearVisitedJobs, VisitedJob } from '@/lib/visited-jobs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import Sidebar from '@/components/sidebar';
-import Navbar from '@/components/navbar';
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer
 } from 'recharts';
-import { notifications } from '@/lib/data';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { calculateCompletion } from '@/lib/profile-completion';
@@ -26,21 +25,12 @@ import {
   fetchProfile,
   fetchApplications,
   fetchSavedJobs,
+  fetchJobs,
   DbUser,
   DbProfile,
   DbApplication,
   DbSavedJob
 } from '@/lib/api-helper';
-
-const activityChartData = [
-  { day: 'Mon', applications: 3, views: 12 },
-  { day: 'Tue', applications: 5, views: 18 },
-  { day: 'Wed', applications: 2, views: 8 },
-  { day: 'Thu', applications: 7, views: 25 },
-  { day: 'Fri', applications: 4, views: 15 },
-  { day: 'Sat', applications: 1, views: 5 },
-  { day: 'Sun', applications: 2, views: 10 },
-];
 
 const matchDistData = [
   { range: '90-100%', count: 8, color: '#10b981' },
@@ -132,6 +122,13 @@ export default function DashboardPage() {
   const [profile, setProfile] = useState<DbProfile | null>(null);
   const [applications, setApplications] = useState<DbApplication[]>([]);
   const [savedJobs, setSavedJobs] = useState<DbSavedJob[]>([]);
+  const [visitedJobs, setVisitedJobs] = useState<VisitedJob[]>([]);
+  const [notificationsList, setNotificationsList] = useState<any[]>([]);
+
+  const handleClearHistory = () => {
+    clearVisitedJobs();
+    setVisitedJobs([]);
+  };
 
   useEffect(() => {
     async function loadData() {
@@ -153,6 +150,32 @@ export default function DashboardPage() {
           setProfile(prof);
           setApplications(apps);
           setSavedJobs(saved);
+          setVisitedJobs(getVisitedJobs());
+          
+          // Load notifications from recent job openings
+          const allJobs = await fetchJobs();
+          if (allJobs && allJobs.length > 0) {
+            // Get 5 most recent jobs
+            const recentJobs = [...allJobs]
+              .sort((a, b) => new Date(b.createdAt || b.postedAt).getTime() - new Date(a.createdAt || a.postedAt).getTime())
+              .slice(0, 5);
+            
+            // Sort in ascending order of posting date (oldest first)
+            recentJobs.sort((a, b) => new Date(a.createdAt || a.postedAt).getTime() - new Date(b.createdAt || b.postedAt).getTime());
+            
+            // Map to notifications
+            const jobNotifications = recentJobs.map((job) => ({
+              id: job._id,
+              type: 'job_match' as const,
+              title: `New Job: ${job.title}`,
+              message: `${job.company} is hiring for ${job.title} in ${job.location}. Skills: ${job.skills.slice(0, 3).join(', ')}`,
+              time: formatTime(job.createdAt || job.postedAt),
+              read: false
+            }));
+            setNotificationsList(jobNotifications);
+          } else {
+            setNotificationsList([]);
+          }
         } else {
           router.push('/sign-in');
         }
@@ -164,6 +187,32 @@ export default function DashboardPage() {
     }
     loadData();
   }, [router]);
+
+  // Generate last 7 days chart data based on actual visits and applications
+  const activityChartData = useMemo(() => {
+    return Array.from({ length: 7 }).map((_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i)); // 6 days ago, ..., today
+      const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+      const dateStr = d.toDateString();
+      
+      const appCount = applications.filter(app => {
+        const appDate = new Date(app.appliedAt);
+        return appDate.toDateString() === dateStr;
+      }).length;
+      
+      const visitCount = visitedJobs.filter(job => {
+        const visitDate = new Date(job.visitedAt);
+        return visitDate.toDateString() === dateStr;
+      }).length;
+      
+      return {
+        day: dayName,
+        applications: appCount,
+        views: visitCount
+      };
+    });
+  }, [applications, visitedJobs]);
 
   // Compute stats
   const appliedCount = applications.length;
@@ -196,11 +245,7 @@ export default function DashboardPage() {
   ].sort((a, b) => b.timeMs - a.timeMs);
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0 mobile-header-offset page-content">
-        <Navbar />
-        <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-[1400px] w-full mx-auto space-y-4 lg:space-y-6">
+    <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-[1400px] w-full mx-auto space-y-4 lg:space-y-6">
           {/* Welcome */}
           <motion.div
             initial={{ opacity: 0, y: -10 }}
@@ -208,8 +253,9 @@ export default function DashboardPage() {
             className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
           >
             <div>
-              <h1 className="text-2xl font-bold flex items-center gap-1.5" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-                Welcome back, {loading ? <Skeleton className="w-24 h-6 inline-block animate-pulse" /> : (user?.fullName.split(' ')[0] || 'User')} 👋
+              <h1 className="text-2xl font-bold flex items-center gap-2" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                <LayoutDashboard className="w-6 h-6 text-primary" />
+                Welcome back, {loading ? <Skeleton className="w-24 h-6 inline-block animate-pulse" /> : (user?.fullName.split(' ')[0] || 'User')}
               </h1>
               <p className="text-muted-foreground text-sm mt-1">
                 You have <strong className="text-foreground">{loading ? '...' : (profile?.skills?.length ? '12 new job matches' : 'no job matches yet')}</strong> and <strong className="text-foreground">3 unread messages</strong> today.
@@ -310,19 +356,16 @@ export default function DashboardPage() {
           )}
 
           {/* Stats Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {loading ? (
-              Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)
+              Array.from({ length: 3 }).map((_, i) => <StatCardSkeleton key={i} />)
             ) : (
               <>
-                <Link href="/applications" className="block cursor-pointer">
-                  <StatCard icon={Briefcase} label="Applications Sent" value={appliedCount} change="+2 this week" color="#6366f1" />
-                </Link>
-                <Link href="/applications" className="block cursor-pointer">
-                  <StatCard icon={Calendar} label="Interviews" value={interviewCount} change="scheduled" color="#10b981" />
-                </Link>
-                <Link href="/applications" className="block cursor-pointer">
-                  <StatCard icon={Star} label="Offers Received" value={offerCount} color="#f59e0b" />
+                <div className="block">
+                  <StatCard icon={Eye} label="Visited Job Openings" value={visitedJobs.length} color="#6366f1" />
+                </div>
+                <Link href="/profile" className="block cursor-pointer">
+                  <StatCard icon={Sparkles} label="Total Skills" value={profile?.skills?.length || 0} color="#10b981" />
                 </Link>
                 <Link href="/jobs/saved" className="block cursor-pointer">
                   <StatCard icon={Bookmark} label="Saved Jobs" value={savedCount} color="#8b5cf6" />
@@ -337,7 +380,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between mb-5">
                 <div>
                   <h3 className="font-semibold">Activity Overview</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">Applications & profile views this week</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Applications & visited jobs this week</p>
                 </div>
                 <Badge variant="secondary" className="rounded-lg text-xs">Last 7 days</Badge>
               </div>
@@ -356,15 +399,17 @@ export default function DashboardPage() {
                   <XAxis dataKey="day" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid var(--border)', fontSize: 12 }} />
-                  <Area type="monotone" dataKey="views" stroke="#8b5cf6" fill="url(#colorViews)" strokeWidth={2} name="Views" />
+                  <Area type="monotone" dataKey="views" stroke="#8b5cf6" fill="url(#colorViews)" strokeWidth={2} name="Visited Jobs" />
                   <Area type="monotone" dataKey="applications" stroke="#6366f1" fill="url(#colorApps)" strokeWidth={2} name="Applications" />
                 </AreaChart>
               </ResponsiveContainer>
-            </div>            {/* Resume Analytics Insight */}
+            </div>
+
+            {/* Resume & Skills Insight */}
             <div className="card-premium p-5 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-sm">Resume Analytics</h3>
+                  <h3 className="font-semibold text-sm">Resume & Skills AI</h3>
                   <Link href="/resume" className="text-xs text-primary hover:underline flex items-center gap-1">
                     Manage <ChevronRight className="w-3 h-3" />
                   </Link>
@@ -383,82 +428,47 @@ export default function DashboardPage() {
                     </div>
                     <div>
                       <p className="text-xs font-semibold">No Resume Uploaded</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">Upload a resume to automatically extract skills and analyze your ATS performance.</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">Upload a resume to automatically extract skills and boost your match score.</p>
                     </div>
                     <Link href="/resume" className="inline-block">
                       <Button size="sm" className="rounded-xl text-[11px] h-8 gradient-brand border-0 text-white">Upload Resume</Button>
                     </Link>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {/* Dynamic ATS Score & Strength Row */}
-                    <div className="flex items-center justify-between p-3 rounded-xl bg-card border border-border shadow-sm">
-                      <div className="text-left">
-                        <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">ATS Score</span>
-                        <div className="text-xl font-extrabold text-foreground">{profile.atsScore || 0}/100</div>
+                  <div className="space-y-3.5">
+                    {/* Status row */}
+                    <div className="flex items-center justify-between text-xs p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 animate-pulse" />
+                        <span className="font-medium">Resume Active</span>
                       </div>
-                      <div className="text-right">
-                        <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Strength</span>
-                        <div>
-                          <Badge className={cn(
-                            "text-[10px] border-0 rounded-full font-bold",
-                            (profile.atsScore || 0) >= 80 
-                              ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" 
-                              : (profile.atsScore || 0) >= 60 
-                                ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" 
-                                : "bg-red-500/15 text-red-600 dark:text-red-400"
-                          )}>
-                            {(profile.atsScore || 0) >= 80 ? "Excellent" : (profile.atsScore || 0) >= 60 ? "Good" : "Needs Work"}
-                          </Badge>
-                        </div>
-                      </div>
+                      <span className="text-[10px] text-muted-foreground">Updated {formatTime(profile.resumeUpdatedAt?.toString())}</span>
                     </div>
 
-                    {/* Metadata details */}
-                    <div className="grid grid-cols-2 gap-2 text-[11px]">
-                      <div className="p-2.5 rounded-xl bg-muted/40">
-                        <div className="text-muted-foreground">Uploaded Date</div>
-                        <div className="font-semibold mt-0.5 text-foreground truncate">
-                          {profile.resumeUpdatedAt ? new Date(profile.resumeUpdatedAt).toLocaleDateString('en-IN') : 'N/A'}
-                        </div>
-                      </div>
-                      <div className="p-2.5 rounded-xl bg-muted/40">
-                        <div className="text-muted-foreground">Last Analyzed</div>
-                        <div className="font-semibold mt-0.5 text-foreground truncate">
-                          {profile.lastAnalyzedAt ? new Date(profile.lastAnalyzedAt).toLocaleDateString('en-IN') : 'N/A'}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Skill Count */}
-                    <div className="flex justify-between items-center text-xs py-0.5">
-                      <span className="text-muted-foreground">Skills Extracted</span>
+                    {/* Total skills */}
+                    <div className="flex justify-between items-center text-xs py-1">
+                      <span className="text-muted-foreground">Total Skills Extracted</span>
                       <Badge variant="secondary" className="rounded-lg font-semibold">{profile.skills?.length || 0} Skills</Badge>
                     </div>
 
-                    {/* Mini ATS History Chart */}
-                    <div className="space-y-1.5">
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">ATS Score History</p>
-                      <div className="h-16 w-full bg-muted/20 border border-border/50 rounded-xl overflow-hidden pt-2 px-1">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart 
-                            data={
-                              profile.atsHistory && profile.atsHistory.length > 0
-                                ? profile.atsHistory.map((h, i) => ({ name: `Run ${i+1}`, score: h.score }))
-                                : [{ name: 'Current', score: profile.atsScore || 0 }]
-                            }
-                          >
-                            <defs>
-                              <linearGradient id="colorHistory" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.25} />
-                                <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                              </linearGradient>
-                            </defs>
-                            <Tooltip contentStyle={{ borderRadius: '8px', fontSize: 10, padding: '4px 8px' }} />
-                            <Area type="monotone" dataKey="score" stroke="#6366f1" fill="url(#colorHistory)" strokeWidth={2} name="Score" />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      </div>
+                    {/* Top skills */}
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Top Profile Skills</p>
+                      {(!profile.skills || profile.skills.length === 0) ? (
+                        <p className="text-xs text-muted-foreground">No skills found.</p>
+                      ) : (
+                        profile.skills.slice(0, 4).map((skill) => (
+                          <div key={skill.name}>
+                            <div className="flex justify-between text-[11px] mb-1">
+                              <span className="font-medium">{skill.name}</span>
+                              <span className="text-muted-foreground">{skill.level}%</span>
+                            </div>
+                            <div className="h-1 bg-muted rounded-full overflow-hidden">
+                              <div className="h-full rounded-full gradient-brand" style={{ width: `${skill.level}%` }} />
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
                 )}
@@ -513,28 +523,108 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold">Notifications</h3>
-                  <Badge className="h-5 px-1.5 text-[10px] gradient-brand text-white border-0">3 new</Badge>
+                  {notificationsList.length > 0 && (
+                    <Badge className="h-5 px-1.5 text-[10px] gradient-brand text-white border-0">
+                      {notificationsList.filter(n => !n.read).length} new
+                    </Badge>
+                  )}
                 </div>
                 <Link href="/notifications" className="text-xs text-primary hover:underline flex items-center gap-1">
                   See all <ChevronRight className="w-3 h-3" />
                 </Link>
               </div>
               <div className="space-y-3">
-                {notifications.slice(0, 5).map((notif) => (
-                  <div key={notif.id} className={cn('flex items-start gap-3 p-2.5 rounded-xl transition-colors', !notif.read && 'bg-primary/5 border border-primary/10')}>
-                    <div className={cn('w-2 h-2 rounded-full mt-1.5 flex-shrink-0', !notif.read ? 'bg-primary' : 'bg-transparent')} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">{notif.title}</p>
-                      <p className="text-xs text-muted-foreground leading-relaxed">{notif.message}</p>
-                      <p className="text-[11px] text-muted-foreground mt-1">{notif.time}</p>
+                {loading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="flex items-start gap-3 p-2.5">
+                      <Skeleton className="w-2 h-2 rounded-full mt-1.5" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="w-1/3 h-4" />
+                        <Skeleton className="w-full h-3" />
+                      </div>
                     </div>
+                  ))
+                ) : notificationsList.length === 0 ? (
+                  <div className="text-center py-8 text-sm text-muted-foreground flex flex-col items-center justify-center gap-2">
+                    <BellOff className="w-8 h-8 text-muted-foreground/40 animate-pulse" />
+                    <p>No notifications yet</p>
                   </div>
-                ))}
+                ) : (
+                  notificationsList.slice(0, 5).map((notif) => (
+                    <div key={notif.id} className={cn('flex items-start gap-3 p-2.5 rounded-xl transition-colors', !notif.read && 'bg-primary/5 border border-primary/10')}>
+                      <div className={cn('w-2 h-2 rounded-full mt-1.5 flex-shrink-0', !notif.read ? 'bg-primary' : 'bg-transparent')} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{notif.title}</p>
+                        <p className="text-xs text-muted-foreground leading-relaxed">{notif.message}</p>
+                        <p className="text-[11px] text-muted-foreground mt-1">{notif.time}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
+
+          {/* Visited Jobs History */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="card-premium p-5"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <History className="w-5 h-5 text-primary" />
+                <h3 className="font-semibold">Recently Visited Jobs</h3>
+              </div>
+              {visitedJobs.length > 0 && (
+                <Button variant="ghost" size="sm" onClick={handleClearHistory} className="text-xs text-muted-foreground hover:text-destructive transition-colors">
+                  Clear History
+                </Button>
+              )}
+            </div>
+            {visitedJobs.length === 0 ? (
+              <div className="text-center py-8 text-sm text-muted-foreground flex flex-col items-center justify-center gap-3">
+                <Eye className="w-8 h-8 text-muted-foreground/50" />
+                <p>No visited jobs in your history yet.</p>
+                <Link href="/jobs">
+                  <Button size="sm" className="rounded-xl gradient-brand text-white border-0">
+                    Explore Jobs
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {visitedJobs.map((job) => (
+                  <Link key={job._id} href={`/jobs/${job._id}`} className="block p-4 rounded-xl border border-border/50 bg-card/50 hover:bg-card hover:border-primary/30 transition-all group relative overflow-hidden">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-base overflow-hidden flex-shrink-0" style={{ backgroundColor: job.companyColor || '#6366f1' }}>
+                        {job.companyLogo && (job.companyLogo.startsWith('http') || job.companyLogo.includes('/')) ? (
+                          <img src={job.companyLogo} alt={job.company} className="w-full h-full object-cover" />
+                        ) : (
+                          job.companyLogo || job.company.charAt(0)
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-sm truncate group-hover:text-primary transition-colors">{job.title}</h4>
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate">{job.company}</p>
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                          <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground">{job.salary}</span>
+                          <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-muted text-muted-foreground">{job.location}</span>
+                        </div>
+                      </div>
+                      <Badge className={cn('text-[10px] flex-shrink-0', job.matchScore >= 85 ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 'bg-blue-500/10 text-blue-600 border-blue-500/20')}>
+                        {job.matchScore}% Match
+                      </Badge>
+                    </div>
+                    <div className="absolute bottom-2 right-3 text-[10px] text-muted-foreground">
+                      {formatTime(job.visitedAt)}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </motion.div>
         </main>
-      </div>
-    </div>
   );
 }

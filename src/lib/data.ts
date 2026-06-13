@@ -525,40 +525,40 @@ export const activities: Activity[] = [
 
 export const features = [
   {
-    icon: 'brain',
-    title: 'AI-Powered Matching',
-    description: 'Our proprietary AI analyses your skills, experience, and preferences to find your perfect role from India\'s top companies with up to 98% accuracy.',
-    highlight: 'Up to 98% match accuracy',
-  },
-  {
-    icon: 'zap',
-    title: 'Instant Aggregation',
-    description: 'We aggregate jobs from 500+ sources including LinkedIn, Naukri, company career pages, and niche tech job boards in real time.',
-    highlight: '500+ sources aggregated',
-  },
-  {
-    icon: 'target',
-    title: 'Smart Skill Gap Analysis',
-    description: 'Understand exactly which skills you\'re missing for your dream role and get personalised learning recommendations to bridge the gap.',
-    highlight: 'Personalised skill roadmap',
-  },
-  {
-    icon: 'bar-chart',
-    title: 'Salary Intelligence',
-    description: 'Access real-time salary benchmarks in INR across cities and companies to negotiate with confidence and know your true market value.',
-    highlight: 'Real-time ₹ salary data',
-  },
-  {
-    icon: 'bell',
-    title: 'Smart Alerts',
-    description: 'Set personalised job alerts and get notified the moment a perfect opportunity appears — before it fills up. Never miss a hot role again.',
-    highlight: 'Real-time notifications',
+    icon: 'search',
+    title: 'Multi-Source Aggregator',
+    description: 'Dynamically aggregate jobs from top channels including LinkedIn, Internshala, and remote directories (via Jobicy) in real time.',
+    highlight: 'Real-time multi-source sync',
   },
   {
     icon: 'file-text',
-    title: 'One-Click Apply',
-    description: 'Apply to multiple jobs with your JobFusion profile. Track all applications in one beautiful dashboard. Built for the Indian job market.',
-    highlight: 'Streamlined applications',
+    title: 'AI Resume Parser',
+    description: 'Upload your PDF resume to automatically extract your core skills, experience, and projects to instantly build your professional profile.',
+    highlight: 'Instant profile generation',
+  },
+  {
+    icon: 'brain',
+    title: 'AI Skill Match Engine',
+    description: 'Compare your skills against job requirements dynamically to calculate precise match percentages and compatibility scores.',
+    highlight: '98% matching accuracy',
+  },
+  {
+    icon: 'history',
+    title: 'Visited Jobs Tracking',
+    description: 'Keep a private history of job openings you have viewed or clicked on to easily track your pipeline and follow up.',
+    highlight: 'Automated history logging',
+  },
+  {
+    icon: 'bar-chart',
+    title: 'Dashboard Analytics',
+    description: 'Visualize your job search activity, visits, and application status over the last 7 days with clear interactive charts.',
+    highlight: 'Interactive activity charts',
+  },
+  {
+    icon: 'bell',
+    title: 'Real-Time Alerts',
+    description: 'Stay ahead with chronological alerts showing the most recent job openings, ensuring you apply before the crowd.',
+    highlight: 'Instant, sorted alerts',
   },
 ];
 

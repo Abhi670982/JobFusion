@@ -151,7 +151,9 @@ const jobsData = [
     ],
     applicants: 312,
     featured: true,
-    category: 'Engineering'
+    category: 'Engineering',
+    source: 'Indeed',
+    applyUrl: 'https://razorpay.com/jobs/'
   },
   {
     title: 'Product Designer',
@@ -194,7 +196,9 @@ const jobsData = [
     ],
     applicants: 204,
     featured: true,
-    category: 'Design'
+    category: 'Design',
+    source: 'LinkedIn',
+    applyUrl: 'https://careers.cred.club/'
   },
   {
     title: 'Staff ML Engineer',
@@ -235,7 +239,9 @@ const jobsData = [
     ],
     applicants: 489,
     featured: false,
-    category: 'Engineering'
+    category: 'Engineering',
+    source: 'Google Jobs',
+    applyUrl: 'https://www.flipkartcareers.com/'
   },
   {
     title: 'Head of Growth Marketing',
@@ -276,7 +282,9 @@ const jobsData = [
     ],
     applicants: 147,
     featured: false,
-    category: 'Marketing'
+    category: 'Marketing',
+    source: 'SimplyHired',
+    applyUrl: 'https://www.zoho.com/careers/'
   },
   {
     title: 'Backend Engineer (Go)',
@@ -317,7 +325,9 @@ const jobsData = [
     ],
     applicants: 276,
     featured: false,
-    category: 'Engineering'
+    category: 'Engineering',
+    source: 'Glassdoor',
+    applyUrl: 'https://careers.swiggy.com/'
   },
   {
     title: 'Senior Data Scientist',
@@ -358,7 +368,9 @@ const jobsData = [
     ],
     applicants: 341,
     featured: false,
-    category: 'Data'
+    category: 'Data',
+    source: 'Indeed',
+    applyUrl: 'https://careers.paytm.com/'
   }
 ];
 
@@ -502,13 +514,7 @@ async function seed() {
   ]);
   console.log("Seeded Applications.");
 
-  // Create Saved Jobs
-  await SavedJob.create([
-    { userId: user._id, jobId: seededJobs[0]._id }, // Razorpay
-    { userId: user._id, jobId: seededJobs[2]._id }, // Flipkart
-    { userId: user._id, jobId: seededJobs[5]._id }  // Paytm
-  ]);
-  console.log("Seeded Saved Jobs.");
+  // Saved jobs seeding removed to allow only user-specific saved jobs.
 
   await mongoose.disconnect();
   console.log("Done.");

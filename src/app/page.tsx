@@ -7,7 +7,7 @@ import Link from 'next/link';
 import {
   Search, MapPin, Briefcase, ArrowRight, Star, CheckCircle2,
   Sparkles, ChevronDown, TrendingUp, Users, Zap, Shield,
-  BarChart3, Bell, FileText, Brain, Target
+  BarChart3, Bell, FileText, Brain, Target, History
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +23,8 @@ const iconMap: Record<string, React.ComponentType<any>> = {
   'bar-chart': BarChart3,
   bell: Bell,
   'file-text': FileText,
+  search: Search,
+  history: History,
 };
 
 function AnimatedCounter({ end, suffix = '' }: { end: number; suffix?: string }) {

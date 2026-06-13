@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   MapPin, Clock, Bookmark, BookmarkCheck, Zap, Building2,
   Wifi, Home, Users
@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { DbJob, saveJob, unsaveJob } from '@/lib/api-helper';
+import { trackVisitedJob } from '@/lib/visited-jobs';
 
 interface JobCardProps {
   job: DbJob;
@@ -18,6 +19,7 @@ interface JobCardProps {
   variant?: 'default' | 'compact';
   userId?: string;
   initialIsSaved?: boolean;
+  initialIsApplied?: boolean;
   onSavedToggle?: (jobId: string, nowSaved: boolean) => void;
 }
 
@@ -40,10 +42,21 @@ export default function JobCard({
   variant = 'default',
   userId,
   initialIsSaved = false,
+  initialIsApplied = false,
   onSavedToggle
 }: JobCardProps) {
   const [saved, setSaved] = useState(initialIsSaved);
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
+
+  const handleCardClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('a') || target.closest('input')) {
+      return;
+    }
+    trackVisitedJob(job);
+    router.push(`/jobs/${job._id}`);
+  };
 
   useEffect(() => {
     setSaved(initialIsSaved);
@@ -85,12 +98,43 @@ export default function JobCard({
     }
   };
 
+  const handleApplyClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    trackVisitedJob(job);
+    if (job.applyUrl) {
+      window.open(job.applyUrl, "_blank", "noopener,noreferrer");
+    } else {
+      // If no applyUrl, navigate to local details page
+      router.push(`/jobs/${job._id}`);
+    }
+  };
+
+  // Determine Source Badge styling
+  const getSourceBadge = () => {
+    const src = (job.source || "").toLowerCase();
+    switch (src) {
+      case "linkedin":
+        return { label: "LinkedIn", className: "bg-blue-600/10 text-blue-600 dark:text-blue-400 border-blue-500/20" };
+      case "indeed":
+        return { label: "Indeed", className: "bg-purple-600/10 text-purple-600 dark:text-purple-400 border-purple-500/20" };
+      case "wellfound":
+        return { label: "Wellfound", className: "bg-teal-600/10 text-teal-600 dark:text-teal-400 border-teal-500/20" };
+      case "internshala":
+        return { label: "Internshala", className: "bg-orange-600/10 text-orange-600 dark:text-orange-400 border-orange-500/20" };
+      default:
+        return null;
+    }
+  };
+
+  const sourceBadge = getSourceBadge();
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: index * 0.07 }}
-      className="card-premium card-hover group"
+      className="card-premium card-hover group cursor-pointer"
+      onClick={handleCardClick}
     >
       <div className="p-5">
         {/* Header */}
@@ -98,10 +142,14 @@ export default function JobCard({
           <div className="flex items-center gap-3">
             {/* Company Logo */}
             <div
-              className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-md flex-shrink-0"
+              className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-md flex-shrink-0 overflow-hidden"
               style={{ backgroundColor: job.companyColor || '#6366f1' }}
             >
-              {job.companyLogo || job.company.charAt(0)}
+              {job.companyLogo && (job.companyLogo.startsWith('http') || job.companyLogo.includes('/')) ? (
+                <img src={job.companyLogo} alt={job.company} className="w-full h-full object-cover" />
+              ) : (
+                job.companyLogo || job.company.charAt(0)
+              )}
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -111,6 +159,11 @@ export default function JobCard({
                 {job.featured && (
                   <Badge className="text-[10px] h-4 px-1.5 gradient-brand text-white border-0 flex-shrink-0">
                     Featured
+                  </Badge>
+                )}
+                {initialIsApplied && (
+                  <Badge className="text-[10px] h-4 px-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 flex-shrink-0 font-medium">
+                    Visited
                   </Badge>
                 )}
               </div>
@@ -127,7 +180,7 @@ export default function JobCard({
               onClick={handleSaveToggle}
               disabled={loading}
               className={cn(
-                'rounded-xl p-2 transition-all duration-200 flex-shrink-0',
+                'rounded-xl p-2 transition-all duration-200 flex-shrink-0 z-10',
                 saved
                   ? 'text-primary bg-primary/10 hover:bg-primary/20'
                   : 'text-muted-foreground hover:text-primary hover:bg-primary/10',
@@ -151,9 +204,16 @@ export default function JobCard({
           <Badge variant="secondary" className="rounded-lg text-xs">
             {job.type}
           </Badge>
-          <Badge variant="secondary" className="rounded-lg text-xs">
-            {job.experience}
-          </Badge>
+          {job.experience && (
+            <Badge variant="secondary" className="rounded-lg text-xs">
+              {job.experience}
+            </Badge>
+          )}
+          {sourceBadge && (
+            <Badge variant="outline" className={cn('rounded-lg text-xs border font-medium', sourceBadge.className)}>
+              {sourceBadge.label}
+            </Badge>
+          )}
         </div>
 
         {/* Location & Salary */}
@@ -196,19 +256,18 @@ export default function JobCard({
             </div>
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <Clock className="w-3 h-3" />
-              {job.postedAt}
+              {typeof job.postedAt === "string" ? job.postedAt : "Just now"}
             </div>
           </div>
 
-          <Link href={`/jobs/${job._id}`}>
-            <Button
-              size="sm"
-              className="h-7 px-3 text-xs rounded-lg gradient-brand text-white border-0 hover:opacity-90"
-            >
-              <Zap className="w-3 h-3 mr-1" />
-              Apply
-            </Button>
-          </Link>
+          <Button
+            onClick={handleApplyClick}
+            size="sm"
+            className="h-7 px-3 text-xs rounded-lg gradient-brand text-white border-0 hover:opacity-90 z-10"
+          >
+            <Zap className="w-3 h-3 mr-1" />
+            Apply
+          </Button>
         </div>
       </div>
     </motion.div>

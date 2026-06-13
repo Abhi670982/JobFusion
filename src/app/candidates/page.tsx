@@ -13,8 +13,6 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
-import Sidebar from '@/components/sidebar';
-import Navbar from '@/components/navbar';
 import { candidates } from '@/lib/data';
 import type { Candidate } from '@/lib/data';
 import { cn } from '@/lib/utils';
@@ -125,11 +123,8 @@ export default function CandidatesPage() {
   });
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <Sidebar isRecruiter />
-      <div className="flex-1 flex flex-col min-w-0 mobile-header-offset page-content">
-        <Navbar />
-        <main className="flex-1 p-3 sm:p-4 lg:p-6">
+    <>
+      <main className="flex-1 p-3 sm:p-4 lg:p-6">
           <div className="mb-6">
             <div className="flex items-center justify-between mb-1">
               <h1 className="text-2xl font-bold" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Candidate Discovery</h1>
@@ -192,7 +187,6 @@ export default function CandidatesPage() {
             </div>
           )}
         </main>
-      </div>
 
       {/* Profile Preview Modal */}
       <Dialog open={!!selected} onOpenChange={() => setSelected(null)}>
@@ -247,6 +241,6 @@ export default function CandidatesPage() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }

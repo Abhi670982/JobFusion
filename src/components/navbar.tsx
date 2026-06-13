@@ -140,14 +140,6 @@ export default function Navbar() {
 
             {isLoggedIn ? (
               <>
-                {/* Notifications */}
-                <Link href="/notifications">
-                  <Button variant="ghost" size="icon" className="relative rounded-xl text-muted-foreground hover:text-foreground w-9 h-9">
-                    <Bell className="w-4 h-4" />
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary" />
-                  </Button>
-                </Link>
-
                 {/* User Menu */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

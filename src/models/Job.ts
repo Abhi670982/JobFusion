@@ -52,7 +52,7 @@ const JobSchema = new Schema(
     },
     type: {
       type: String,
-      enum: ["full-time", "part-time", "contract", "internship"],
+      enum: ["full-time", "part-time", "contract", "internship", "freelance"],
       default: "full-time",
     },
     skills: {
@@ -103,11 +103,68 @@ const JobSchema = new Schema(
       type: String,
       trim: true,
     },
+    // --- Unified Schema Extensions ---
+    sourceId: {
+      type: String,
+      trim: true,
+    },
+    sourceUrl: {
+      type: String,
+      trim: true,
+    },
+    city: {
+      type: String,
+      trim: true,
+    },
+    country: {
+      type: String,
+      trim: true,
+    },
+    isRemote: {
+      type: Boolean,
+      default: false,
+    },
+    jobType: {
+      type: String,
+      trim: true,
+    },
+    salaryCurrency: {
+      type: String,
+      trim: true,
+    },
+    salaryPeriod: {
+      type: String,
+      trim: true,
+    },
+    descriptionHtml: {
+      type: String,
+      trim: true,
+    },
+    expiresAt: {
+      type: Date,
+    },
+    fetchedAt: {
+      type: Date,
+      default: Date.now,
+    },
+    dedupeHash: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
+    }
   },
   {
     timestamps: true,
   }
 );
+
+// Create indexes
+JobSchema.index({ source: 1 });
+JobSchema.index({ title: 1, company: 1 });
+JobSchema.index({ createdAt: -1 });
+JobSchema.index({ skills: 1 });
+JobSchema.index({ city: 1, country: 1 });
 
 const Job = models.Job || model("Job", JobSchema);
 
