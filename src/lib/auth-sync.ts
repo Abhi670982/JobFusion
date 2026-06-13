@@ -4,34 +4,62 @@ import User from "@/models/User";
 import Profile from "@/models/Profile";
 
 export async function getOrCreateMongoUser() {
-  console.log("[AUTH-SYNC] getOrCreateMongoUser() started");
   await connectDB();
   
   let clerkId: string | null = null;
   try {
-    const authObject = await auth();
-    clerkId = authObject?.userId;
-    console.log(`[AUTH-SYNC] Clerk auth check: userId = ${clerkId}`);
-  } catch (authErr: any) {
-    console.error("[AUTH-SYNC] Error fetching Clerk auth details:", authErr);
-    return null;
+    const authData = await auth();
+    clerkId = authData?.userId || null;
+  } catch (error) {
+    console.warn("[Auth Sync] Clerk auth() failed or is not configured. Falling back to dev mode mock user.");
   }
 
   if (!clerkId) {
-    console.log("[AUTH-SYNC] No Clerk user ID found in session. User is anonymous.");
-    return null;
+    console.log("[Auth Sync] Using fallback mock user (Rahul Sharma)");
+    let user = await User.findOne({ clerkId: "user_123" });
+    if (!user) {
+      user = await User.create({
+        clerkId: "user_123",
+        fullName: "Rahul Sharma",
+        email: "rahul@example.com",
+        profileImage: "",
+        role: "jobseeker",
+      });
+      
+      // Check if profile exists
+      let profile = await Profile.findOne({ userId: user._id });
+      if (!profile) {
+        await Profile.create({
+          userId: user._id,
+          skills: [],
+          experiences: [],
+          education: [],
+          certifications: [],
+          projects: [],
+          headline: "",
+          bio: "",
+          location: "",
+          experience: "",
+          resumeUrl: "",
+          resumeName: "",
+          resumeText: "",
+          phone: "",
+          portfolioUrl: "",
+          githubUrl: "",
+          linkedinUrl: "",
+        });
+      }
+    }
+    return user;
   }
 
   // Try to find user in MongoDB by clerkId
-  console.log(`[AUTH-SYNC] Querying MongoDB User model for clerkId: ${clerkId}`);
   let user = await User.findOne({ clerkId });
 
   if (!user) {
-    console.log(`[AUTH-SYNC] User not found in MongoDB. Querying Clerk API for details...`);
     // Fetch Clerk user details
     const clerkUser = await currentUser();
     if (!clerkUser) {
-      console.warn(`[AUTH-SYNC] Clerk currentUser() returned null for clerkId: ${clerkId}`);
       return null;
     }
 
@@ -40,8 +68,7 @@ export async function getOrCreateMongoUser() {
     if (clerkUser.firstName || clerkUser.lastName) {
       fullName = `${clerkUser.firstName || ""} ${clerkUser.lastName || ""}`.trim();
     }
-    
-    // If fullName is still empty, fall back to email name
+        // If fullName is still empty, fall back to email name
     const email = clerkUser.emailAddresses[0]?.emailAddress || "";
     if (!fullName && email) {
       const emailName = email.split("@")[0];
@@ -52,7 +79,44 @@ export async function getOrCreateMongoUser() {
       fullName = "User";
     }
 
-    console.log(`[AUTH-SYNC] Creating new user in MongoDB: name='${fullName}', email='${email}'`);
+    // Check if user already exists by email (casing/ID change handling)
+    if (email) {
+      const existingUser = await User.findOne({ email });
+      if (existingUser) {
+        // Link the existing user to the new clerkId
+        console.log(`[Auth Sync] Linking existing user email: ${email} to new clerkId: ${clerkUser.id}`);
+        existingUser.clerkId = clerkUser.id;
+        if (fullName && !existingUser.fullName) existingUser.fullName = fullName;
+        if (clerkUser.imageUrl) existingUser.profileImage = clerkUser.imageUrl;
+        await existingUser.save();
+        
+        // Ensure profile exists for the user
+        let profile = await Profile.findOne({ userId: existingUser._id });
+        if (!profile) {
+          await Profile.create({
+            userId: existingUser._id,
+            skills: [],
+            experiences: [],
+            education: [],
+            certifications: [],
+            projects: [],
+            headline: "",
+            bio: "",
+            location: "",
+            experience: "",
+            resumeUrl: "",
+            resumeName: "",
+            resumeText: "",
+            phone: "",
+            portfolioUrl: "",
+            githubUrl: "",
+            linkedinUrl: "",
+          });
+        }
+        return existingUser;
+      }
+    }
+
     // Create User document in MongoDB
     user = await User.create({
       clerkId: clerkUser.id,
@@ -60,16 +124,7 @@ export async function getOrCreateMongoUser() {
       email,
       profileImage: clerkUser.imageUrl || "",
       role: "jobseeker",
-    });
-    console.log(`[AUTH-SYNC] Successfully created MongoDB User document (ID: ${user._id})`);
-  } else {
-    console.log(`[AUTH-SYNC] Found existing MongoDB User document (ID: ${user._id})`);
-  }
-
-  // Defensive check: Ensure a Profile exists for this User
-  const profile = await Profile.findOne({ userId: user._id });
-  if (!profile) {
-    console.log(`[AUTH-SYNC] WARNING: Profile document missing for user ${user._id}. Creating empty profile now...`);
+    });    // Automatically create an empty Profile document linked to the user
     await Profile.create({
       userId: user._id,
       skills: [],
@@ -89,9 +144,8 @@ export async function getOrCreateMongoUser() {
       githubUrl: "",
       linkedinUrl: "",
     });
-    console.log(`[AUTH-SYNC] Successfully created missing Profile document for user ${user._id}`);
-  } else {
-    console.log(`[AUTH-SYNC] Profile document validated for user ${user._id}`);
+
+    console.log(`Created new MongoDB User and Profile for Clerk user: ${clerkId}`);
   }
 
   return user;

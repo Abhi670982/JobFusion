@@ -1,19 +1,20 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bookmark, Search } from 'lucide-react';
+import { Bookmark, Search, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import Sidebar from '@/components/sidebar';
-import Navbar from '@/components/navbar';
 import JobCard from '@/components/job-card';
 import Link from 'next/link';
 import {
   fetchCurrentUser,
   fetchSavedJobs,
+  fetchApplications,
   DbUser,
-  DbSavedJob
+  DbSavedJob,
+  DbApplication
 } from '@/lib/api-helper';
 
 function JobCardSkeleton() {
@@ -39,9 +40,11 @@ function JobCardSkeleton() {
 }
 
 export default function SavedJobsPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<DbUser | null>(null);
   const [savedJobs, setSavedJobs] = useState<DbSavedJob[]>([]);
+  const [appliedJobIds, setAppliedJobIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     async function loadData() {
@@ -51,6 +54,9 @@ export default function SavedJobsPage() {
           setUser(currentUser);
           const saved = await fetchSavedJobs(currentUser._id);
           setSavedJobs(saved);
+          
+          const apps = await fetchApplications(currentUser._id);
+          setAppliedJobIds(new Set(apps.map((a: DbApplication) => a.jobId?._id).filter(Boolean)));
         }
       } catch (err) {
         console.error("Error loading saved jobs:", err);
@@ -69,11 +75,19 @@ export default function SavedJobsPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0 mobile-header-offset page-content">
-        <Navbar />
-        <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-[1400px] w-full mx-auto space-y-4 lg:space-y-6">
+    <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-[1400px] w-full mx-auto space-y-4 lg:space-y-6">
+          {/* Back Button */}
+          <div className="mb-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push('/dashboard')}
+              className="h-8 px-2.5 rounded-lg text-xs gap-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 -ml-2 transition-all touch-auto"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Back to Dashboard
+            </Button>
+          </div>
           <div className="mb-4">
             <h1 className="text-2xl font-bold" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Saved Jobs</h1>
             <p className="text-muted-foreground text-sm mt-1">
@@ -106,6 +120,7 @@ export default function SavedJobsPage() {
                     index={i}
                     userId={user?._id}
                     initialIsSaved={true}
+                    initialIsApplied={appliedJobIds.has(job._id)}
                     onSavedToggle={handleSavedToggle}
                   />
                 );
@@ -113,7 +128,5 @@ export default function SavedJobsPage() {
             )}
           </div>
         </main>
-      </div>
-    </div>
   );
 }

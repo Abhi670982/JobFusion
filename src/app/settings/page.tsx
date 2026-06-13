@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   User, Bell, Shield, Palette,
   Save, Trash2, LogOut, Moon, Sun, Monitor,
-  Camera, Loader2
+  Camera, Loader2, ArrowLeft
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,8 +17,6 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import Sidebar from '@/components/sidebar';
-import Navbar from '@/components/navbar';
 import { fetchCurrentUser, fetchProfile, updateProfile, DbUser, DbProfile } from '@/lib/api-helper';
 import { useClerk } from '@clerk/nextjs';
 
@@ -34,6 +33,7 @@ function SettingRow({ label, description, children }: { label: string; descripti
 }
 
 export default function SettingsPage() {
+  const router = useRouter();
   const { signOut } = useClerk();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -110,19 +110,16 @@ export default function SettingsPage() {
       const updated = await updateProfile(user._id, {
         fullName,
         email,
-        role,
         headline,
         location,
         phone,
-        expectedSalary,
-        noticePeriod,
         notifications: notifSettings
       } as any);
 
       if (updated) {
         setProfile(updated);
         // Update local user state
-        setUser(prev => prev ? { ...prev, fullName, email, role } : null);
+        setUser(prev => prev ? { ...prev, fullName, email } : null);
         showToast('success', 'Settings updated successfully!');
       } else {
         showToast('error', 'Failed to update settings.');
@@ -209,24 +206,26 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen bg-background">
-        <Sidebar />
-        <div className="flex-1 flex flex-col min-w-0 mobile-header-offset page-content">
-          <Navbar />
-          <div className="flex-1 flex items-center justify-center">
-            <Loader2 className="w-8 h-8 text-primary animate-spin" />
-          </div>
-        </div>
+      <div className="flex-1 flex items-center justify-center min-h-[50vh]">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0 mobile-header-offset page-content">
-        <Navbar />
-        <main className="flex-1 p-4 lg:p-6 max-w-3xl mx-auto w-full space-y-6">
+    <main className="flex-1 p-4 lg:p-6 max-w-3xl mx-auto w-full space-y-6">
+          {/* Back Button */}
+          <div className="mb-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push('/dashboard')}
+              className="h-8 px-2.5 rounded-lg text-xs gap-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 -ml-2 transition-all touch-auto"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Back to Dashboard
+            </Button>
+          </div>
           
           {/* Toast Notification */}
           {toast && (
@@ -342,57 +341,12 @@ export default function SettingsPage() {
                       />
                     </div>
                   </div>
-                </motion.div>
-
-                <motion.div 
-                  initial={{ opacity: 0, y: 10 }} 
-                  animate={{ opacity: 1, y: 0 }} 
-                  transition={{ delay: 0.1 }} 
-                  className="card-premium p-6"
-                >
-                  <h2 className="font-semibold mb-2">Job Preferences & Settings</h2>
-                  <p className="text-sm text-muted-foreground mb-5">Customize your JobFusion dashboard experience</p>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="role">Account Role</Label>
-                      <Select value={role} onValueChange={setRole}>
-                        <SelectTrigger className="rounded-xl h-10">
-                          <SelectValue placeholder="Select role" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl">
-                          <SelectItem value="jobseeker">Job Seeker</SelectItem>
-                          <SelectItem value="recruiter">Recruiter</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="expectedSalary">Expected Salary</Label>
-                      <Input 
-                        id="expectedSalary" 
-                        value={expectedSalary} 
-                        onChange={(e) => setExpectedSalary(e.target.value)} 
-                        className="rounded-xl h-10" 
-                        placeholder="e.g. ₹28L – ₹45L"
-                      />
-                    </div>
-                    <div className="space-y-2 sm:col-span-2">
-                      <Label htmlFor="noticePeriod">Notice Period / Availability</Label>
-                      <Input 
-                        id="noticePeriod" 
-                        value={noticePeriod} 
-                        onChange={(e) => setNoticePeriod(e.target.value)} 
-                        className="rounded-xl h-10" 
-                        placeholder="e.g. Immediate, 30 days notice"
-                      />
-                    </div>
-                  </div>
 
                   <Separator className="my-5" />
-                  <div className="flex justify-end gap-3">
+                  <div className="flex justify-end pt-2">
                     <Button 
                       type="submit" 
-                      className="rounded-xl gradient-brand text-white border-0 shadow-lg"
+                      className="rounded-xl gradient-brand text-white border-0 shadow-lg touch-auto"
                       disabled={updating}
                     >
                       {updating ? (
@@ -493,7 +447,5 @@ export default function SettingsPage() {
             </TabsContent>
           </Tabs>
         </main>
-      </div>
-    </div>
   );
 }

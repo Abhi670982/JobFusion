@@ -13,6 +13,7 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { fetchCurrentUser, fetchSavedJobs, DbUser } from '@/lib/api-helper';
 
@@ -30,7 +31,6 @@ const navItems: NavItem[] = [
   { href: '/jobs/saved', label: 'Saved Jobs', icon: Bookmark },
   { href: '/profile', label: 'My Profile', icon: User },
   { href: '/resume', label: 'Resume', icon: FileText },
-  { href: '/notifications', label: 'Notifications', icon: Bell, badge: 3 },
 ];
 
 const recruiterItems: NavItem[] = [
@@ -70,7 +70,7 @@ function NavLink({ item, collapsed, pathname, onClick }: {
       <AnimatePresence>
         {!collapsed && (
           <motion.span
-            initial={{ opacity: 0 }}
+            initial={false}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="text-sm whitespace-nowrap flex-1 overflow-hidden"
@@ -79,12 +79,12 @@ function NavLink({ item, collapsed, pathname, onClick }: {
           </motion.span>
         )}
       </AnimatePresence>
-      {item.badge && item.badge > 0 && !collapsed && (
+      {item.badge !== undefined && item.badge > 0 && !collapsed && (
         <Badge className="ml-auto h-5 px-1.5 text-[10px] gradient-brand text-white border-0">
           {item.badge}
         </Badge>
       )}
-      {item.badge && item.badge > 0 && collapsed && (
+      {item.badge !== undefined && item.badge > 0 && collapsed && (
         <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary" />
       )}
     </Link>
@@ -103,30 +103,63 @@ function NavLink({ item, collapsed, pathname, onClick }: {
 
 export default function Sidebar({ isRecruiter = false }: SidebarProps) {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
-  const [user, setUser] = useState<DbUser | null>(null);
-  const [savedCount, setSavedCount] = useState<number>(0);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('sidebar_collapsed') === 'true';
+    }
+    return false;
+  });
+  const [user, setUser] = useState<DbUser | null>(() => {
+    if (typeof window !== 'undefined') {
+      const cached = sessionStorage.getItem('jobfusion_user');
+      return cached ? JSON.parse(cached) : null;
+    }
+    return null;
+  });
+  const [savedCount, setSavedCount] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const cached = sessionStorage.getItem('jobfusion_saved_count');
+      return cached ? parseInt(cached, 10) : 0;
+    }
+    return 0;
+  });
 
+  // Fetch user details once on mount
   useEffect(() => {
-    async function loadSidebarData() {
+    async function loadUser() {
       try {
         const currentUser = await fetchCurrentUser();
         if (currentUser) {
           setUser(currentUser);
-          const saved = await fetchSavedJobs(currentUser._id);
-          setSavedCount(saved.length);
+          sessionStorage.setItem('jobfusion_user', JSON.stringify(currentUser));
         }
       } catch (err) {
-        console.error("Error fetching sidebar data:", err);
+        console.error("Error fetching sidebar user:", err);
       }
     }
-    loadSidebarData();
-  }, [pathname]);
+    loadUser();
+  }, []);
+
+  // Fetch saved jobs count on mount and route changes
+  useEffect(() => {
+    if (!user) return;
+    const userId = user._id;
+    async function loadSavedCount() {
+      try {
+        const saved = await fetchSavedJobs(userId);
+        setSavedCount(saved.length);
+        sessionStorage.setItem('jobfusion_saved_count', String(saved.length));
+      } catch (err) {
+        console.error("Error fetching saved count:", err);
+      }
+    }
+    loadSavedCount();
+  }, [pathname, user?._id]);
 
   const allItems = [...navItems, ...(isRecruiter ? recruiterItems : [])];
 
   const getInitials = () => {
-    if (!user) return 'RS';
+    if (!user) return 'U';
     const names = user.fullName.split(' ');
     if (names.length >= 2) return `${names[0][0]}${names[1][0]}`;
     return names[0].slice(0, 2).toUpperCase();
@@ -150,7 +183,7 @@ export default function Sidebar({ isRecruiter = false }: SidebarProps) {
           <AnimatePresence>
             {!collapsed && (
               <motion.span
-                initial={{ opacity: 0, x: -10 }}
+                initial={false}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
                 className="font-bold text-lg whitespace-nowrap overflow-hidden"
@@ -195,22 +228,36 @@ export default function Sidebar({ isRecruiter = false }: SidebarProps) {
 
       {/* User Profile */}
       <div className={cn(
-        'flex items-center gap-3 p-4 border-t border-sidebar-border transition-all',
+        'flex items-center gap-3 p-4 border-t border-sidebar-border transition-all flex-shrink-0 bg-sidebar sticky bottom-0 z-10',
         collapsed && 'justify-center'
       )}>
-        <Avatar className="w-8 h-8 flex-shrink-0 ring-2 ring-primary/20">
-          <AvatarFallback className="text-xs gradient-brand text-white">{getInitials()}</AvatarFallback>
-        </Avatar>
+        {user ? (
+          <Avatar className="w-8 h-8 flex-shrink-0 ring-2 ring-primary/20">
+            <AvatarFallback className="text-xs gradient-brand text-white">{getInitials()}</AvatarFallback>
+          </Avatar>
+        ) : (
+          <Skeleton className="w-8 h-8 rounded-full bg-sidebar-accent/50 animate-pulse flex-shrink-0" />
+        )}
         <AnimatePresence>
           {!collapsed && (
             <motion.div
-              initial={{ opacity: 0 }}
+              initial={false}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="flex-1 min-w-0"
             >
-              <p className="text-sm font-medium truncate">{user?.fullName || 'Rahul Sharma'}</p>
-              <p className="text-xs text-muted-foreground truncate">{user?.role === 'recruiter' ? 'Recruiter' : 'Senior Engineer'}</p>
+              {user ? (
+                <>
+                  <p className="text-sm font-medium truncate">{user.fullName}</p>
+                  {user.role === 'recruiter' && (
+                    <p className="text-xs text-muted-foreground truncate">Recruiter</p>
+                  )}
+                </>
+              ) : (
+                <div className="space-y-1">
+                  <Skeleton className="h-4 w-24 bg-sidebar-accent/50 animate-pulse" />
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -229,7 +276,11 @@ export default function Sidebar({ isRecruiter = false }: SidebarProps) {
       >
         <SidebarContent />
         <button
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={() => {
+            const next = !collapsed;
+            setCollapsed(next);
+            localStorage.setItem('sidebar_collapsed', String(next));
+          }}
           className="absolute -right-3 top-20 w-6 h-6 rounded-full bg-background border border-border shadow-md flex items-center justify-center hover:bg-accent transition-colors z-10"
         >
           {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
@@ -274,7 +325,7 @@ export default function Sidebar({ isRecruiter = false }: SidebarProps) {
               <span className="text-[10px] font-medium leading-none mt-1">
                 {label}
               </span>
-              {displayItem.badge && displayItem.badge > 0 && (
+              {displayItem.badge !== undefined && displayItem.badge > 0 && (
                 <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-primary" />
               )}
             </Link>

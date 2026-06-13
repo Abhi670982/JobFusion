@@ -7,15 +7,13 @@ import { Briefcase, Calendar, ChevronRight, Clock, Star, Eye } from 'lucide-reac
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import Sidebar from '@/components/sidebar';
-import Navbar from '@/components/navbar';
+import { cn } from '@/lib/utils';
 import {
   fetchCurrentUser,
   fetchApplications,
   DbUser,
   DbApplication
 } from '@/lib/api-helper';
-import { cn } from '@/lib/utils';
 
 const STATUS_TABS = ['All', 'Applied', 'Under Review', 'Interview', 'Offer', 'Rejected'];
 
@@ -84,11 +82,7 @@ export default function ApplicationsPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0 mobile-header-offset page-content">
-        <Navbar />
-        <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-[1400px] w-full mx-auto space-y-4 lg:space-y-6">
+    <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-[1400px] w-full mx-auto space-y-4 lg:space-y-6">
           <div className="mb-4">
             <h1 className="text-2xl font-bold" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>My Applications</h1>
             <p className="text-muted-foreground text-sm mt-1">
@@ -147,10 +141,14 @@ export default function ApplicationsPage() {
                   >
                     <div className="flex items-center gap-3">
                       <div
-                        className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm"
+                        className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm overflow-hidden"
                         style={{ backgroundColor: job.companyColor || '#6366f1' }}
                       >
-                        {job.companyLogo || job.company.charAt(0)}
+                        {job.companyLogo && (job.companyLogo.startsWith('http') || job.companyLogo.includes('/')) ? (
+                          <img src={job.companyLogo} alt={job.company} className="w-full h-full object-cover" />
+                        ) : (
+                          job.companyLogo || job.company.charAt(0)
+                        )}
                       </div>
                       <div>
                         <h4 className="font-semibold text-sm group-hover:text-primary transition-colors">{job.title}</h4>
@@ -179,7 +177,5 @@ export default function ApplicationsPage() {
             )}
           </div>
         </main>
-      </div>
-    </div>
   );
 }

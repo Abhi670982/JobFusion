@@ -395,3 +395,16 @@ button, a, [role="button"] {
     padding-right: 2rem;
   }
 }
+
+/* Custom interactive hover cursors */
+button, 
+a, 
+select, 
+input[type="button"], 
+input[type="submit"], 
+input[type="checkbox"], 
+input[type="radio"], 
+[role="button"],
+[onClick] {
+  cursor: pointer !important;
+}

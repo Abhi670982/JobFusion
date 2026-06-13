@@ -3,22 +3,25 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   MapPin, Clock, Users, Bookmark, BookmarkCheck, Share2,
   CheckCircle2, XCircle, ArrowLeft, ExternalLink, Briefcase,
-  DollarSign, Wifi, Star, Zap, Building2
+  DollarSign, Wifi, Star, Zap, Building2, X, Sparkles
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import Sidebar from '@/components/sidebar';
-import Navbar from '@/components/navbar';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { trackVisitedJob } from '@/lib/visited-jobs';
 import {
   fetchCurrentUser,
+  fetchProfile,
   fetchJobById,
   fetchJobs,
   fetchSavedJobs,
@@ -26,10 +29,12 @@ import {
   saveJob,
   unsaveJob,
   applyToJob,
+  updateProfile,
   DbUser,
   DbJob,
   DbSavedJob,
-  DbApplication
+  DbApplication,
+  DbProfile
 } from '@/lib/api-helper';
 
 function JobDetailSkeleton() {
@@ -57,6 +62,32 @@ function JobDetailSkeleton() {
   );
 }
 
+function getPortalSearchUrl(source: string, title: string, company: string): string {
+  const cleanTitle = title
+    .replace(/[\(\[][^\)\]]*[\)\]]/g, "") // remove parentheses/brackets
+    .replace(/\b(?:remote|india|us|usa|canada|uk|europe|london|germany|world|worldwide|timezone|utc|gmt|emea|latam|apac)\b/gi, "") // remove location/timezone keywords
+    .replace(/[-|/\\+,;:]+$/g, "") // remove trailing punctuation
+    .replace(/\s+/g, " ") // normalize whitespace
+    .trim();
+  const query = encodeURIComponent(`${cleanTitle} ${company}`);
+  const src = (source || "").toLowerCase();
+
+  switch (src) {
+    case 'indeed':
+      return `https://www.indeed.com/jobs?q=${query}`;
+    case 'linkedin':
+      return `https://www.linkedin.com/jobs/search/?keywords=${query}`;
+    case 'wellfound':
+      return `https://wellfound.com/jobs?q=${query}`;
+    case 'internshala':
+      return `https://internshala.com/jobs/keyword-${encodeURIComponent(cleanTitle)}/`;
+    case 'glassdoor':
+      return `https://www.glassdoor.com/Job/jobs.htm?sc.keyword=${query}`;
+    default:
+      return `https://www.linkedin.com/jobs/search/?keywords=${query}`;
+  }
+}
+
 export default function JobDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -71,6 +102,18 @@ export default function JobDetailPage() {
   const [applied, setApplied] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
+  // Quick Apply missing details states
+  const [profile, setProfile] = useState<DbProfile | null>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [missingFields, setMissingFields] = useState<string[]>([]);
+  const [formData, setFormData] = useState({ phone: '', location: '', portfolioUrl: '' });
+  const [uploadingResume, setUploadingResume] = useState(false);
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [extractingDetails, setExtractingDetails] = useState(false);
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+
   useEffect(() => {
     async function loadData() {
       if (!jobId) return;
@@ -84,6 +127,7 @@ export default function JobDetailPage() {
 
         if (jobData) {
           setJob(jobData);
+          trackVisitedJob(jobData);
 
           // Get similar jobs
           const similar = allJobs
@@ -103,6 +147,10 @@ export default function JobDetailPage() {
             const applications = await fetchApplications(currentUser._id);
             const isApplied = applications.some((a: DbApplication) => a.jobId?._id === jobData._id);
             setApplied(isApplied);
+
+            // Fetch profile
+            const prof = await fetchProfile(currentUser._id);
+            setProfile(prof);
           }
         }
       } catch (err) {
@@ -135,29 +183,158 @@ export default function JobDetailPage() {
     }
   };
 
-  const handleApply = async () => {
-    if (!user || !job || actionLoading || applied) return;
+  const handleResumeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    setResumeFile(file);
+    setUploadingResume(true);
+    setModalError(null);
+
+    try {
+      const uploadFormData = new FormData();
+      uploadFormData.append('file', file);
+      uploadFormData.append('userId', user._id);
+
+      const uploadRes = await fetch('/api/upload-resume', {
+        method: 'POST',
+        body: uploadFormData,
+      });
+
+      if (!uploadRes.ok) {
+        const uploadData = await uploadRes.json();
+        throw new Error(uploadData.error || 'Failed to upload resume file.');
+      }
+
+      const uploadData = await uploadRes.json();
+      
+      if (uploadData.success && uploadData.data) {
+        const updatedProf = {
+          ...profile,
+          resumeUrl: uploadData.data.resumeUrl,
+          resumeName: uploadData.data.resumeName,
+          resumeUpdatedAt: uploadData.data.resumeUpdatedAt,
+          skills: uploadData.data.skills,
+          phone: uploadData.data.phone,
+          location: uploadData.data.location,
+          portfolioUrl: uploadData.data.portfolioUrl,
+          linkedinUrl: uploadData.data.linkedinUrl,
+          githubUrl: uploadData.data.githubUrl,
+        } as DbProfile;
+        setProfile(updatedProf);
+
+        // Pre-fill form fields dynamically
+        setFormData(prev => ({
+          phone: (uploadData.data.phone && uploadData.data.phone !== "+91 98765 43210") ? uploadData.data.phone : prev.phone,
+          location: uploadData.data.location || prev.location,
+          portfolioUrl: uploadData.data.portfolioUrl || prev.portfolioUrl
+        }));
+
+        setToastMessage("JobFusion AI successfully extracted details from your resume!");
+        setShowSuccessToast(true);
+        setTimeout(() => setShowSuccessToast(false), 5000);
+      }
+    } catch (err: any) {
+      console.error("Error auto-parsing uploaded resume:", err);
+      setModalError(err.message || 'Failed to auto-extract details from resume.');
+    } finally {
+      setUploadingResume(false);
+    }
+  };
+
+  const handleApply = () => {
+    if (!user || !job || actionLoading) return;
+
+    const applyUrl = job.applyUrl || getPortalSearchUrl(job.source || 'Google Jobs', job.title, job.company);
+
+    setActionLoading(true);
+    // Record application in database in the background without blocking the redirect gesture
+    applyToJob(user._id, job._id)
+      .then((app) => {
+        if (app) setApplied(true);
+      })
+      .catch((err) => console.error("Failed to record application in background:", err))
+      .finally(() => setActionLoading(false));
+
+    // Show redirect toast
+    setToastMessage(`Redirecting you to the official verified application page...`);
+    setShowSuccessToast(true);
+    setTimeout(() => setShowSuccessToast(false), 5000);
+
+    // Open target application URL synchronously and securely with noopener,noreferrer
+    window.open(applyUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleSubmitApply = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !job || actionLoading) return;
+    setModalError(null);
     setActionLoading(true);
 
     try {
+      let currentResumeUrl = profile?.resumeUrl || '';
+      let currentResumeName = profile?.resumeName || '';
+
+      // 1. Upload resume if needed (and not already done in background)
+      if (!profile?.resumeUrl && resumeFile) {
+        setUploadingResume(true);
+        const uploadFormData = new FormData();
+        uploadFormData.append('file', resumeFile);
+        uploadFormData.append('userId', user._id);
+
+        const uploadRes = await fetch('/api/upload-resume', {
+          method: 'POST',
+          body: uploadFormData,
+        });
+
+        if (!uploadRes.ok) {
+          const uploadData = await uploadRes.json();
+          throw new Error(uploadData.error || 'Failed to upload resume file.');
+        }
+
+        const uploadData = await uploadRes.json();
+        currentResumeUrl = uploadData.data.resumeUrl;
+        currentResumeName = uploadData.data.resumeName;
+        setUploadingResume(false);
+      }
+
+      // 2. Update profile
+      const updatedProfile = await updateProfile(user._id, {
+        phone: formData.phone || profile?.phone,
+        location: formData.location || profile?.location,
+        portfolioUrl: formData.portfolioUrl || profile?.portfolioUrl,
+        ...(resumeFile ? {
+          resumeUrl: currentResumeUrl,
+          resumeName: currentResumeName,
+          resumeUpdatedAt: new Date()
+        } : {})
+      });
+
+      if (updatedProfile) {
+        setProfile(updatedProfile);
+      }
+
+      // 3. Apply to job
       const application = await applyToJob(user._id, job._id);
       if (application) {
         setApplied(true);
+        setShowDetailsModal(false);
+        setToastMessage("Get it! You can check it out - Applied successfully!");
+        setShowSuccessToast(true);
+        setTimeout(() => setShowSuccessToast(false), 5000);
       }
-    } catch (err) {
-      console.error("Failed to apply to job:", err);
+    } catch (err: any) {
+      console.error("Error submitting application details:", err);
+      setModalError(err.message || 'An error occurred during submission.');
     } finally {
       setActionLoading(false);
+      setUploadingResume(false);
     }
   };
 
   if (loading) {
     return (
-      <div className="flex min-h-screen bg-background">
-        <Sidebar />
-        <div className="flex-1 flex flex-col min-w-0 mobile-header-offset page-content">
-          <Navbar />
-          <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-6xl mx-auto w-full">
+      <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-6xl mx-auto w-full">
             <Skeleton className="w-24 h-4 mb-6" />
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2">
@@ -171,27 +348,19 @@ export default function JobDetailPage() {
                 </div>
               </div>
             </div>
-          </main>
-        </div>
-      </div>
+      </main>
     );
   }
 
   if (!job) {
     return (
-      <div className="flex min-h-screen bg-background">
-        <Sidebar />
-        <div className="flex-1 flex flex-col min-w-0 mobile-header-offset page-content">
-          <Navbar />
-          <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-6xl mx-auto w-full text-center py-20">
+      <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-6xl mx-auto w-full text-center py-20">
             <h2 className="text-xl font-bold mb-2">Job not found</h2>
             <p className="text-muted-foreground text-sm mb-4">The job posting you are looking for does not exist or has expired.</p>
             <Link href="/jobs">
               <Button className="rounded-xl gradient-brand text-white border-0">Back to Jobs</Button>
             </Link>
-          </main>
-        </div>
-      </div>
+      </main>
     );
   }
 
@@ -199,11 +368,8 @@ export default function JobDetailPage() {
   const missingSkills = job.skills.slice(Math.ceil(job.skills.length * 0.7));
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0 mobile-header-offset page-content">
-        <Navbar />
-        <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-6xl mx-auto w-full">
+    <>
+      <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-6xl mx-auto w-full">
           {/* Back */}
           <button onClick={() => router.back()} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors">
             <ArrowLeft className="w-4 h-4" />
@@ -218,10 +384,14 @@ export default function JobDetailPage() {
                 <div className="flex items-start justify-between gap-4 mb-5">
                   <div className="flex items-start gap-4">
                     <div
-                      className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg flex-shrink-0"
+                      className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-lg flex-shrink-0 overflow-hidden"
                       style={{ backgroundColor: job.companyColor || '#6366f1' }}
                     >
-                      {job.companyLogo || job.company.charAt(0)}
+                      {job.companyLogo && (job.companyLogo.startsWith('http') || job.companyLogo.includes('/')) ? (
+                        <img src={job.companyLogo} alt={job.company} className="w-full h-full object-cover" />
+                      ) : (
+                        job.companyLogo || job.company.charAt(0)
+                      )}
                     </div>
                     <div>
                       <h1 className="text-xl font-bold mb-1" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>{job.title}</h1>
@@ -269,21 +439,26 @@ export default function JobDetailPage() {
                   </div>
                 </div>
 
-                {applied ? (
-                  <div className="w-full rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3 flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-medium">
-                    <CheckCircle2 className="w-5 h-5 animate-bounce" />
-                    Application Submitted! We'll notify you of updates.
+                  <div className="flex flex-col gap-2 w-full">
+                    <Button
+                      onClick={handleApply}
+                      disabled={actionLoading || !user}
+                      className="w-full h-11 rounded-xl gradient-brand text-white border-0 font-semibold hover:opacity-90 shadow-lg text-sm flex items-center justify-center gap-2"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      Apply on Company Site (Verified)
+                    </Button>
+                    {job.source && (
+                      <a
+                        href={getPortalSearchUrl(job.source, job.title, job.company)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-center text-muted-foreground hover:text-primary transition-colors py-1 underline"
+                      >
+                        Or search on {job.source}
+                      </a>
+                    )}
                   </div>
-                ) : (
-                  <Button
-                    onClick={handleApply}
-                    disabled={actionLoading || !user}
-                    className="w-full h-11 rounded-xl gradient-brand text-white border-0 font-semibold hover:opacity-90 shadow-lg text-sm flex items-center justify-center gap-2"
-                  >
-                    <Zap className="w-4 h-4" />
-                    Quick Apply with JobFusion Profile
-                  </Button>
-                )}
               </motion.div>
 
               {/* Skill Match */}
@@ -401,10 +576,14 @@ export default function JobDetailPage() {
                   About {job.company}
                 </h3>
                 <div
-                  className="w-12 h-12 rounded-xl flex items-center justify-center text-white text-xl font-bold mb-3"
+                  className="w-12 h-12 rounded-xl flex items-center justify-center text-white text-xl font-bold mb-3 overflow-hidden"
                   style={{ backgroundColor: job.companyColor || '#6366f1' }}
                 >
-                  {job.companyLogo || job.company.charAt(0)}
+                  {job.companyLogo && (job.companyLogo.startsWith('http') || job.companyLogo.includes('/')) ? (
+                    <img src={job.companyLogo} alt={job.company} className="w-full h-full object-cover" />
+                  ) : (
+                    job.companyLogo || job.company.charAt(0)
+                  )}
                 </div>
                 <p className="text-sm text-muted-foreground mb-3">
                   {job.company} is a global leader in its sector, dedicated to innovation, high quality, and delivering outstanding client solutions.
@@ -438,8 +617,12 @@ export default function JobDetailPage() {
                     similarJobs.map((sj) => (
                       <Link key={sj._id} href={`/jobs/${sj._id}`} className="block card-premium p-4 hover:border-primary/30 transition-all group">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: sj.companyColor || '#6366f1' }}>
-                            {sj.companyLogo || sj.company.charAt(0)}
+                          <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm overflow-hidden" style={{ backgroundColor: sj.companyColor || '#6366f1' }}>
+                            {sj.companyLogo && (sj.companyLogo.startsWith('http') || sj.companyLogo.includes('/')) ? (
+                              <img src={sj.companyLogo} alt={sj.company} className="w-full h-full object-cover" />
+                            ) : (
+                              sj.companyLogo || sj.company.charAt(0)
+                            )}
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate group-hover:text-primary">{sj.title}</p>
@@ -457,7 +640,113 @@ export default function JobDetailPage() {
             </div>
           </div>
         </main>
-      </div>
-    </div>
+
+      {/* Details Dialog */}
+      <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
+        <DialogContent className="max-w-md rounded-2xl bg-card border border-border p-6 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold">Additional Details Required</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmitApply} className="space-y-4 py-3">
+            {modalError && (
+              <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs">
+                {modalError}
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Quick Apply requires the following details which are currently missing from your profile. Filling them here will also save them to your profile.
+            </p>
+
+            {missingFields.includes('resume') && (
+              <div className="space-y-2">
+                <Label htmlFor="resume" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Upload Resume (PDF/DOCX)</Label>
+                <Input
+                  id="resume"
+                  type="file"
+                  accept=".pdf,.docx"
+                  onChange={handleResumeChange}
+                  required={!profile?.resumeUrl}
+                  className="rounded-xl cursor-pointer bg-muted/50 border-border"
+                />
+                {uploadingResume && (
+                  <p className="text-[11px] text-primary animate-pulse font-medium">
+                    JobFusion AI is uploading and reading your resume...
+                  </p>
+                )}
+              </div>
+            )}
+
+            {missingFields.includes('phone') && (
+              <div className="space-y-2">
+                <Label htmlFor="phone" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Phone Number</Label>
+                <Input
+                  id="phone"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  placeholder="+91 98765 43210"
+                  required
+                  className="rounded-xl bg-muted/50 border-border"
+                />
+              </div>
+            )}
+
+            {missingFields.includes('location') && (
+              <div className="space-y-2">
+                <Label htmlFor="location" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Location (City, Country)</Label>
+                <Input
+                  id="location"
+                  value={formData.location}
+                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                  placeholder="Bengaluru, India"
+                  required
+                  className="rounded-xl bg-muted/50 border-border"
+                />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="portfolioUrl" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Portfolio or LinkedIn URL (Optional)</Label>
+              <Input
+                id="portfolioUrl"
+                value={formData.portfolioUrl}
+                onChange={(e) => setFormData({ ...formData, portfolioUrl: e.target.value })}
+                placeholder="https://yourportfolio.com"
+                className="rounded-xl bg-muted/50 border-border"
+              />
+            </div>
+
+            <DialogFooter className="gap-2 pt-2 flex flex-col-reverse sm:flex-row justify-end">
+              <Button type="button" variant="outline" onClick={() => setShowDetailsModal(false)} disabled={actionLoading} className="rounded-xl">Cancel</Button>
+              <Button type="submit" disabled={actionLoading} className="rounded-xl gradient-brand text-white border-0 font-medium">
+                {uploadingResume ? 'Uploading...' : actionLoading ? 'Submitting...' : 'Submit & Apply'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {showSuccessToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className="fixed bottom-6 right-6 z-50 max-w-sm w-full p-4 rounded-2xl glass border border-emerald-500/20 shadow-2xl flex items-start gap-3 bg-card/90"
+          >
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 flex-shrink-0">
+              <Sparkles className="w-4.5 h-4.5 animate-bounce" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Application Status</h4>
+              <p className="text-sm font-semibold text-foreground mt-0.5">{toastMessage}</p>
+            </div>
+            <button onClick={() => setShowSuccessToast(false)} className="text-muted-foreground hover:text-foreground">
+              <X className="w-4 h-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
