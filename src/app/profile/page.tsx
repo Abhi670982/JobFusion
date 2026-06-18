@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   User, MapPin, Briefcase, GraduationCap, Award, Code2,
   Plus, Edit3, Star, CheckCircle2,
   Link2, ExternalLink, Globe, Camera, Phone, Mail,
-  Cloud, Smartphone, Palette, Save, Trash2, Upload, FileText, Loader2, AlertCircle, ArrowLeft
+  Cloud, Smartphone, Palette, Save, Trash2, Upload, FileText, Loader2, AlertCircle, ArrowLeft, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -85,6 +85,23 @@ export default function ProfilePage() {
   // Upload states
   const [uploadingResume, setUploadingResume] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  // Toast notifications state
+  const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; title: string; message: string } | null>(null);
+
+  // Confirmation modal state
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<{ title: string; description: string; onConfirm: () => void } | null>(null);
+
+  const showToast = (type: 'success' | 'error' | 'info', title: string, message: string) => {
+    setToast({ type, title, message });
+    setTimeout(() => setToast(null), 4000);
+  };
+
+  const triggerConfirm = (title: string, description: string, onConfirm: () => void) => {
+    setConfirmAction({ title, description, onConfirm });
+    setConfirmOpen(true);
+  };
 
   // Skill Modals State
   const [skillModalOpen, setSkillModalOpen] = useState(false);
@@ -195,13 +212,13 @@ export default function ProfilePage() {
           setProfile(prof);
           if (prof.skills) setProfile(prev => prev ? { ...prev, skills: prof.skills } : null);
         }
-        alert(`Resume uploaded and parsed successfully! Extracted ${data.data.skillsExtracted} skills.`);
+        showToast('success', 'Resume Uploaded', `Resume uploaded and parsed successfully! Extracted ${data.data.skillsExtracted} skills.`);
       } else {
-        alert(data.error || "Failed to upload resume.");
+        showToast('error', 'Upload Failed', data.error || "Failed to upload resume.");
       }
     } catch (err) {
       console.error(err);
-      alert("Something went wrong during resume upload.");
+      showToast('error', 'Upload Error', "Something went wrong during resume upload.");
     } finally {
       setUploadingResume(false);
     }
@@ -223,13 +240,13 @@ export default function ProfilePage() {
       const data = await res.json();
       if (data.success && data.imageUrl) {
         setUser(prev => prev ? { ...prev, profileImage: data.imageUrl } : null);
-        alert("Profile picture updated successfully!");
+        showToast('success', 'Avatar Updated', "Profile picture updated successfully!");
       } else {
-        alert(data.error || "Failed to upload profile photo.");
+        showToast('error', 'Upload Failed', data.error || "Failed to upload profile photo.");
       }
     } catch (err) {
       console.error(err);
-      alert("Something went wrong uploading profile photo.");
+      showToast('error', 'Upload Error', "Something went wrong uploading profile photo.");
     } finally {
       setUploadingAvatar(false);
     }
@@ -342,18 +359,23 @@ export default function ProfilePage() {
 
   const handleDeleteExperience = async (index: number) => {
     if (!user || !profile) return;
-    const confirm = window.confirm("Delete this experience?");
-    if (!confirm) return;
-
-    const updatedExps = profile.experiences.filter((_, i) => i !== index);
-    try {
-      const updated = await updateProfile(user._id, { experiences: updatedExps });
-      if (updated) {
-        setProfile(updated);
+    triggerConfirm(
+      "Delete Experience",
+      "Are you sure you want to delete this experience entry?",
+      async () => {
+        const updatedExps = profile.experiences.filter((_, i) => i !== index);
+        try {
+          const updated = await updateProfile(user._id, { experiences: updatedExps });
+          if (updated) {
+            setProfile(updated);
+            showToast('success', 'Experience Deleted', 'The work experience entry has been deleted.');
+          }
+        } catch (err) {
+          console.error("Failed to delete experience:", err);
+          showToast('error', 'Error', 'Failed to delete experience entry.');
+        }
       }
-    } catch (err) {
-      console.error("Failed to delete experience:", err);
-    }
+    );
   };
 
   // Education Adding / Editing / Deleting
@@ -404,18 +426,23 @@ export default function ProfilePage() {
 
   const handleDeleteEducation = async (index: number) => {
     if (!user || !profile) return;
-    const confirm = window.confirm("Delete this education history?");
-    if (!confirm) return;
-
-    const updatedEdus = profile.education.filter((_, i) => i !== index);
-    try {
-      const updated = await updateProfile(user._id, { education: updatedEdus });
-      if (updated) {
-        setProfile(updated);
+    triggerConfirm(
+      "Delete Education",
+      "Are you sure you want to delete this education history?",
+      async () => {
+        const updatedEdus = profile.education.filter((_, i) => i !== index);
+        try {
+          const updated = await updateProfile(user._id, { education: updatedEdus });
+          if (updated) {
+            setProfile(updated);
+            showToast('success', 'Education Deleted', 'The education entry has been deleted.');
+          }
+        } catch (err) {
+          console.error("Failed to delete education:", err);
+          showToast('error', 'Error', 'Failed to delete education entry.');
+        }
       }
-    } catch (err) {
-      console.error("Failed to delete education:", err);
-    }
+    );
   };
 
   // Projects Adding / Editing / Deleting
@@ -468,18 +495,23 @@ export default function ProfilePage() {
 
   const handleDeleteProject = async (index: number) => {
     if (!user || !profile) return;
-    const confirm = window.confirm("Delete this project?");
-    if (!confirm) return;
-
-    const updatedProjs = profile.projects.filter((_, i) => i !== index);
-    try {
-      const updated = await updateProfile(user._id, { projects: updatedProjs });
-      if (updated) {
-        setProfile(updated);
+    triggerConfirm(
+      "Delete Project",
+      "Are you sure you want to delete this project?",
+      async () => {
+        const updatedProjs = profile.projects.filter((_, i) => i !== index);
+        try {
+          const updated = await updateProfile(user._id, { projects: updatedProjs });
+          if (updated) {
+            setProfile(updated);
+            showToast('success', 'Project Deleted', 'The project has been deleted.');
+          }
+        } catch (err) {
+          console.error("Failed to delete project:", err);
+          showToast('error', 'Error', 'Failed to delete project.');
+        }
       }
-    } catch (err) {
-      console.error("Failed to delete project:", err);
-    }
+    );
   };
 
   const getInitials = () => {
@@ -1210,6 +1242,79 @@ export default function ProfilePage() {
               <DialogFooter className="gap-2">
                 <Button variant="outline" onClick={() => setSkillModalOpen(false)} className="rounded-xl">Cancel</Button>
                 <Button onClick={handleAddSkill} className="rounded-xl gradient-brand text-white border-0">Add Skill</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Toast Notification */}
+          <AnimatePresence>
+            {toast && (
+              <motion.div
+                initial={{ opacity: 0, y: 50, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 20, scale: 0.95 }}
+                className={`fixed bottom-6 right-6 z-50 max-w-sm w-full p-4 rounded-2xl glass border shadow-2xl flex items-start gap-3 bg-card/90 ${
+                  toast.type === 'success'
+                    ? 'border-emerald-500/20'
+                    : toast.type === 'error'
+                    ? 'border-rose-500/20'
+                    : 'border-blue-500/20'
+                }`}
+              >
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                  toast.type === 'success'
+                    ? 'bg-emerald-500/10 text-emerald-500'
+                    : toast.type === 'error'
+                    ? 'bg-rose-500/10 text-rose-500'
+                    : 'bg-blue-500/10 text-blue-500'
+                }`}>
+                  {toast.type === 'success' ? (
+                    <CheckCircle2 className="w-4.5 h-4.5" />
+                  ) : toast.type === 'error' ? (
+                    <AlertCircle className="w-4.5 h-4.5" />
+                  ) : (
+                    <Loader2 className="w-4.5 h-4.5 animate-spin" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className={`text-xs font-bold uppercase tracking-wider ${
+                    toast.type === 'success'
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : toast.type === 'error'
+                      ? 'text-rose-600 dark:text-rose-400'
+                      : 'text-blue-600 dark:text-blue-400'
+                  }`}>{toast.title}</h4>
+                  <p className="text-sm font-semibold text-foreground mt-0.5">{toast.message}</p>
+                </div>
+                <button onClick={() => setToast(null)} className="text-muted-foreground hover:text-foreground">
+                  <X className="w-4 h-4" />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Confirmation Dialog */}
+          <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+            <DialogContent className="max-w-sm rounded-2xl p-6">
+              <DialogHeader>
+                <DialogTitle className="text-lg font-bold">{confirmAction?.title}</DialogTitle>
+              </DialogHeader>
+              <div className="py-2">
+                <p className="text-sm text-muted-foreground">{confirmAction?.description}</p>
+              </div>
+              <DialogFooter className="gap-2 sm:gap-0 mt-4">
+                <Button variant="outline" onClick={() => setConfirmOpen(false)} className="rounded-xl flex-1 sm:flex-none">
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={() => {
+                    confirmAction?.onConfirm();
+                    setConfirmOpen(false);
+                  }} 
+                  className="rounded-xl bg-destructive hover:bg-destructive/90 text-destructive-foreground flex-1 sm:flex-none"
+                >
+                  Delete
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
