@@ -4,6 +4,7 @@ import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import Profile from "@/models/Profile";
 import Application from "@/models/Application";
 import SavedJob from "@/models/SavedJob";
+import Notification from "@/models/Notification";
 import Activity from "@/models/Activity";
 
 export const dynamic = "force-dynamic";
@@ -21,42 +22,31 @@ export async function GET() {
 
     const userId = user._id;
 
-    // Dates for week and month filters
-    const now = new Date();
-    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-    // Run basic aggregate lookups concurrently
+    // Run lookups concurrently
     const [
       profile,
-      appliedCount,
-      appliedThisWeek,
-      appliedThisMonth,
-      interviewCount,
-      offerCount,
       savedCount,
+      visitedJobIds,
+      unreadNotifCount,
     ] = await Promise.all([
       Profile.findOne({ userId }).lean(),
-      Application.countDocuments({ userId }),
-      Application.countDocuments({ userId, appliedAt: { $gte: oneWeekAgo } }),
-      Application.countDocuments({ userId, appliedAt: { $gte: oneMonthAgo } }),
-      Application.countDocuments({ userId, status: "Interview" }),
-      Application.countDocuments({ userId, status: "Offer" }),
       SavedJob.countDocuments({ userId }),
+      Activity.distinct("jobId", { userId, type: "viewed", jobId: { $ne: null } }),
+      Notification.countDocuments({ userId, read: false }),
     ]);
+
+    const visitedCount = visitedJobIds.length;
 
     return NextResponse.json({
       success: true,
       user,
       profile,
       stats: {
-        appliedCount,
-        appliedThisWeek,
-        appliedThisMonth,
-        interviewCount,
-        offerCount,
+        visitedCount,
+        skillsCount: profile?.skills?.length || 0,
         savedCount,
       },
+      unreadNotificationsCount: unreadNotifCount,
     });
   } catch (error: any) {
     console.error("Error in GET /api/dashboard:", error);

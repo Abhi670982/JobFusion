@@ -10,7 +10,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { DbJob, saveJob, unsaveJob } from '@/lib/api-helper';
+import { DbJob, saveJob, unsaveJob, logActivity } from '@/lib/api-helper';
 import { trackVisitedJob } from '@/lib/visited-jobs';
 
 interface JobCardProps {
@@ -29,12 +29,6 @@ const locationTypeConfig = {
   onsite: { icon: Users, label: 'On-site', className: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20' },
 };
 
-const matchColor = (score: number) => {
-  if (score >= 90) return 'text-emerald-500';
-  if (score >= 75) return 'text-blue-500';
-  if (score >= 60) return 'text-amber-500';
-  return 'text-muted-foreground';
-};
 
 export default function JobCard({
   job,
@@ -55,6 +49,14 @@ export default function JobCard({
       return;
     }
     trackVisitedJob(job);
+    if (userId) {
+      logActivity({
+        type: "viewed",
+        jobId: job._id,
+        jobTitle: job.title,
+        company: job.company,
+      }).catch((err) => console.error("Failed to log viewed activity from Card click:", err));
+    }
     router.push(`/jobs/${job._id}`);
   };
 
@@ -101,6 +103,14 @@ export default function JobCard({
   const handleApplyClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     trackVisitedJob(job);
+    if (userId) {
+      logActivity({
+        type: "viewed",
+        jobId: job._id,
+        jobTitle: job.title,
+        company: job.company,
+      }).catch((err) => console.error("Failed to log viewed activity from Apply click:", err));
+    }
     if (job.applyUrl) {
       window.open(job.applyUrl, "_blank", "noopener,noreferrer");
     } else {
@@ -245,18 +255,22 @@ export default function JobCard({
         {/* Footer */}
         <div className="flex items-center justify-between pt-3 border-t border-border/60">
           <div className="flex items-center gap-3">
-            {/* Match Score */}
-            <div className="flex items-center gap-1.5">
-              <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
-                <span className="text-[8px] font-bold text-primary">AI</span>
-              </div>
-              <span className={cn('text-xs font-semibold', matchColor(job.matchScore))}>
-                {job.matchScore}% match
-              </span>
-            </div>
+
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <Clock className="w-3 h-3" />
-              {typeof job.postedAt === "string" ? job.postedAt : "Just now"}
+              {(() => {
+                const d = job.postedAtDate ? new Date(job.postedAtDate) : null;
+                if (!d || isNaN(d.getTime())) return typeof job.postedAt === "string" ? job.postedAt : "Just now";
+                const diffMs = Date.now() - d.getTime();
+                const mins = Math.floor(diffMs / 60000);
+                const hrs = Math.floor(diffMs / 3600000);
+                const days = Math.floor(diffMs / 86400000);
+                if (mins < 1) return "Just now";
+                if (mins < 60) return `${mins}m ago`;
+                if (hrs < 24) return `${hrs}h ago`;
+                if (days < 30) return `${days}d ago`;
+                return `${Math.floor(days / 30)}mo ago`;
+              })()}
             </div>
           </div>
 

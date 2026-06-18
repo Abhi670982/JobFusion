@@ -107,6 +107,7 @@ export interface DbJob {
   skills: string[];
   matchScore: number;
   postedAt: string;
+  postedAtDate?: string;
   description: string;
   requirements: string[];
   responsibilities: string[];

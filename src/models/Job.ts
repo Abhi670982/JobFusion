@@ -67,6 +67,10 @@ const JobSchema = new Schema(
       type: String,
       default: "Just now",
     },
+    postedAtDate: {
+      type: Date,
+      default: Date.now,
+    },
     description: {
       type: String,
       trim: true,
@@ -163,6 +167,7 @@ const JobSchema = new Schema(
 JobSchema.index({ source: 1 });
 JobSchema.index({ title: 1, company: 1 });
 JobSchema.index({ createdAt: -1 });
+JobSchema.index({ postedAtDate: -1 });
 JobSchema.index({ skills: 1 });
 JobSchema.index({ city: 1, country: 1 });
 

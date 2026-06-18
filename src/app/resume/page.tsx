@@ -117,7 +117,13 @@ export default function ResumePage() {
           tips: []
         }
       });
-      if (updated) { setProfile(updated); setSuccessMessage('Resume removed.'); }
+      if (updated) { 
+        setProfile(updated); 
+        setSuccessMessage('Resume removed.'); 
+        if (typeof window !== 'undefined') {
+          sessionStorage.removeItem('jobfusion_filter_query');
+        }
+      }
     } catch (err: any) { setError(err.message || 'Failed to remove resume.'); }
   };
 
@@ -395,7 +401,9 @@ export default function ResumePage() {
 
                     {insights.tips.length > 0 && (
                       <div className="space-y-2">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">💡 Tips to Improve</p>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                          <Lightbulb className="w-3.5 h-3.5 text-blue-500" /> Tips to Improve
+                        </p>
                         {insights.tips.map((tip, i) => (
                           <div key={i} className="flex gap-2 text-xs">
                             <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-blue-500" />

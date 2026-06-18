@@ -34,6 +34,23 @@ export function getCompanyColor(source: JobSource): string {
   }
 }
 
+// Convert a Date to a human-readable relative string like "2 hours ago"
+export function toRelativeTimeString(date: Date | null | undefined): string {
+  if (!date) return "Just now";
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHrs = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+  if (diffHrs < 24) return `${diffHrs} hour${diffHrs > 1 ? 's' : ''} ago`;
+  if (diffDays < 30) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  const diffMonths = Math.floor(diffDays / 30);
+  return `${diffMonths} month${diffMonths > 1 ? 's' : ''} ago`;
+}
+
 // Fetch and process jobs for a specific source
 export async function runSourceSync(source: JobSource, keywords: string[]): Promise<{ success: boolean; count: number; error?: string }> {
   try {
@@ -108,6 +125,9 @@ export async function runSourceSync(source: JobSource, keywords: string[]): Prom
           existingJob.fetchedAt = new Date();
           existingJob.applyUrl = unified.applyUrl || existingJob.applyUrl;
           existingJob.sourceUrl = unified.sourceUrl || existingJob.sourceUrl;
+          const updatedDate = unified.postedAt || existingJob.postedAtDate || new Date();
+          existingJob.postedAtDate = updatedDate;
+          existingJob.postedAt = toRelativeTimeString(updatedDate instanceof Date ? updatedDate : new Date(updatedDate));
           await existingJob.save();
           console.log(`[Pipeline] Updated existing job: ${unified.title} at ${unified.company} (${source})`);
         } else {
@@ -137,7 +157,8 @@ export async function runSourceSync(source: JobSource, keywords: string[]): Prom
             jobType: unified.jobType,
             skills: unified.skills,
             matchScore: 70 + Math.floor(Math.random() * 25), // Random Match Score for AI feature
-            postedAt: unified.postedAt || new Date(),
+            postedAt: toRelativeTimeString(unified.postedAt),
+            postedAtDate: unified.postedAt || new Date(),
             description: unified.description,
             descriptionHtml: unified.descriptionHtml,
             source: source,

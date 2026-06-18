@@ -123,6 +123,10 @@ export default function JobsPage() {
   const [savedJobIds, setSavedJobIds] = useState<Set<string>>(new Set());
   const [appliedJobIds, setAppliedJobIds] = useState<Set<string>>(new Set());
 
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
   // Input states
   const [queryInput, setQueryInput] = useState('');
   const [locationInput, setLocationInput] = useState('');
@@ -225,6 +229,7 @@ export default function JobsPage() {
         if (params.get('order')) setOrder(params.get('order') as any);
         if (params.get('datePosted')) setDatePosted(params.get('datePosted') || '');
         if (params.get('salaryMin')) setSalaryRange(Math.floor(parseInt(params.get('salaryMin') || '0', 10) / 100000));
+        if (params.get('page')) setCurrentPage(parseInt(params.get('page') || '1', 10));
         
         if (params.get('source')) setSelectedSources(params.get('source')!.split(','));
         if (params.get('jobType')) setSelectedJobTypes(params.get('jobType')!.split(','));
@@ -279,6 +284,7 @@ export default function JobsPage() {
       if (data.success) {
         setJobs(data.data || []);
         setTotalJobsCount(data.total || 0);
+        setTotalPages(data.totalPages || 1);
         if (data.sourceCounts) {
           setSourceCounts(data.sourceCounts);
         }
@@ -291,7 +297,7 @@ export default function JobsPage() {
   };
 
   // 3. Build search params, update browser URL, and trigger fetch
-  const handleFilterChange = () => {
+  const handleFilterChange = (page = currentPage) => {
     const params = new URLSearchParams();
 
     if (queryInput) params.set('q', queryInput);
@@ -319,6 +325,21 @@ export default function JobsPage() {
       params.set('datePosted', datePosted); // Keep tag in URL
     }
 
+    params.set('page', String(page));
+
+    const hasSkillsFilter = selectedSkills.length > 0;
+    const hasSearchQuery = !!queryInput || !!locationInput || selectedSources.length > 0 || selectedJobTypes.length > 0 || selectedExpLevels.length > 0 || remoteOnly || salaryRange > 0 || datePosted;
+
+    if (!hasSkillsFilter && !hasSearchQuery) {
+      setSkillWarning(true);
+      setJobs([]);
+      setTotalJobsCount(0);
+      setLoading(false);
+      return;
+    } else {
+      setSkillWarning(false);
+    }
+
     const newQueryString = params.toString();
 
     // Cache the filter query in sessionStorage
@@ -339,7 +360,8 @@ export default function JobsPage() {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
 
     debounceTimerRef.current = setTimeout(() => {
-      handleFilterChange();
+      setCurrentPage(1);
+      handleFilterChange(1);
     }, 300);
 
     return () => {
@@ -350,8 +372,14 @@ export default function JobsPage() {
   // 5. Trigger filter update immediately when checkbox / dropdown filters change
   useEffect(() => {
     if (!initialDataLoaded.current) return;
-    handleFilterChange();
+    setCurrentPage(1);
+    handleFilterChange(1);
   }, [selectedSources, selectedJobTypes, selectedExpLevels, selectedSkills, datePosted, remoteOnly, salaryRange, sortBy, order]);
+
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage);
+    handleFilterChange(newPage);
+  };
 
   // AI Matching with Skills in Profile
   const handleAISearch = async () => {
@@ -381,7 +409,7 @@ export default function JobsPage() {
       // Select the skills in UI to filter the feed
       setSelectedSkills(userSkills);
       
-      setToastMessage(`AI is fetching and matching live jobs for your ${userSkills.length} skills!`);
+      setToastMessage(`Fetching and matching live jobs for your ${userSkills.length} skills!`);
       setShowSuccessToast(true);
     } catch (error) {
       console.error("Error AI matching jobs:", error);
@@ -427,7 +455,6 @@ export default function JobsPage() {
     setSelectedSources([]);
     setSelectedJobTypes([]);
     setSelectedExpLevels([]);
-    setSelectedSkills([]);
     setDatePosted('');
     setRemoteOnly(false);
     setSalaryRange(0);
@@ -438,7 +465,12 @@ export default function JobsPage() {
     
     sessionStorage.removeItem('jobfusion_filter_query');
     window.history.pushState(null, '', window.location.pathname);
-    fetchFilteredJobs('');
+
+    if (profile && profile.skills && profile.skills.length > 0) {
+      setSelectedSkills(profile.skills.map((s: any) => s.name.toLowerCase()));
+    } else {
+      setSelectedSkills([]);
+    }
   };
 
   const handleSavedToggle = (jobId: string, nowSaved: boolean) => {
@@ -530,12 +562,12 @@ export default function JobsPage() {
                 disabled={loading || matching || !user}
                 className="gradient-brand text-white border-0 rounded-xl h-10 px-5 font-semibold hover:opacity-90 shadow-md flex items-center"
               >
-                <Sparkles className={cn("w-4.5 h-4.5 mr-2", matching && "animate-spin")} />
-                {matching ? 'Matching skills...' : 'Find jobs matched to my skill'}
+                <Briefcase className={cn("w-4.5 h-4.5 mr-2", matching && "animate-spin")} />
+                {matching ? 'Matching skills...' : 'Match My Skills'}
               </Button>
               {skillWarning && (
                 <p className="text-red-500 text-xs font-semibold mt-1">
-                  Please <Link href="/profile" className="underline font-bold hover:text-red-600 transition-colors">enter your skills</Link> in your profile first!
+                  Please <Link href="/resume" className="underline font-bold hover:text-red-600 transition-colors">add your skills</Link> in the resume section first!
                 </p>
               )}
             </div>
@@ -867,22 +899,22 @@ export default function JobsPage() {
 
               {/* Main Jobs Listing */}
               <div className={cn('grid gap-4', viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1')}>
-                {loading ? (
+                {(loading && !skillWarning) ? (
                   Array.from({ length: 4 }).map((_, i) => <JobCardSkeleton key={i} />)
-                ) : (skillWarning && jobs.length === 0) ? (
+                ) : skillWarning ? (
                   <div className="col-span-full flex flex-col items-center justify-center py-20 text-center bg-card/10 border border-dashed border-red-500/30 rounded-3xl p-8 space-y-4">
                     <div className="w-16 h-16 rounded-2xl bg-red-500/5 border border-red-500/15 flex items-center justify-center text-red-500 mb-2">
                       <AlertTriangle className="w-8 h-8 animate-pulse" />
                     </div>
                     <div className="space-y-1">
-                      <h3 className="font-bold text-lg" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Please Enter Your Skills</h3>
+                      <h3 className="font-bold text-lg" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>No Skills Added</h3>
                       <p className="text-muted-foreground text-xs max-w-sm mx-auto">
-                        To find relevant jobs matching your profile, please enter your skills or upload a resume.
+                        To find relevant jobs, please upload your resume or add skills in the resume section.
                       </p>
                     </div>
-                    <Link href="/profile">
+                    <Link href="/resume">
                       <Button className="rounded-xl gradient-brand text-white border-0 shadow-md">
-                        Go to Profile to Add Skills
+                        Go to Resume Section
                       </Button>
                     </Link>
                   </div>
@@ -909,6 +941,33 @@ export default function JobsPage() {
                   ))
                 )}
               </div>
+
+              {/* Pagination Controls */}
+              {!loading && !skillWarning && totalPages > 1 && (
+                <div className="flex items-center justify-between pt-6 border-t border-border mt-6">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(Math.max(currentPage - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="rounded-xl gap-1"
+                  >
+                    <ArrowLeft className="w-4 h-4" /> Previous
+                  </Button>
+                  <span className="text-xs text-muted-foreground font-semibold">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePageChange(Math.min(currentPage + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className="rounded-xl gap-1"
+                  >
+                    Next <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
             </div>
 
           </div>
@@ -1002,7 +1061,7 @@ export default function JobsPage() {
               <Sparkles className="w-4.5 h-4.5 animate-bounce" />
             </div>
             <div className="flex-1 min-w-0">
-              <h4 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">AI Skill Match Complete</h4>
+              <h4 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Skill Match Complete</h4>
               <p className="text-sm font-semibold text-foreground mt-0.5">{toastMessage}</p>
             </div>
             <button onClick={() => setShowSuccessToast(false)} className="text-muted-foreground hover:text-foreground">

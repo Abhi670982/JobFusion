@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   TrendingUp, Briefcase, Bookmark, Eye, MessageSquare,
   Sparkles, ArrowRight, CheckCircle2, XCircle,
-  Calendar, Star, ChevronRight, Zap
+  Calendar, Star, ChevronRight, Zap, Code2, Smile
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,7 @@ import { calculateCompletion } from '@/lib/profile-completion';
 import {
   fetchDashboardData,
   fetchDashboardActivity,
+  fetchDashboardNotifications,
   fetchDashboardMatches,
   DbUser,
   DbProfile
@@ -110,15 +111,14 @@ export default function DashboardPage() {
   const [user, setUser] = useState<DbUser | null>(null);
   const [profile, setProfile] = useState<DbProfile | null>(null);
   const [stats, setStats] = useState<any>({
-    appliedCount: 0,
-    appliedThisWeek: 0,
-    appliedThisMonth: 0,
-    interviewCount: 0,
-    offerCount: 0,
+    visitedCount: 0,
+    skillsCount: 0,
     savedCount: 0,
   });
   const [activities, setActivities] = useState<any[]>([]);
   const [chartData, setChartData] = useState<any[]>([]);
+  const [notifs, setNotifs] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [matchesCount, setMatchesCount] = useState(0);
 
   useEffect(() => {
@@ -133,16 +133,21 @@ export default function DashboardPage() {
           }
           setProfile(dash.profile);
           setStats(dash.stats);
+          setUnreadCount(dash.unreadNotificationsCount || 0);
 
           // Load other sub-widgets concurrently
-          const [actRes, matchRes] = await Promise.all([
+          const [actRes, notifRes, matchRes] = await Promise.all([
             fetchDashboardActivity(),
+            fetchDashboardNotifications(),
             fetchDashboardMatches()
           ]);
 
           if (actRes) {
             setActivities(actRes.recentActivities || []);
             setChartData(actRes.chartData || []);
+          }
+          if (notifRes) {
+            setNotifs(notifRes);
           }
           if (matchRes) {
             setMatchesCount(matchRes.totalMatches || 0);
@@ -169,10 +174,11 @@ export default function DashboardPage() {
           >
             <div>
               <h1 className="text-2xl font-bold flex items-center gap-1.5" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-                Welcome back, {loading ? <Skeleton className="w-24 h-6 inline-block animate-pulse" /> : (user?.fullName.split(' ')[0] || 'User')} 👋
+                Welcome back, {loading ? <Skeleton className="w-24 h-6 inline-block animate-pulse" /> : (user?.fullName.split(' ')[0] || 'User')}{" "}
+                <Smile className="w-5.5 h-5.5 inline-block text-amber-500 animate-pulse" />
               </h1>
               <p className="text-muted-foreground text-sm mt-1">
-                You have <strong className="text-foreground">{loading ? '...' : (matchesCount > 0 ? `${matchesCount} new job matches` : 'no job matches yet')}</strong> today.
+                You have <strong className="text-foreground">{loading ? '...' : (matchesCount > 0 ? `${matchesCount} new job matches` : 'no job matches yet')}</strong> and <strong className="text-foreground">{unreadCount} unread notification{unreadCount === 1 ? '' : 's'}</strong> today.
               </p>
             </div>
             <div className="flex gap-2">
@@ -270,19 +276,16 @@ export default function DashboardPage() {
           )}
 
           {/* Stats Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             {loading ? (
-              Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)
+              Array.from({ length: 3 }).map((_, i) => <StatCardSkeleton key={i} />)
             ) : (
               <>
-                <Link href="/applications" className="block cursor-pointer">
-                  <StatCard icon={Briefcase} label="Applications Sent" value={stats.appliedCount} change={stats.appliedThisWeek > 0 ? `+${stats.appliedThisWeek} this week` : "0 this week"} color="#6366f1" />
-                </Link>
-                <Link href="/applications" className="block cursor-pointer">
-                  <StatCard icon={Calendar} label="Interviews" value={stats.interviewCount} change="scheduled" color="#10b981" />
-                </Link>
-                <Link href="/applications" className="block cursor-pointer">
-                  <StatCard icon={Star} label="Offers Received" value={stats.offerCount} color="#f59e0b" />
+                <div className="block">
+                  <StatCard icon={Eye} label="Visited Openings" value={stats.visitedCount} color="#6366f1" />
+                </div>
+                <Link href="/profile" className="block cursor-pointer">
+                  <StatCard icon={Code2} label="Skills" value={stats.skillsCount} color="#10b981" />
                 </Link>
                 <Link href="/jobs/saved" className="block cursor-pointer">
                   <StatCard icon={Bookmark} label="Saved Jobs" value={stats.savedCount} color="#8b5cf6" />
@@ -296,28 +299,23 @@ export default function DashboardPage() {
             <div className="lg:col-span-2 card-premium p-4 lg:p-5">
               <div className="flex items-center justify-between mb-5">
                 <div>
-                  <h3 className="font-semibold">Activity Overview</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">Applications & profile views this week</p>
+                  <h3 className="font-semibold">Visited Openings</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">Unique job openings visited this week</p>
                 </div>
                 <Badge variant="secondary" className="rounded-lg text-xs">Last 7 days</Badge>
               </div>
               <ResponsiveContainer width="100%" height={200}>
                 <AreaChart data={chartData}>
                   <defs>
-                    <linearGradient id="colorApps" x1="0" y1="0" x2="0" y2="1">
+                    <linearGradient id="colorVisited" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
                       <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="colorViews" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <XAxis dataKey="day" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid var(--border)', fontSize: 12 }} />
-                  <Area type="monotone" dataKey="views" stroke="#8b5cf6" fill="url(#colorViews)" strokeWidth={2} name="Views" />
-                  <Area type="monotone" dataKey="applications" stroke="#6366f1" fill="url(#colorApps)" strokeWidth={2} name="Applications" />
+                  <Area type="monotone" dataKey="visited" stroke="#6366f1" fill="url(#colorVisited)" strokeWidth={2} name="Visited Openings" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -396,11 +394,11 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 )}
-              </div>
             </div>
           </div>
+        </div>
 
-          <div className="grid grid-cols-1 gap-4 lg:gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
             {/* Recent Activity */}
             <div className="card-premium p-5">
               <div className="flex items-center justify-between mb-4">
@@ -447,6 +445,49 @@ export default function DashboardPage() {
                       </div>
                     );
                   })
+                )}
+              </div>
+            </div>
+
+            {/* Notifications Panel */}
+            <div className="card-premium p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold">Notifications</h3>
+                  {unreadCount > 0 && (
+                    <Badge className="h-5 px-1.5 text-[10px] gradient-brand text-white border-0">{unreadCount} new</Badge>
+                  )}
+                </div>
+                <Link href="/notifications" className="text-xs text-primary hover:underline flex items-center gap-1">
+                  See all <ChevronRight className="w-3 h-3" />
+                </Link>
+              </div>
+              <div className="space-y-3">
+                {loading ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <Skeleton className="w-2 h-2 rounded-full animate-pulse" />
+                      <div className="flex-1 space-y-1">
+                        <Skeleton className="h-3.5 w-1/3 animate-pulse" />
+                        <Skeleton className="h-3 w-2/3 animate-pulse" />
+                      </div>
+                    </div>
+                  ))
+                ) : notifs.length === 0 ? (
+                  <div className="text-center py-6 text-xs text-muted-foreground">
+                    No new notifications.
+                  </div>
+                ) : (
+                  notifs.slice(0, 5).map((notif) => (
+                    <div key={notif._id || notif.id} className={cn('flex items-start gap-3 p-2.5 rounded-xl transition-colors', !notif.read && 'bg-primary/5 border border-primary/10')}>
+                      <div className={cn('w-2 h-2 rounded-full mt-1.5 flex-shrink-0', !notif.read ? 'bg-primary' : 'bg-transparent')} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{notif.title}</p>
+                        <p className="text-xs text-muted-foreground leading-relaxed">{notif.message}</p>
+                        <p className="text-[11px] text-muted-foreground mt-1">{formatTime(notif.createdAt)}</p>
+                      </div>
+                    </div>
+                  ))
                 )}
               </div>
             </div>

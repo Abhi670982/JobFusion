@@ -137,13 +137,13 @@ export async function GET() {
         return actDate >= dayStart && actDate <= dayEnd;
       });
 
-      const appsCount = dayActivities.filter(act => act.type === "applied").length;
-      const viewsCount = dayActivities.filter(act => act.type === "viewed").length;
+      const dayViewActivities = dayActivities.filter(act => act.type === "viewed" && act.jobId);
+      const uniqueJobIds = Array.from(new Set(dayViewActivities.map(act => act.jobId.toString())));
+      const visitedCount = uniqueJobIds.length;
 
       chartData.push({
         day: dayName,
-        applications: appsCount,
-        views: viewsCount,
+        visited: visitedCount,
       });
     }
 

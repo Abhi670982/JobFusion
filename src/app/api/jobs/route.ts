@@ -38,6 +38,8 @@ export async function POST(req: NextRequest) {
       description,
       source,
       applyUrl,
+      postedAt: new Date().toString(),
+      postedAtDate: new Date(),
     });
 
     return NextResponse.json(
@@ -88,6 +90,7 @@ export async function GET(req: NextRequest) {
     const salaryMax = searchParams.get("salaryMax") || "";
     const skills = searchParams.get("skills") || "";
     const postedAfter = searchParams.get("postedAfter") || "";
+    const category = searchParams.get("category") || "";
     
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "20", 10)));
@@ -109,10 +112,9 @@ export async function GET(req: NextRequest) {
 
     // 2. Multi-source filter
     if (source) {
-      const sources = source.split(",").map((s) => s.trim());
-      const regexPattern = sources.map(s => `^${s}$`).join("|");
+      const sources = source.split(",").map((s) => s.trim().toLowerCase());
       andConditions.push({
-        source: { $regex: new RegExp(regexPattern, "i") }
+        source: { $in: sources }
       });
     }
 
@@ -187,21 +189,61 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    const datePosted = searchParams.get("datePosted") || "";
+
     // 9. Date posted filter
-    if (postedAfter) {
-      const dateLimit = new Date(postedAfter);
-      if (!isNaN(dateLimit.getTime())) {
-        andConditions.push({
-          postedAt: { $gte: dateLimit }
-        });
+    let dateLimit: Date | null = null;
+    if (datePosted) {
+      const now = new Date();
+      if (datePosted === "24h") now.setHours(now.getHours() - 24);
+      else if (datePosted === "3d") now.setDate(now.getDate() - 3);
+      else if (datePosted === "7d") now.setDate(now.getDate() - 7);
+      else if (datePosted === "30d") now.setDate(now.getDate() - 30);
+      dateLimit = now;
+    } else if (postedAfter) {
+      const parsed = new Date(postedAfter);
+      if (!isNaN(parsed.getTime())) {
+        dateLimit = parsed;
       }
     }
+
+    if (dateLimit) {
+      andConditions.push({
+        $or: [
+          { postedAtDate: { $gte: dateLimit } },
+          {
+            $and: [
+              { postedAtDate: { $exists: false } },
+              { createdAt: { $gte: dateLimit } }
+            ]
+          }
+        ]
+      });
+    }
+
+
+    // 10. Category filter
+    if (category) {
+      andConditions.push({
+        category: { $regex: category, $options: "i" }
+      });
+    }
+
+    // 11. Filter out closed jobs (expiresAt in the future, null, or not set)
+    const now = new Date();
+    andConditions.push({
+      $or: [
+        { expiresAt: { $gt: now } },
+        { expiresAt: null },
+        { expiresAt: { $exists: false } }
+      ]
+    });
 
     // Build final query conditions object
     const queryConditions = andConditions.length > 0 ? { $and: andConditions } : {};
 
     // Construct sorting
-    const sortField = sortBy === "salaryMin" ? "salaryMin" : "postedAt";
+    const sortField = sortBy === "salaryMin" ? "salaryMin" : "postedAtDate";
     const sortDirection = order === "asc" ? 1 : -1;
     const sortOptions: any = {};
     sortOptions[sortField] = sortDirection;
@@ -220,15 +262,22 @@ export async function GET(req: NextRequest) {
     // Count per source dynamically based on other active filters (ignoring the source filter itself)
     const getSourceCount = async (src: string) => {
       const baseConditions = andConditions.filter(c => !c.source);
-      baseConditions.push({ source: { $regex: new RegExp(`^${src}$`, "i") } });
-      return await Job.countDocuments({ $and: baseConditions });
+      baseConditions.push({ source: src });
+      return Job.countDocuments(baseConditions.length > 1 ? { $and: baseConditions } : baseConditions[0]);
     };
 
+    const [linkedinCount, indeedCount, wellfoundCount, internshalaCount] = await Promise.all([
+      getSourceCount("linkedin"),
+      getSourceCount("indeed"),
+      getSourceCount("wellfound"),
+      getSourceCount("internshala")
+    ]);
+
     const sourceCounts = {
-      linkedin: await getSourceCount("linkedin"),
-      indeed: await getSourceCount("indeed"),
-      wellfound: await getSourceCount("wellfound"),
-      internshala: await getSourceCount("internshala")
+      linkedin: linkedinCount,
+      indeed: indeedCount,
+      wellfound: wellfoundCount,
+      internshala: internshalaCount
     };
 
     return NextResponse.json({
