@@ -37,6 +37,7 @@ export default function ResumePage() {
   const [newSkillName, setNewSkillName]   = useState('');
   const [newSkillLevel, setNewSkillLevel] = useState(80);
   const [editingSkill, setEditingSkill]   = useState<{ index: number; name: string; level: number } | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -99,9 +100,23 @@ export default function ResumePage() {
 
   const handleDeleteResume = async () => {
     if (!user || !profile) return;
-    if (!confirm('Remove your resume? Skills extracted from it will remain.')) return;
     try {
-      const updated = await updateProfile(user._id, { resumeUrl: '', resumeName: '', resumeUpdatedAt: undefined });
+      const updated = await updateProfile(user._id, {
+        resumeUrl: '',
+        resumeName: '',
+        resumeUpdatedAt: null,
+        skills: [],
+        resumeText: '',
+        resumeCategory: '',
+        resumeSummary: '',
+        suggestedRoles: [],
+        lastAnalyzedAt: null,
+        resumeInsights: {
+          found: [],
+          missing: [],
+          tips: []
+        }
+      });
       if (updated) { setProfile(updated); setSuccessMessage('Resume removed.'); }
     } catch (err: any) { setError(err.message || 'Failed to remove resume.'); }
   };
@@ -109,8 +124,8 @@ export default function ResumePage() {
   const handleAddSkill = async () => {
     if (!user || !profile || !newSkillName.trim()) return;
     if (profile.skills.some(s => s.name.toLowerCase() === newSkillName.trim().toLowerCase())) { setError('Skill already exists.'); return; }
-    const updated = await updateProfile(user._id, { skills: [...profile.skills, { name: newSkillName.trim(), level: newSkillLevel }] });
-    if (updated) { setProfile(updated); setNewSkillName(''); setNewSkillLevel(80); setSkillModalOpen(false); setSuccessMessage('Skill added.'); }
+    const updated = await updateProfile(user._id, { skills: [...profile.skills, { name: newSkillName.trim(), level: 100 }] });
+    if (updated) { setProfile(updated); setNewSkillName(''); setSkillModalOpen(false); setSuccessMessage('Skill added.'); }
   };
 
   const handleRemoveSkill = async (skillName: string) => {
@@ -127,7 +142,7 @@ export default function ResumePage() {
     if (updated) { setProfile(updated); setEditingSkill(null); setSuccessMessage('Skill updated.'); }
   };
 
-  const formatDate = (d?: string | Date) =>
+  const formatDate = (d?: string | Date | null) =>
     d ? new Date(d).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Never';
 
   const insights = profile?.resumeInsights;
@@ -247,10 +262,7 @@ export default function ResumePage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <a href={profile.resumeUrl} target="_blank" rel="noopener noreferrer">
-                        <Button size="sm" variant="ghost" className="rounded-lg h-8 px-2.5 text-xs gap-1"><Eye className="w-3.5 h-3.5" />View</Button>
-                      </a>
-                      <Button size="sm" variant="ghost" onClick={handleDeleteResume}
+                      <Button size="sm" variant="ghost" onClick={() => setDeleteModalOpen(true)}
                         className="rounded-lg h-8 px-2.5 text-xs text-destructive hover:bg-destructive/10 gap-1"><Trash2 className="w-3.5 h-3.5" />Remove</Button>
                     </div>
                   </motion.div>
@@ -279,12 +291,8 @@ export default function ResumePage() {
                         <div key={skill.name}
                           className="flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-xl bg-muted/60 border border-border/80 text-xs hover:border-primary/30 transition-all group">
                           <span className="font-medium">{skill.name}</span>
-                          <button onClick={() => setEditingSkill({ index, name: skill.name, level: skill.level })}
-                            className="p-0.5 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors ml-1 text-[10px]">
-                            {skill.level}%
-                          </button>
                           <button onClick={() => handleRemoveSkill(skill.name)}
-                            className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-destructive transition-colors">
+                            className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-destructive transition-colors ml-1">
                             <XCircle className="w-3 h-3" />
                           </button>
                         </div>
@@ -357,7 +365,7 @@ export default function ResumePage() {
                 )}
 
                 {/* Resume Insights */}
-                {insights && (
+                {profile?.resumeUrl && insights && (
                   <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }} className="card-premium p-5 space-y-4">
                     <h3 className="font-semibold text-sm">Resume Insights</h3>
 
@@ -418,12 +426,6 @@ export default function ResumePage() {
                     placeholder="e.g. Tally, Figma, SEO, Recruitment, Python..."
                     className="rounded-xl" />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="skillLevel" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Proficiency ({newSkillLevel}%)</Label>
-                  <input type="range" id="skillLevel" min="10" max="100" step="5" value={newSkillLevel}
-                    onChange={(e) => setNewSkillLevel(Number(e.target.value))}
-                    className="w-full h-1.5 bg-muted rounded-lg appearance-none cursor-pointer accent-primary" />
-                </div>
               </div>
               <DialogFooter className="gap-2">
                 <Button variant="outline" onClick={() => setSkillModalOpen(false)} className="rounded-xl">Cancel</Button>
@@ -432,24 +434,25 @@ export default function ResumePage() {
             </DialogContent>
           </Dialog>
 
-          {/* Edit Skill Dialog */}
-          <Dialog open={!!editingSkill} onOpenChange={() => setEditingSkill(null)}>
-            <DialogContent className="max-w-md rounded-2xl">
-              <DialogHeader><DialogTitle className="text-lg font-bold">Adjust Proficiency</DialogTitle></DialogHeader>
-              {editingSkill && (
-                <div className="space-y-4 py-3">
-                  <p className="text-sm">Skill: <span className="font-bold">{editingSkill.name}</span></p>
-                  <div className="space-y-2">
-                    <Label htmlFor="editLevel" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Level ({editingSkill.level}%)</Label>
-                    <input type="range" id="editLevel" min="10" max="100" step="5" value={editingSkill.level}
-                      onChange={(e) => setEditingSkill({ ...editingSkill, level: Number(e.target.value) })}
-                      className="w-full h-1.5 bg-muted rounded-lg appearance-none cursor-pointer accent-primary" />
-                  </div>
+          {/* Delete Resume Confirmation Dialog */}
+          <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+            <DialogContent className="max-w-md rounded-2xl border-destructive/20">
+              <DialogHeader className="flex flex-col items-center text-center">
+                <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center mb-3 text-destructive">
+                  <Trash2 className="w-6 h-6 animate-pulse" />
                 </div>
-              )}
-              <DialogFooter className="gap-2">
-                <Button variant="outline" onClick={() => setEditingSkill(null)} className="rounded-xl">Cancel</Button>
-                <Button onClick={handleEditSkillSave} className="rounded-xl gradient-brand text-white border-0">Save</Button>
+                <DialogTitle className="text-lg font-bold text-foreground">Remove Resume?</DialogTitle>
+                <p className="text-sm text-muted-foreground mt-2 px-2">
+                  Are you sure you want to remove your resume? This will also clear all auto-extracted skills and resume insights. This action cannot be undone.
+                </p>
+              </DialogHeader>
+              <DialogFooter className="sm:justify-center gap-3 mt-4">
+                <Button variant="outline" onClick={() => setDeleteModalOpen(false)} className="rounded-xl flex-1 max-w-[120px]">
+                  Cancel
+                </Button>
+                <Button onClick={async () => { setDeleteModalOpen(false); await handleDeleteResume(); }} className="rounded-xl bg-destructive hover:bg-destructive/90 text-destructive-foreground border-0 flex-1 max-w-[120px]">
+                  Yes, Delete
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

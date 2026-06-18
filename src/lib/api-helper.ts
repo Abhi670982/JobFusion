@@ -56,7 +56,8 @@ export interface DbProfile {
   experience?: string;
   resumeUrl?: string;
   resumeName?: string;
-  resumeUpdatedAt?: string | Date;
+  resumeUpdatedAt?: string | Date | null;
+  resumeText?: string;
   experiences: DbExperience[];
   education: DbEducation[];
   certifications: DbCertification[];
@@ -80,7 +81,7 @@ export interface DbProfile {
   resumeCategory?: string;
   resumeSummary?: string;
   suggestedRoles?: string[];
-  lastAnalyzedAt?: string | Date;
+  lastAnalyzedAt?: string | Date | null;
   resumeInsights?: {
     found: string[];
     missing: string[];

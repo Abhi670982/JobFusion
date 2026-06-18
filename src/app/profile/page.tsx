@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   User, MapPin, Briefcase, GraduationCap, Award, Code2,
-  Plus, Edit3, Star, CheckCircle2, X,
+  Plus, Edit3, Star, CheckCircle2,
   Link2, ExternalLink, Globe, Camera, Phone, Mail,
   Cloud, Smartphone, Palette, Save, Trash2, Upload, FileText, Loader2, AlertCircle, ArrowLeft
 } from 'lucide-react';
@@ -243,7 +243,7 @@ export default function ProfilePage() {
     );
     if (exists) return;
 
-    const updatedSkills = [...profile.skills, { name: newSkillName.trim(), level: newSkillLevel }];
+    const updatedSkills = [...profile.skills, { name: newSkillName.trim(), level: 100 }];
     try {
       const updated = await updateProfile(user._id, { skills: updatedSkills });
       if (updated) {
@@ -741,15 +741,6 @@ export default function ProfilePage() {
                             </p>
                           </div>
                         </div>
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          onClick={() => window.open(profile.resumeUrl, '_blank')} 
-                          className="rounded-xl text-xs gap-1.5"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                          View
-                        </Button>
                       </div>
                     ) : (
                       <div className="text-center py-6 border-2 border-dashed border-border rounded-xl space-y-2.5">
@@ -807,20 +798,13 @@ export default function ProfilePage() {
                       {(!profile.skills || profile.skills.length === 0) ? (
                         <p className="text-xs text-muted-foreground italic">No skills added yet. Click Add Skill to add manually or upload a resume.</p>
                       ) : (
-                        profile.skills.map((skill) => (
-                          <Badge 
-                            key={skill.name} 
-                            variant="secondary" 
-                            className="rounded-full px-3 py-1 text-sm gap-1.5 border border-border bg-muted/40 hover:bg-muted"
-                          >
-                            <span>{skill.name}</span>
-                            <button
-                              onClick={() => handleRemoveSkill(skill.name)}
-                              className="text-muted-foreground hover:text-destructive transition-colors rounded-full"
-                            >
-                              <X className="w-3.5 h-3.5" />
+                        profile.skills.map((skill, index) => (
+                          <div key={skill.name} className="flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-xl bg-muted/60 border border-border/80 text-xs hover:border-primary/30 transition-all group">
+                            <span className="font-medium">{skill.name}</span>
+                            <button onClick={() => handleRemoveSkill(skill.name)} className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-destructive transition-colors ml-1">
+                              <Trash2 className="w-3 h-3" />
                             </button>
-                          </Badge>
+                          </div>
                         ))
                       )}
                     </div>
