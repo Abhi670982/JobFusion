@@ -6,9 +6,8 @@ import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  LayoutDashboard, Briefcase, User, FileText, Bell, Settings,
-  Users, BarChart3, ChevronLeft, ChevronRight,
-  Bookmark
+  LayoutDashboard, Briefcase, User, FileText, Settings,
+  ChevronLeft, ChevronRight, Bookmark
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -22,7 +21,6 @@ interface NavItem {
   label: string;
   icon: React.ElementType;
   badge?: number;
-  recruiterOnly?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -33,18 +31,11 @@ const navItems: NavItem[] = [
   { href: '/resume', label: 'Resume', icon: FileText },
 ];
 
-const recruiterItems: NavItem[] = [
-  { href: '/recruiter', label: 'Recruiter Hub', icon: BarChart3, recruiterOnly: true },
-  { href: '/candidates', label: 'Candidates', icon: Users, recruiterOnly: true },
-];
-
 const bottomItems: NavItem[] = [
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
-interface SidebarProps {
-  isRecruiter?: boolean;
-}
+interface SidebarProps {}
 
 function NavLink({ item, collapsed, pathname, onClick }: {
   item: NavItem;
@@ -101,7 +92,7 @@ function NavLink({ item, collapsed, pathname, onClick }: {
   return link;
 }
 
-export default function Sidebar({ isRecruiter = false }: SidebarProps) {
+export default function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -156,7 +147,7 @@ export default function Sidebar({ isRecruiter = false }: SidebarProps) {
     loadSavedCount();
   }, [pathname, user?._id]);
 
-  const allItems = [...navItems, ...(isRecruiter ? recruiterItems : [])];
+  const allItems = navItems;
 
   const getInitials = () => {
     if (!user) return 'U';
@@ -186,7 +177,7 @@ export default function Sidebar({ isRecruiter = false }: SidebarProps) {
                 initial={false}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
-                className="font-bold text-lg whitespace-nowrap overflow-hidden"
+                className="font-bold text-lg whitespace-nowrap overflow-hidden inline-flex items-center gap-0.5"
                 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
               >
                 <span className="gradient-brand-text">Job</span>
@@ -247,12 +238,7 @@ export default function Sidebar({ isRecruiter = false }: SidebarProps) {
               className="flex-1 min-w-0"
             >
               {user ? (
-                <>
-                  <p className="text-sm font-medium truncate">{user.fullName}</p>
-                  {user.role === 'recruiter' && (
-                    <p className="text-xs text-muted-foreground truncate">Recruiter</p>
-                  )}
-                </>
+                <p className="text-sm font-medium truncate">{user.fullName}</p>
               ) : (
                 <div className="space-y-1">
                   <Skeleton className="h-4 w-24 bg-sidebar-accent/50 animate-pulse" />
@@ -289,10 +275,7 @@ export default function Sidebar({ isRecruiter = false }: SidebarProps) {
 
       {/* Mobile Bottom Nav */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-background/90 backdrop-blur-md border-t border-border/80 flex items-center justify-around px-2 py-2 shadow-lg">
-        {[
-          ...navItems.slice(0, 4),
-          ...(isRecruiter ? recruiterItems.slice(0, 1) : [navItems[4]])
-        ].slice(0, 5).map((item) => {
+        {navItems.slice(0, 5).map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href || (item.href !== '/jobs' && pathname.startsWith(item.href + '/'));
 
@@ -302,7 +285,6 @@ export default function Sidebar({ isRecruiter = false }: SidebarProps) {
             'Saved Jobs': 'Saved',
             'My Profile': 'Profile',
             'Resume': 'Resume',
-            'Notifications': 'Inbox',
           };
           const label = mobileLabelMap[item.label] || item.label;
 

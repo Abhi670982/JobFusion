@@ -22,7 +22,7 @@ const plusJakarta = Plus_Jakarta_Sans({
 
 export const metadata: Metadata = {
   title: 'JobFusion – One Search. Every Opportunity.',
-  description: 'AI-powered job aggregation platform that finds your perfect role from 2.4M+ opportunities across 500+ sources.',
+  description: 'AI-powered job aggregation platform that finds your perfect role by parsing your resume and searching unified job openings.',
   keywords: ['jobs', 'AI job search', 'job aggregator', 'career', 'employment', 'remote jobs'],
   icons: {
     icon: '/logo-circle.png',

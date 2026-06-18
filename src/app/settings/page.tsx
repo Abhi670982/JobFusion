@@ -54,14 +54,7 @@ export default function SettingsPage() {
   const [expectedSalary, setExpectedSalary] = useState('');
   const [noticePeriod, setNoticePeriod] = useState('');
   
-  const [notifSettings, setNotifSettings] = useState({
-    jobMatches: true,
-    applicationUpdates: true,
-    recruiterMessages: true,
-    aiRecommendations: true,
-    weeklyDigest: false,
-    marketingEmails: false,
-  });
+
 
   const [toast, setToast] = useState<{ type: 'success' | 'error', message: string } | null>(null);
 
@@ -82,9 +75,7 @@ export default function SettingsPage() {
             setPhone(prof.phone || '');
             setExpectedSalary(prof.expectedSalary || '');
             setNoticePeriod(prof.noticePeriod || '');
-            if (prof.notifications) {
-              setNotifSettings(prof.notifications);
-            }
+
           }
         }
       } catch (err) {
@@ -113,7 +104,6 @@ export default function SettingsPage() {
         headline,
         location,
         phone,
-        notifications: notifSettings
       } as any);
 
       if (updated) {
@@ -195,9 +185,7 @@ export default function SettingsPage() {
     }
   };
 
-  const toggleNotif = (key: keyof typeof notifSettings) => {
-    setNotifSettings(prev => ({ ...prev, [key]: !prev[key] }));
-  };
+
 
   const getInitials = () => {
     if (fullName) return fullName.slice(0, 2).toUpperCase();
@@ -244,9 +232,8 @@ export default function SettingsPage() {
           </div>
 
           <Tabs defaultValue="profile">
-            <TabsList className="rounded-xl mb-6 grid grid-cols-2 sm:grid-cols-4 h-auto sm:h-10 gap-1 p-1">
+            <TabsList className="rounded-xl mb-6 grid grid-cols-3 h-auto sm:h-10 gap-1 p-1">
               <TabsTrigger value="profile" className="rounded-lg text-xs gap-1.5 py-2"><User className="w-3.5 h-3.5" />Profile</TabsTrigger>
-              <TabsTrigger value="notifications" className="rounded-lg text-xs gap-1.5 py-2"><Bell className="w-3.5 h-3.5" />Alerts</TabsTrigger>
               <TabsTrigger value="security" className="rounded-lg text-xs gap-1.5 py-2"><Shield className="w-3.5 h-3.5" />Security</TabsTrigger>
               <TabsTrigger value="appearance" className="rounded-lg text-xs gap-1.5 py-2"><Palette className="w-3.5 h-3.5" />Display</TabsTrigger>
             </TabsList>
@@ -366,41 +353,7 @@ export default function SettingsPage() {
               </form>
             </TabsContent>
 
-            {/* Notifications */}
-            <TabsContent value="notifications">
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="card-premium p-6 space-y-1">
-                <h2 className="font-semibold mb-4">Notification Preferences</h2>
-                {[
-                  { key: 'jobMatches', label: 'Job Matches', desc: 'New jobs matching your profile and preferences' },
-                  { key: 'applicationUpdates', label: 'Application Updates', desc: 'Status changes on your job applications' },
-                  { key: 'recruiterMessages', label: 'Recruiter Messages', desc: 'Direct messages from recruiters and companies' },
-                  { key: 'aiRecommendations', label: 'AI Recommendations', desc: 'Smart career insights and suggestions' },
-                  { key: 'weeklyDigest', label: 'Weekly Digest', desc: 'Summary of top jobs and career insights' },
-                  { key: 'marketingEmails', label: 'Marketing Emails', desc: 'Product updates, tips, and promotions' },
-                ].map(({ key, label, desc }, i) => (
-                  <div key={key}>
-                    <SettingRow label={label} description={desc}>
-                      <Switch
-                        checked={notifSettings[key as keyof typeof notifSettings]}
-                        onCheckedChange={() => toggleNotif(key as keyof typeof notifSettings)}
-                      />
-                    </SettingRow>
-                    {i < 5 && <Separator />}
-                  </div>
-                ))}
-                
-                <Separator className="my-4" />
-                <div className="flex justify-end pt-2">
-                  <Button 
-                    onClick={handleSaveProfile} 
-                    className="rounded-xl gradient-brand text-white border-0 shadow-md"
-                    disabled={updating}
-                  >
-                    {updating ? 'Saving Preferences...' : 'Save Preferences'}
-                  </Button>
-                </div>
-              </motion.div>
-            </TabsContent>
+
 
             {/* Security */}
             <TabsContent value="security" className="space-y-5">

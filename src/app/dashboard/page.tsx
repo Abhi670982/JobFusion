@@ -21,7 +21,6 @@ import { calculateCompletion } from '@/lib/profile-completion';
 import {
   fetchDashboardData,
   fetchDashboardActivity,
-  fetchDashboardNotifications,
   fetchDashboardMatches,
   DbUser,
   DbProfile
@@ -118,10 +117,8 @@ export default function DashboardPage() {
     offerCount: 0,
     savedCount: 0,
   });
-  const [unreadCount, setUnreadCount] = useState(0);
   const [activities, setActivities] = useState<any[]>([]);
   const [chartData, setChartData] = useState<any[]>([]);
-  const [notifs, setNotifs] = useState<any[]>([]);
   const [matchesCount, setMatchesCount] = useState(0);
 
   useEffect(() => {
@@ -136,21 +133,16 @@ export default function DashboardPage() {
           }
           setProfile(dash.profile);
           setStats(dash.stats);
-          setUnreadCount(dash.unreadNotificationsCount);
 
           // Load other sub-widgets concurrently
-          const [actRes, notifRes, matchRes] = await Promise.all([
+          const [actRes, matchRes] = await Promise.all([
             fetchDashboardActivity(),
-            fetchDashboardNotifications(),
             fetchDashboardMatches()
           ]);
 
           if (actRes) {
             setActivities(actRes.recentActivities || []);
             setChartData(actRes.chartData || []);
-          }
-          if (notifRes) {
-            setNotifs(notifRes);
           }
           if (matchRes) {
             setMatchesCount(matchRes.totalMatches || 0);
@@ -180,7 +172,7 @@ export default function DashboardPage() {
                 Welcome back, {loading ? <Skeleton className="w-24 h-6 inline-block animate-pulse" /> : (user?.fullName.split(' ')[0] || 'User')} 👋
               </h1>
               <p className="text-muted-foreground text-sm mt-1">
-                You have <strong className="text-foreground">{loading ? '...' : (matchesCount > 0 ? `${matchesCount} new job matches` : 'no job matches yet')}</strong> and <strong className="text-foreground">{unreadCount} unread notification{unreadCount === 1 ? '' : 's'}</strong> today.
+                You have <strong className="text-foreground">{loading ? '...' : (matchesCount > 0 ? `${matchesCount} new job matches` : 'no job matches yet')}</strong> today.
               </p>
             </div>
             <div className="flex gap-2">
@@ -408,7 +400,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+          <div className="grid grid-cols-1 gap-4 lg:gap-6">
             {/* Recent Activity */}
             <div className="card-premium p-5">
               <div className="flex items-center justify-between mb-4">
@@ -455,49 +447,6 @@ export default function DashboardPage() {
                       </div>
                     );
                   })
-                )}
-              </div>
-            </div>
-
-            {/* Notifications Panel */}
-            <div className="card-premium p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold">Notifications</h3>
-                  {unreadCount > 0 && (
-                    <Badge className="h-5 px-1.5 text-[10px] gradient-brand text-white border-0">{unreadCount} new</Badge>
-                  )}
-                </div>
-                <Link href="/notifications" className="text-xs text-primary hover:underline flex items-center gap-1">
-                  See all <ChevronRight className="w-3 h-3" />
-                </Link>
-              </div>
-              <div className="space-y-3">
-                {loading ? (
-                  Array.from({ length: 3 }).map((_, i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <Skeleton className="w-2 h-2 rounded-full animate-pulse" />
-                      <div className="flex-1 space-y-1">
-                        <Skeleton className="h-3.5 w-1/3 animate-pulse" />
-                        <Skeleton className="h-3 w-2/3 animate-pulse" />
-                      </div>
-                    </div>
-                  ))
-                ) : notifs.length === 0 ? (
-                  <div className="text-center py-6 text-xs text-muted-foreground">
-                    No new notifications.
-                  </div>
-                ) : (
-                  notifs.slice(0, 5).map((notif) => (
-                    <div key={notif._id || notif.id} className={cn('flex items-start gap-3 p-2.5 rounded-xl transition-colors', !notif.read && 'bg-primary/5 border border-primary/10')}>
-                      <div className={cn('w-2 h-2 rounded-full mt-1.5 flex-shrink-0', !notif.read ? 'bg-primary' : 'bg-transparent')} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">{notif.title}</p>
-                        <p className="text-xs text-muted-foreground leading-relaxed">{notif.message}</p>
-                        <p className="text-[11px] text-muted-foreground mt-1">{formatTime(notif.createdAt)}</p>
-                      </div>
-                    </div>
-                  ))
                 )}
               </div>
             </div>

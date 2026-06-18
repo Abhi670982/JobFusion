@@ -8,9 +8,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from 'next-themes';
 import { useUser, useClerk } from '@clerk/nextjs';
 import {
-  Bell, Moon, Sun, ChevronDown,
+  Moon, Sun, ChevronDown,
   User, Settings, LogOut, Briefcase, LayoutDashboard,
-  Bookmark, FileText, BarChart3, Users, Menu, X
+  Bookmark, FileText, Menu, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -196,25 +196,6 @@ export default function Navbar() {
                       <DropdownMenuItem asChild className="rounded-xl px-3 py-1.5 text-sm cursor-pointer transition-colors">
                         <Link href="/resume" className="flex items-center w-full justify-between">
                           <span className="flex items-center"><FileText className="w-4 h-4 mr-2 text-muted-foreground" />Resume</span>
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild className="rounded-xl px-3 py-1.5 text-sm cursor-pointer transition-colors">
-                        <Link href="/notifications" className="flex items-center w-full justify-between">
-                          <span className="flex items-center"><Bell className="w-4 h-4 mr-2 text-muted-foreground" />Notifications</span>
-                        </Link>
-                      </DropdownMenuItem>
-                    </div>
-
-                    <DropdownMenuSeparator className="my-1 bg-border/40" />
-                    <div className="p-1 space-y-0.5">
-                      <DropdownMenuItem asChild className="rounded-xl px-3 py-1.5 text-sm cursor-pointer transition-colors">
-                        <Link href="/recruiter" className="flex items-center w-full">
-                          <BarChart3 className="w-4 h-4 mr-2 text-muted-foreground" />Recruiter Hub
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild className="rounded-xl px-3 py-1.5 text-sm cursor-pointer transition-colors">
-                        <Link href="/candidates" className="flex items-center w-full">
-                          <Users className="w-4 h-4 mr-2 text-muted-foreground" />Candidates
                         </Link>
                       </DropdownMenuItem>
                     </div>

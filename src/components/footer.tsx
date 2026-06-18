@@ -7,17 +7,9 @@ import { MessageCircle, Link2, Code2, Play, Globe, Heart } from 'lucide-react';
 const footerLinks = {
   Product: [
     { label: 'Find Jobs', href: '/jobs' },
-    { label: 'Job Alerts', href: '/notifications' },
     { label: 'Salary Insights', href: '/' },
     { label: 'Resume Tools', href: '/resume' },
     { label: 'AI Matching', href: '/' },
-  ],
-  Recruiters: [
-    { label: 'Post a Job', href: '/recruiter' },
-    { label: 'Find Candidates', href: '/candidates' },
-    { label: 'Recruiter Dashboard', href: '/recruiter' },
-    { label: 'Pricing', href: '/' },
-    { label: 'ATS Integration', href: '/' },
   ],
   Company: [
     { label: 'About Us', href: '/' },
@@ -55,7 +47,7 @@ export default function Footer() {
               </span>
             </Link>
             <p className="text-sm text-muted-foreground leading-relaxed max-w-xs mb-6">
-              The AI-powered job platform that aggregates 2.4M+ opportunities and matches you with your perfect role.
+              The AI-powered job platform that aggregates job openings and matches you with your perfect role.
             </p>
             <div className="flex gap-3">
               {[MessageCircle, Link2, Code2, Play].map((Icon, i) => (

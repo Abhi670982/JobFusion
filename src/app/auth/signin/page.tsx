@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
-import { Eye, EyeOff, Code2, ArrowRight, Lock, Mail } from 'lucide-react';
+import { Eye, EyeOff, Code2, ArrowRight, Lock, Mail, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -38,28 +38,29 @@ export default function SignInPage() {
             <h2 className="text-4xl font-extrabold text-white mb-3" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
               Your next great opportunity awaits.
             </h2>
-            <p className="text-white/75 text-lg">Join 125,000+ professionals who found their dream jobs.</p>
+            <p className="text-white/75 text-lg">Find matching positions powered by resume parsing and real-time job aggregation.</p>
           </div>
-          <div className="space-y-4">
-            {[
-              { stat: '2.4M+', label: 'Jobs aggregated daily' },
-              { stat: '94%', label: 'Average AI match accuracy' },
-              { stat: '18 days', label: 'Average time to hire' },
-            ].map(({ stat, label }) => (
-              <div key={stat} className="flex items-center gap-4">
-                <div className="text-2xl font-bold text-white">{stat}</div>
-                <div className="text-white/70 text-sm">{label}</div>
+          <div className="space-y-5 text-white/90">
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="w-5 h-5 text-white mt-1 flex-shrink-0" />
+              <div>
+                <h4 className="font-semibold text-white">Gemini AI Sourced Matches</h4>
+                <p className="text-white/70 text-sm">Direct resume-to-job matching based on actual skills and experience.</p>
               </div>
-            ))}
-          </div>
-          <div className="flex -space-x-2">
-            {['SC', 'MJ', 'PP', 'AR', 'DK'].map((init, i) => (
-              <div key={i} className="w-9 h-9 rounded-full bg-white/20 border-2 border-white/40 flex items-center justify-center text-white text-xs font-semibold">
-                {init}
+            </div>
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="w-5 h-5 text-white mt-1 flex-shrink-0" />
+              <div>
+                <h4 className="font-semibold text-white">Unified Sourcing</h4>
+                <p className="text-white/70 text-sm">Aggregated openings from leading portals in one clean search dashboard.</p>
               </div>
-            ))}
-            <div className="w-9 h-9 rounded-full bg-white/30 border-2 border-white/40 flex items-center justify-center text-white text-xs font-semibold">
-              +5k
+            </div>
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="w-5 h-5 text-white mt-1 flex-shrink-0" />
+              <div>
+                <h4 className="font-semibold text-white">Privacy Focused</h4>
+                <p className="text-white/70 text-sm">No public profiling. Your job applications and search history remain confidential.</p>
+              </div>
             </div>
           </div>
         </div>

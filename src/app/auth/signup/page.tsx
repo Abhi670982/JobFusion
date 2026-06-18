@@ -12,7 +12,7 @@ import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
 
 const perks = [
-  'Access 2.4M+ job opportunities',
+  'Access aggregated job opportunities',
   'AI-powered job matching',
   'One-click applications',
   'Free forever for job seekers',
@@ -20,7 +20,6 @@ const perks = [
 
 export default function SignUpPage() {
   const [show, setShow] = useState(false);
-  const [role, setRole] = useState<'jobseeker' | 'recruiter'>('jobseeker');
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2">

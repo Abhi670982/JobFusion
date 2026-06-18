@@ -555,48 +555,6 @@ export async function fetchDashboardActivity(): Promise<any> {
   }
 }
 
-export async function fetchDashboardNotifications(): Promise<any[]> {
-  try {
-    const res = await fetch('/api/dashboard/notifications');
-    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-    const data = await res.json();
-    return data.success ? data.data : [];
-  } catch (error) {
-    console.error("[Frontend API] Error fetching notifications:", error);
-    return [];
-  }
-}
-
-export async function markNotificationRead(id: string, readAll = false): Promise<boolean> {
-  try {
-    const res = await fetch('/api/dashboard/notifications', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, readAll }),
-    });
-    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-    const data = await res.json();
-    return !!data.success;
-  } catch (error) {
-    console.error("[Frontend API] Error marking notification as read:", error);
-    return false;
-  }
-}
-
-export async function dismissNotification(id: string): Promise<boolean> {
-  try {
-    const res = await fetch(`/api/dashboard/notifications?id=${id}`, {
-      method: 'DELETE',
-    });
-    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-    const data = await res.json();
-    return !!data.success;
-  } catch (error) {
-    console.error("[Frontend API] Error dismissing notification:", error);
-    return false;
-  }
-}
-
 export async function logActivity(activityData: {
   type: string;
   jobId?: string;

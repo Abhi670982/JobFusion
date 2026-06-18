@@ -13,7 +13,7 @@ const ProfileSchema = new Schema(
     skills: [
       {
         name:  { type: String, required: true },
-        level: { type: Number, required: true },
+        level: { type: Number, default: 80 },
       },
     ],
     location:   { type: String, trim: true },

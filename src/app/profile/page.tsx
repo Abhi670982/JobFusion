@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   User, MapPin, Briefcase, GraduationCap, Award, Code2,
-  Plus, Edit3, Star, CheckCircle2,
+  Plus, Edit3, Star, CheckCircle2, X,
   Link2, ExternalLink, Globe, Camera, Phone, Mail,
   Cloud, Smartphone, Palette, Save, Trash2, Upload, FileText, Loader2, AlertCircle, ArrowLeft
 } from 'lucide-react';
@@ -803,41 +803,24 @@ export default function ProfilePage() {
                       </Button>
                     }
                   >
-                    <div className="space-y-4">
+                    <div className="flex flex-wrap gap-2">
                       {(!profile.skills || profile.skills.length === 0) ? (
                         <p className="text-xs text-muted-foreground italic">No skills added yet. Click Add Skill to add manually or upload a resume.</p>
                       ) : (
-                        profile.skills.map((skill, index) => (
-                          <div key={skill.name} className="group relative">
-                            <div className="flex justify-between text-sm mb-1.5">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">{skill.name}</span>
-                                <div className="opacity-0 group-hover:opacity-100 flex gap-1.5 transition-opacity">
-                                  <button
-                                    onClick={() => setEditingSkill({ index, name: skill.name, level: skill.level })}
-                                    className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
-                                  >
-                                    <Edit3 className="w-3 h-3" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleRemoveSkill(skill.name)}
-                                    className="text-muted-foreground hover:text-destructive p-0.5 rounded transition-colors"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </button>
-                                </div>
-                              </div>
-                              <span className="text-muted-foreground text-xs">{skill.level}%</span>
-                            </div>
-                            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                              <motion.div
-                                initial={{ width: 0 }}
-                                animate={{ width: `${skill.level}%` }}
-                                transition={{ duration: 0.8, delay: 0.1 }}
-                                className="h-full rounded-full gradient-brand"
-                              />
-                            </div>
-                          </div>
+                        profile.skills.map((skill) => (
+                          <Badge 
+                            key={skill.name} 
+                            variant="secondary" 
+                            className="rounded-full px-3 py-1 text-sm gap-1.5 border border-border bg-muted/40 hover:bg-muted"
+                          >
+                            <span>{skill.name}</span>
+                            <button
+                              onClick={() => handleRemoveSkill(skill.name)}
+                              className="text-muted-foreground hover:text-destructive transition-colors rounded-full"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </Badge>
                         ))
                       )}
                     </div>
@@ -1239,58 +1222,10 @@ export default function ProfilePage() {
                     className="rounded-xl"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="skillLevel" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Proficiency Level ({newSkillLevel}%)</Label>
-                  <div className="flex items-center gap-4">
-                    <input
-                      type="range"
-                      id="skillLevel"
-                      min="10"
-                      max="100"
-                      step="5"
-                      value={newSkillLevel}
-                      onChange={(e) => setNewSkillLevel(Number(e.target.value))}
-                      className="w-full h-1.5 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
-                    />
-                  </div>
-                </div>
               </div>
               <DialogFooter className="gap-2">
                 <Button variant="outline" onClick={() => setSkillModalOpen(false)} className="rounded-xl">Cancel</Button>
                 <Button onClick={handleAddSkill} className="rounded-xl gradient-brand text-white border-0">Add Skill</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          {/* Edit Skill Level Dialog */}
-          <Dialog open={!!editingSkill} onOpenChange={() => setEditingSkill(null)}>
-            <DialogContent className="max-w-md rounded-2xl">
-              <DialogHeader>
-                <DialogTitle className="text-lg font-bold">Adjust Skill Proficiency</DialogTitle>
-              </DialogHeader>
-              {editingSkill && (
-                <div className="space-y-4 py-3">
-                  <p className="text-sm">Modify the experience level for <span className="font-bold">{editingSkill.name}</span>:</p>
-                  <div className="space-y-2">
-                    <Label htmlFor="editLevel" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Level ({editingSkill.level}%)</Label>
-                    <div className="flex items-center gap-4">
-                      <input
-                        type="range"
-                        id="editLevel"
-                        min="10"
-                        max="100"
-                        step="5"
-                        value={editingSkill.level}
-                        onChange={(e) => setEditingSkill({ ...editingSkill, level: Number(e.target.value) })}
-                        className="w-full h-1.5 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-              <DialogFooter className="gap-2">
-                <Button variant="outline" onClick={() => setEditingSkill(null)} className="rounded-xl">Cancel</Button>
-                <Button onClick={handleEditSkillSave} className="rounded-xl gradient-brand text-white border-0">Save Changes</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

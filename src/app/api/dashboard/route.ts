@@ -4,7 +4,6 @@ import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import Profile from "@/models/Profile";
 import Application from "@/models/Application";
 import SavedJob from "@/models/SavedJob";
-import Notification from "@/models/Notification";
 import Activity from "@/models/Activity";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +35,6 @@ export async function GET() {
       interviewCount,
       offerCount,
       savedCount,
-      unreadNotifCount,
     ] = await Promise.all([
       Profile.findOne({ userId }).lean(),
       Application.countDocuments({ userId }),
@@ -45,7 +43,6 @@ export async function GET() {
       Application.countDocuments({ userId, status: "Interview" }),
       Application.countDocuments({ userId, status: "Offer" }),
       SavedJob.countDocuments({ userId }),
-      Notification.countDocuments({ userId, read: false }),
     ]);
 
     return NextResponse.json({
@@ -60,7 +57,6 @@ export async function GET() {
         offerCount,
         savedCount,
       },
-      unreadNotificationsCount: unreadNotifCount,
     });
   } catch (error: any) {
     console.error("Error in GET /api/dashboard:", error);

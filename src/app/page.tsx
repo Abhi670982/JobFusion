@@ -5,23 +5,22 @@ import { motion, useInView } from 'framer-motion';
 import { useRef } from 'react';
 import Link from 'next/link';
 import {
-  Search, MapPin, Briefcase, ArrowRight, Star, CheckCircle2,
-  Sparkles, ChevronDown, TrendingUp, Users, Zap, Shield,
-  BarChart3, Bell, FileText, Brain, Target, History
+  Search, MapPin, Briefcase, ArrowRight, CheckCircle2,
+  Sparkles, ChevronDown, TrendingUp, Zap,
+  BarChart3, FileText, Brain, Target, History
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import Navbar from '@/components/navbar';
 import Footer from '@/components/footer';
-import { trustedCompanies, features, testimonials, platformStats } from '@/lib/data';
+import { features } from '@/lib/data';
 
 const iconMap: Record<string, React.ComponentType<any>> = {
   brain: Brain,
   zap: Zap,
   target: Target,
   'bar-chart': BarChart3,
-  bell: Bell,
   'file-text': FileText,
   search: Search,
   history: History,
@@ -64,13 +63,46 @@ function SectionHeading({ eyebrow, title, description }: { eyebrow: string; titl
 
 const howItWorks = [
   { step: '01', title: 'Create Your Profile', description: 'Upload your resume or build your profile. Our AI extracts your skills and experience automatically.', icon: FileText },
-  { step: '02', title: 'AI Finds Your Matches', description: 'Our engine scans 500+ sources and matches jobs to your unique profile with precision scoring.', icon: Brain },
-  { step: '03', title: 'Apply Smarter', description: 'Apply with one click, track all applications, and get AI-powered interview prep tips.', icon: Zap },
+  { step: '02', title: 'AI Finds Your Matches', description: 'Our engine scans integrated portals and matches jobs to your unique profile with compatibility scoring.', icon: Brain },
+  { step: '03', title: 'Apply Smarter', description: 'Apply to jobs directly, save roles for later, and track your pipeline in one unified dashboard.', icon: Zap },
 ];
 
 export default function LandingPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [location, setLocation] = useState('');
+  const [stats, setStats] = useState<{
+    totalJobs: number;
+    activeSources: number;
+    addedLast24h: number;
+    isLoaded: boolean;
+  }>({
+    totalJobs: 0,
+    activeSources: 4,
+    addedLast24h: 0,
+    isLoaded: false
+  });
+
+  useEffect(() => {
+    async function loadStats() {
+      try {
+        const res = await fetch('/api/jobs/stats');
+        const json = await res.json();
+        if (json.success && json.data) {
+          const bySource = json.data.bySource || {};
+          const activeSourceCount = Object.values(bySource).filter(count => (count as number) > 0).length || 4;
+          setStats({
+            totalJobs: json.data.total || 0,
+            activeSources: activeSourceCount,
+            addedLast24h: json.data.addedInLast24h || 0,
+            isLoaded: true
+          });
+        }
+      } catch (err) {
+        console.error("Error loading landing page stats:", err);
+      }
+    }
+    loadStats();
+  }, []);
 
   return (
     <div className="min-h-screen bg-background mesh-bg">
@@ -116,7 +148,7 @@ export default function LandingPage() {
             transition={{ duration: 0.7, delay: 0.2 }}
             className="text-xl md:text-2xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed"
           >
-            The most intelligent job platform. AI matches you with your perfect role from <strong className="text-foreground">2.4M+ opportunities</strong> across 500+ sources.
+            The most intelligent job platform. AI matches you with your perfect role by parsing your resume and searching unified job openings.
           </motion.p>
 
           {/* Search Bar */}
@@ -173,58 +205,33 @@ export default function LandingPage() {
           </motion.div>
 
           {/* Stats */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-            className="flex flex-wrap justify-center gap-8"
-          >
-            {[
-              { label: 'Jobs Available', value: 2400000, suffix: '+' },
-              { label: 'Partner Companies', value: 50000, suffix: '+' },
-              { label: 'Professionals Placed', value: 125000, suffix: '+' },
-            ].map(({ label, value, suffix }) => (
-              <div key={label} className="text-center">
-                <div className="text-3xl font-bold gradient-brand-text tabular-nums">
-                  <AnimatedCounter end={value} suffix={suffix} />
+          {stats.isLoaded && stats.totalJobs > 0 ? (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+              className="flex flex-wrap justify-center gap-8"
+            >
+              {[
+                { label: 'Jobs Indexed', value: stats.totalJobs, suffix: '' },
+                { label: 'Active Channels', value: stats.activeSources, suffix: '' },
+                { label: 'Recent Openings (24h)', value: stats.addedLast24h, suffix: '' },
+              ].map(({ label, value, suffix }) => (
+                <div key={label} className="text-center">
+                  <div className="text-3xl font-bold gradient-brand-text tabular-nums">
+                    <AnimatedCounter end={value} suffix={suffix} />
+                  </div>
+                  <div className="text-sm text-muted-foreground mt-1">{label}</div>
                 </div>
-                <div className="text-sm text-muted-foreground mt-1">{label}</div>
-              </div>
-            ))}
-          </motion.div>
+              ))}
+            </motion.div>
+          ) : (
+            <div className="h-12" />
+          )}
         </div>
       </section>
 
-      {/* ── Trusted Companies ──────────────────────────────────── */}
-      <section className="py-16 px-4 border-y border-border/40">
-        <div className="max-w-6xl mx-auto">
-          <p className="text-center text-sm text-muted-foreground mb-8 font-medium uppercase tracking-widest">
-            Trusted by teams at world-class companies
-          </p>
-          <div className="flex flex-wrap justify-center items-center gap-6 md:gap-10">
-            {trustedCompanies.map((company, i) => (
-              <motion.div
-                key={company.name}
-                initial={{ opacity: 0, scale: 0.8 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.05 }}
-                className="flex items-center gap-2 group cursor-pointer"
-              >
-                <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm shadow-sm group-hover:scale-110 transition-transform"
-                  style={{ backgroundColor: company.color === '#000000' ? '#374151' : company.color }}
-                >
-                  {company.logo}
-                </div>
-                <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors">
-                  {company.name}
-                </span>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
+
 
       {/* ── Features ──────────────────────────────────────────── */}
       <section id="features" className="py-24 px-4">
@@ -300,54 +307,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Testimonials ──────────────────────────────────────── */}
-      <section className="py-24 px-4">
-        <div className="max-w-6xl mx-auto">
-          <SectionHeading
-            eyebrow="✦ Success Stories"
-            title="Loved by professionals worldwide"
-            description="Join 125,000+ professionals who found their dream jobs through JobFusion."
-          />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {testimonials.map((t, i) => (
-              <motion.div
-                key={t.id}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-                className="card-premium p-6"
-              >
-                {/* Stars */}
-                <div className="flex gap-1 mb-4">
-                  {Array.from({ length: t.rating }).map((_, i) => (
-                    <Star key={i} className="w-4 h-4 fill-amber-400 text-amber-400" />
-                  ))}
-                </div>
-                <p className="text-sm leading-relaxed mb-5 text-foreground/90 italic">"{t.text}"</p>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold"
-                      style={{ backgroundColor: t.avatarColor }}
-                    >
-                      {t.avatar}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold">{t.name}</p>
-                      <p className="text-xs text-muted-foreground">{t.role}</p>
-                    </div>
-                  </div>
-                  <Badge className="rounded-full px-3 py-1 border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs">
-                    ✓ {t.outcome}
-                  </Badge>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* ── CTA ───────────────────────────────────────────────── */}
       <section className="py-24 px-4">
         <div className="max-w-4xl mx-auto">
@@ -363,7 +322,7 @@ export default function LandingPage() {
               Ready to find your dream job?
             </h2>
             <p className="text-white/80 text-lg mb-8 max-w-xl mx-auto">
-              Join 125,000+ professionals using JobFusion. Free forever for job seekers.
+              Join professionals using JobFusion to discover matches in real-time. Free forever for job seekers.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Link href="/sign-up">

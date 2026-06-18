@@ -63,22 +63,7 @@ export interface Activity {
   status?: string;
 }
 
-// ─── Companies ───────────────────────────────────────────────────────────────
 
-export const trustedCompanies = [
-  { name: 'Razorpay', logo: 'R', color: '#2D6BE4' },
-  { name: 'Flipkart', logo: 'F', color: '#F74E1F' },
-  { name: 'Zoho', logo: 'Z', color: '#E42527' },
-  { name: 'CRED', logo: 'C', color: '#1A1A2E' },
-  { name: 'Swiggy', logo: 'S', color: '#FC8019' },
-  { name: 'Zomato', logo: 'Z', color: '#E23744' },
-  { name: 'Paytm', logo: 'P', color: '#00BAF2' },
-  { name: 'Freshworks', logo: 'F', color: '#2BB34A' },
-  { name: 'TCS', logo: 'T', color: '#0A2D6B' },
-  { name: 'Infosys', logo: 'I', color: '#007CC3' },
-  { name: 'Wipro', logo: 'W', color: '#341D63' },
-  { name: 'HCL', logo: 'H', color: '#0F6CBD' },
-];
 
 // ─── Jobs ────────────────────────────────────────────────────────────────────
 
@@ -539,8 +524,8 @@ export const features = [
   {
     icon: 'brain',
     title: 'AI Skill Match Engine',
-    description: 'Compare your skills against job requirements dynamically to calculate precise match percentages and compatibility scores.',
-    highlight: '98% matching accuracy',
+    description: 'Compare your skills against job requirements dynamically to calculate precise match compatibility scores.',
+    highlight: 'Gemini-powered compatibility match',
   },
   {
     icon: 'history',
@@ -554,67 +539,9 @@ export const features = [
     description: 'Visualize your job search activity, visits, and application status over the last 7 days with clear interactive charts.',
     highlight: 'Interactive activity charts',
   },
-  {
-    icon: 'bell',
-    title: 'Real-Time Alerts',
-    description: 'Stay ahead with chronological alerts showing the most recent job openings, ensuring you apply before the crowd.',
-    highlight: 'Instant, sorted alerts',
-  },
 ];
 
-// ─── Testimonials ─────────────────────────────────────────────────────────────
 
-export const testimonials = [
-  {
-    id: 't1',
-    name: 'Riya Kapoor',
-    role: 'Software Engineer at Razorpay',
-    avatar: 'RK',
-    avatarColor: '#6366f1',
-    rating: 5,
-    text: 'JobFusion completely changed my job search. The AI matched me with my dream role in just 2 weeks. The skill gap analysis was incredibly actionable — I knew exactly what to work on.',
-    outcome: 'Hired in 2 weeks',
-  },
-  {
-    id: 't2',
-    name: 'Aditya Mehta',
-    role: 'Product Manager at Zoho',
-    avatar: 'AM',
-    avatarColor: '#8b5cf6',
-    rating: 5,
-    text: 'I was spending hours every week searching across Naukri, LinkedIn, and dozens of company sites. JobFusion consolidated everything beautifully. The match scores are surprisingly accurate.',
-    outcome: '10× faster search',
-  },
-  {
-    id: 't3',
-    name: 'Divya Krishnan',
-    role: 'Data Scientist at Paytm',
-    avatar: 'DK',
-    avatarColor: '#06b6d4',
-    rating: 5,
-    text: 'The salary intelligence feature helped me negotiate ₹8L more than my initial offer. Having real INR benchmarks in negotiations is a total game-changer in the Indian market.',
-    outcome: '₹8L salary increase',
-  },
-  {
-    id: 't4',
-    name: 'Karthik Iyer',
-    role: 'Senior Designer at CRED',
-    avatar: 'KI',
-    avatarColor: '#f59e0b',
-    rating: 5,
-    text: 'As a designer, I love that JobFusion itself looks beautiful. But beyond aesthetics, the recommendations are spot-on for Indian companies. Landed my dream role after just 3 weeks.',
-    outcome: 'Dream role in 3 weeks',
-  },
-];
-
-// ─── Stats ────────────────────────────────────────────────────────────────────
-
-export const platformStats = {
-  jobsAggregated: '2.4M+',
-  companies: '50K+',
-  placements: '1.25L+',
-  avgTimeToHire: '18 days',
-};
 
 export const dashboardStats = {
   applied: 24,
