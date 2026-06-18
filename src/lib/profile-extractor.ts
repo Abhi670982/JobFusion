@@ -1,3 +1,24 @@
+export interface ExtractedExperience {
+  company: string;
+  role: string;
+  period: string;
+  duration?: string;
+  description: string;
+  skills?: string[];
+}
+
+export interface ExtractedEducation {
+  school: string;
+  degree: string;
+  period: string;
+}
+
+export interface ExtractedProject {
+  name: string;
+  description: string;
+  tech?: string[];
+}
+
 export interface ExtractedProfileDetails {
   phone: string;
   location: string;
@@ -12,6 +33,10 @@ export interface ExtractedProfileDetails {
     missing: string[];
     tips: string[];
   };
+  bio?: string;
+  experiences?: ExtractedExperience[];
+  education?: ExtractedEducation[];
+  projects?: ExtractedProject[];
 }
 
 /**
@@ -38,7 +63,11 @@ export function extractProfileDetailsLocally(text: string): ExtractedProfileDeta
       found: [],
       missing: [],
       tips: []
-    }
+    },
+    bio: "",
+    experiences: [],
+    education: [],
+    projects: []
   };
 
   if (!text) return result;
@@ -157,7 +186,7 @@ export async function extractProfileDetails(text: string): Promise<ExtractedProf
 
     const prompt = `
 You are an expert resume parsing assistant. Analyze the following resume text.
-Extract the contact details and career intelligence:
+Extract the contact details, career intelligence, and profile sections:
 1. Phone number (format nicely like '+91 XXXXX XXXXX' or similar).
 2. Location (City, State/Country like 'Bengaluru, India' or 'San Francisco, CA').
 3. Portfolio website URL (personal website, portfolio).
@@ -170,6 +199,22 @@ Extract the contact details and career intelligence:
    - What We Found (array of 2-3 bullet points highlighting strong aspects of their resume, e.g. key projects, long tenure, relevant degree).
    - Missing Sections (array of 1-3 bullet points highlighting sections or crucial info they might have omitted, e.g. certifications, portfolio links, detailed project descriptions).
    - Tips to Improve (array of 2-3 actionable tips to improve the ATS compatibility or impact of their resume).
+10. About Me (Bio) - a brief, professional summary paragraph introducing the candidate's background and core expertise (about 3-4 sentences).
+11. Work Experience - list of previous jobs:
+    - Company Name
+    - Role / Job Title
+    - Period / Dates (e.g. '2021 - 2023' or 'June 2020 - Present')
+    - Duration (e.g. '2 years' or '6 months')
+    - Job Description (concise summary of responsibilities and achievements)
+    - Key Skills Used (array of skills used)
+12. Education - list of degrees:
+    - School / University Name
+    - Degree / Major
+    - Period / Dates (e.g., '2018 - 2022')
+13. Projects - list of projects:
+    - Project Name
+    - Description
+    - Technologies Used (array of technologies)
 
 You must return your output in the following JSON format:
 {
@@ -185,7 +230,32 @@ You must return your output in the following JSON format:
     "found": ["string (what was found)"],
     "missing": ["string (missing sections/info)"],
     "tips": ["string (actionable improvement tips)"]
-  }
+  },
+  "bio": "string (About Me/Bio paragraph, or empty if not found)",
+  "experiences": [
+    {
+      "company": "string (company name)",
+      "role": "string (job title)",
+      "period": "string (period)",
+      "duration": "string (duration, optional)",
+      "description": "string (job description)",
+      "skills": ["string (skills used)"]
+    }
+  ],
+  "education": [
+    {
+      "school": "string (university name)",
+      "degree": "string (degree/major)",
+      "period": "string (period)"
+    }
+  ],
+  "projects": [
+    {
+      "name": "string (project name)",
+      "description": "string (project description)",
+      "tech": ["string (technologies used)"]
+    }
+  ]
 }
 
 Resume Text:
@@ -237,7 +307,11 @@ ${text}
       resumeCategory: parsedResult.resumeCategory || "",
       resumeSummary: parsedResult.resumeSummary || "",
       suggestedRoles: parsedResult.suggestedRoles || [],
-      resumeInsights: parsedResult.resumeInsights || { found: [], missing: [], tips: [] }
+      resumeInsights: parsedResult.resumeInsights || { found: [], missing: [], tips: [] },
+      bio: parsedResult.bio || "",
+      experiences: parsedResult.experiences || [],
+      education: parsedResult.education || [],
+      projects: parsedResult.projects || []
     };
   } catch (error) {
     console.error("[Profile Extractor] Failed to extract details using Gemini. Falling back to local parser:", error);

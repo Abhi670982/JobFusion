@@ -115,7 +115,11 @@ export default function ResumePage() {
           found: [],
           missing: [],
           tips: []
-        }
+        },
+        bio: '',
+        experiences: [],
+        education: [],
+        projects: []
       });
       if (updated) { 
         setProfile(updated); 
