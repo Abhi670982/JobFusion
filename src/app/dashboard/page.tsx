@@ -188,9 +188,9 @@ export default function DashboardPage() {
                   Browse Jobs
                 </Button>
               </Link>
-              <Link href="/profile">
+              <Link href="/resume">
                 <Button size="sm" variant="outline" className="rounded-xl">
-                  Complete Profile
+                  Manage Resume
                 </Button>
               </Link>
             </div>
@@ -230,9 +230,9 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </div>
-              <Link href="/profile">
+              <Link href="/resume">
                 <Button size="sm" className="bg-white text-primary hover:bg-white/90 rounded-xl font-semibold">
-                  Complete Profile
+                  Manage Resume
                   <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
                 </Button>
               </Link>
@@ -261,14 +261,14 @@ export default function DashboardPage() {
                     Upload Resume
                   </Button>
                 </Link>
-                <Link href="/profile">
+                <Link href="/resume">
                   <Button size="sm" variant="secondary" className="rounded-xl">
                     Add Skills
                   </Button>
                 </Link>
-                <Link href="/profile">
+                <Link href="/resume">
                   <Button size="sm" variant="outline" className="rounded-xl">
-                    Complete Profile
+                    Manage Resume
                   </Button>
                 </Link>
               </div>
@@ -284,7 +284,7 @@ export default function DashboardPage() {
                 <div className="block">
                   <StatCard icon={Eye} label="Visited Openings" value={stats.visitedCount} color="#6366f1" />
                 </div>
-                <Link href="/profile" className="block cursor-pointer">
+                <Link href="/resume" className="block cursor-pointer">
                   <StatCard icon={Code2} label="Skills" value={stats.skillsCount} color="#10b981" />
                 </Link>
                 <Link href="/jobs/saved" className="block cursor-pointer">

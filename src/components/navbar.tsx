@@ -177,12 +177,7 @@ export default function Navbar() {
                           <span className="text-[10px] text-muted-foreground/60 bg-muted px-1.5 py-0.5 rounded">⌘D</span>
                         </Link>
                       </DropdownMenuItem>
-                      <DropdownMenuItem asChild className="rounded-xl px-3 py-1.5 text-sm cursor-pointer transition-colors">
-                        <Link href="/profile" className="flex items-center w-full justify-between">
-                          <span className="flex items-center"><User className="w-4 h-4 mr-2 text-muted-foreground" />My Profile</span>
-                          <span className="text-[10px] text-muted-foreground/60 bg-muted px-1.5 py-0.5 rounded">⌘P</span>
-                        </Link>
-                      </DropdownMenuItem>
+
                       <DropdownMenuItem asChild className="rounded-xl px-3 py-1.5 text-sm cursor-pointer transition-colors">
                         <Link href="/jobs" className="flex items-center w-full justify-between">
                           <span className="flex items-center"><Briefcase className="w-4 h-4 mr-2 text-muted-foreground" />Find Jobs</span>

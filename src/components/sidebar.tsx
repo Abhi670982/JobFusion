@@ -27,7 +27,6 @@ const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/jobs', label: 'Find Jobs', icon: Briefcase },
   { href: '/jobs/saved', label: 'Saved Jobs', icon: Bookmark },
-  { href: '/profile', label: 'My Profile', icon: User },
   { href: '/resume', label: 'Resume', icon: FileText },
 ];
 
