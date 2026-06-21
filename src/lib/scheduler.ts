@@ -55,7 +55,7 @@ export async function cleanupExpiredJobs() {
     console.log(`[Scheduler] Cleaning up jobs posted before: ${cutoffDate.toISOString()}`);
     const res = await Job.deleteMany({
       $or: [
-        { postedAt: { $lt: cutoffDate } },
+        { postedAtDate: { $lt: cutoffDate } },
         { createdAt: { $lt: cutoffDate } }
       ]
     });
