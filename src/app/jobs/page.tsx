@@ -89,6 +89,8 @@ function PortalStatusText() {
     "Searching Indeed listings...",
     "Syncing Wellfound startup database...",
     "Scraping Internshala internships...",
+    "Scanning Google, Stripe, Vercel careers...",
+    "Crawling company career pages...",
     "Filtering openings against your skills...",
     "Structuring unified search results..."
   ];
@@ -163,7 +165,8 @@ export default function JobsPage() {
     linkedin: 0,
     indeed: 0,
     wellfound: 0,
-    internshala: 0
+    internshala: 0,
+    careers: 0
   });
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -495,6 +498,7 @@ export default function JobsPage() {
     if (src === 'indeed') return 'Indeed';
     if (src === 'wellfound') return 'Wellfound';
     if (src === 'internshala') return 'Internshala';
+    if (src === 'careers') return 'Company Careers';
     return src;
   };
 
@@ -618,7 +622,7 @@ export default function JobsPage() {
               <div>
                 <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">Job Portal Source</h4>
                 <div className="space-y-2.5">
-                  {['linkedin', 'indeed', 'wellfound', 'internshala'].map(src => {
+                  {['linkedin', 'indeed', 'wellfound', 'internshala', 'careers'].map(src => {
                     const count = sourceCounts[src] ?? 0;
                     return (
                       <div key={src} className="flex items-center justify-between">
@@ -1029,7 +1033,7 @@ export default function JobsPage() {
                 />
               </div>
 
-              <div className="flex justify-center gap-6 pt-2">
+              <div className="flex justify-center gap-6 pt-2 flex-wrap">
                 <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping" /> LinkedIn
                 </span>
@@ -1041,6 +1045,9 @@ export default function JobsPage() {
                 </span>
                 <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-ping" /> Internshala
+                </span>
+                <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" /> Company Careers
                 </span>
               </div>
             </motion.div>

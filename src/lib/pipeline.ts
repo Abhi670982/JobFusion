@@ -8,6 +8,7 @@ import { LinkedInAdapter } from "./adapters/linkedin";
 import { IndeedAdapter } from "./adapters/indeed";
 import { WellfoundAdapter } from "./adapters/wellfound";
 import { InternshalaAdapter } from "./adapters/internshala";
+import { CareersAdapter } from "./adapters/careers";
 
 // Helper to clean HTML from descriptions
 export function stripHtml(html: string | null | undefined): string {
@@ -29,6 +30,8 @@ export function getCompanyColor(source: JobSource): string {
       return "#0a85ea";
     case "internshala":
       return "#f97316";
+    case "careers":
+      return "#14b8a6";
     default:
       return "#6366f1";
   }
@@ -70,6 +73,9 @@ export async function runSourceSync(source: JobSource, keywords: string[]): Prom
         break;
       case "internshala":
         adapter = new InternshalaAdapter();
+        break;
+      case "careers":
+        adapter = new CareersAdapter();
         break;
       default:
         throw new Error(`Unknown source: ${source}`);
@@ -197,6 +203,19 @@ export async function runSourceSync(source: JobSource, keywords: string[]): Prom
       status: "success",
       jobsFetched: successCount,
     });
+
+    // Mark jobs from this source not seen in 12h as inactive
+    // (missed 2+ crawl cycles at 6h intervals)
+    if (source === "careers") {
+      await Job.updateMany(
+        {
+          source: "careers",
+          fetchedAt: { $lt: new Date(Date.now() - 12 * 60 * 60 * 1000) },
+          isActive: { $ne: false },
+        },
+        { $set: { isActive: false } }
+      );
+    }
 
     return { success: true, count: successCount };
   } catch (error: any) {

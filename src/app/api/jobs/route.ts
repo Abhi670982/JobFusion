@@ -239,6 +239,14 @@ export async function GET(req: NextRequest) {
       ]
     });
 
+    // 12. Only show active jobs (isActive true or not set)
+    andConditions.push({
+      $or: [
+        { isActive: true },
+        { isActive: { $exists: false } }
+      ]
+    });
+
     // Build final query conditions object
     const queryConditions = andConditions.length > 0 ? { $and: andConditions } : {};
 
@@ -266,18 +274,20 @@ export async function GET(req: NextRequest) {
       return Job.countDocuments(baseConditions.length > 1 ? { $and: baseConditions } : baseConditions[0]);
     };
 
-    const [linkedinCount, indeedCount, wellfoundCount, internshalaCount] = await Promise.all([
+    const [linkedinCount, indeedCount, wellfoundCount, internshalaCount, careersCount] = await Promise.all([
       getSourceCount("linkedin"),
       getSourceCount("indeed"),
       getSourceCount("wellfound"),
-      getSourceCount("internshala")
+      getSourceCount("internshala"),
+      getSourceCount("careers")
     ]);
 
     const sourceCounts = {
       linkedin: linkedinCount,
       indeed: indeedCount,
       wellfound: wellfoundCount,
-      internshala: internshalaCount
+      internshala: internshalaCount,
+      careers: careersCount
     };
 
     return NextResponse.json({

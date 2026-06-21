@@ -156,6 +156,10 @@ const JobSchema = new Schema(
       unique: true,
       sparse: true,
       trim: true,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
     }
   },
   {
@@ -171,6 +175,9 @@ JobSchema.index({ postedAtDate: -1 });
 JobSchema.index({ skills: 1 });
 JobSchema.index({ city: 1, country: 1 });
 
-const Job = models.Job || model("Job", JobSchema);
+if (models.Job) {
+  delete (models as any).Job;
+}
+const Job = model("Job", JobSchema);
 
 export default Job;

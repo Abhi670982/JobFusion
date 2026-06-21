@@ -11,21 +11,32 @@ export async function POST(req: NextRequest) {
   try {
     const now = Date.now();
     
-    // Parse custom keywords if provided in request body
+    // Parse custom keywords and source if provided in request body or query params
+    const { searchParams } = new URL(req.url);
+    const querySource = searchParams.get("source");
+    
     let customKeywords: string[] = [];
+    let bodySource = "";
     try {
-      const body = await req.json();
-      if (body && Array.isArray(body.keywords)) {
-        customKeywords = body.keywords.map((k: any) => String(k).trim()).filter(Boolean);
+      // Make a clone of the request to read body, in case it is read again elsewhere
+      const body = await req.clone().json();
+      if (body) {
+        if (Array.isArray(body.keywords)) {
+          customKeywords = body.keywords.map((k: any) => String(k).trim()).filter(Boolean);
+        }
+        if (body.source) {
+          bodySource = String(body.source).trim().toLowerCase();
+        }
       }
     } catch (e) {
       // Ignore if body is empty or not JSON
     }
 
     const isCustom = customKeywords.length > 0;
+    const targetSource = querySource || bodySource;
 
     // Only apply rate cooldown limit to automated periodic crawls (non-custom)
-    if (!isCustom && now - lastCrawlTime < COOLDOWN_MS) {
+    if (!isCustom && !targetSource && now - lastCrawlTime < COOLDOWN_MS) {
       const remainingSeconds = Math.ceil((COOLDOWN_MS - (now - lastCrawlTime)) / 1000);
       console.log(`[Cron API] Crawl skipped. Rate-limit active. Cooldown remaining: ${remainingSeconds}s`);
       return NextResponse.json(
@@ -38,14 +49,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!isCustom) {
+    if (!isCustom && !targetSource) {
       lastCrawlTime = now;
     }
     
     console.log(`[Cron API] Triggering background job sync...`);
 
     const keywords = isCustom ? customKeywords : (process.env.FETCH_KEYWORDS || "software engineer,frontend developer,backend developer").split(",");
-    const sources: JobSource[] = ["linkedin", "indeed", "wellfound", "internshala"];
+    
+    let sources: JobSource[] = ["linkedin", "indeed", "wellfound", "internshala", "careers"];
+    if (targetSource && sources.includes(targetSource as JobSource)) {
+      sources = [targetSource as JobSource];
+    }
 
     // Run crawler in the background using after() to return 202 immediately but keep container alive
     after(async () => {
