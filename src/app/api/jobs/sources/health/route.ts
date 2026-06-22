@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   try {
     await connectDB();
 
-    const sources = ["linkedin", "indeed", "wellfound", "internshala"];
+    const sources = ["linkedin", "indeed", "wellfound", "internshala", "careers"];
     const healthStatus: any = {};
 
     for (const source of sources) {

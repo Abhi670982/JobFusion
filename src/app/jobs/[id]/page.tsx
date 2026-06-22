@@ -23,13 +23,13 @@ import {
   fetchCurrentUser,
   fetchProfile,
   fetchJobById,
-  fetchJobs,
   fetchSavedJobs,
   fetchApplications,
   saveJob,
   unsaveJob,
   applyToJob,
   updateProfile,
+  logActivity,
   DbUser,
   DbJob,
   DbSavedJob,
@@ -119,24 +119,23 @@ export default function JobDetailPage() {
       if (!jobId) return;
       try {
         setLoading(true);
-        const [currentUser, jobData, allJobs] = await Promise.all([
+        const [currentUser, jobData] = await Promise.all([
           fetchCurrentUser(),
-          fetchJobById(jobId),
-          fetchJobs()
+          fetchJobById(jobId)
         ]);
 
         if (jobData) {
           setJob(jobData);
           trackVisitedJob(jobData);
 
-          // Get similar jobs
-          const similar = allJobs
-            .filter(j => j._id !== jobData._id && j.category === jobData.category)
-            .slice(0, 3);
-          setSimilarJobs(similar);
-
           if (currentUser) {
             setUser(currentUser);
+            logActivity({
+              type: "viewed",
+              jobId: jobData._id,
+              jobTitle: jobData.title,
+              company: jobData.company,
+            }).catch((err) => console.error("Failed to log viewed activity:", err));
 
             // Check if saved
             const savedJobs = await fetchSavedJobs(currentUser._id);
@@ -152,6 +151,19 @@ export default function JobDetailPage() {
             const prof = await fetchProfile(currentUser._id);
             setProfile(prof);
           }
+
+          // Fetch similar jobs asynchronously in the background using the category filter
+          fetch(`/api/jobs?category=${encodeURIComponent(jobData.category)}&limit=4`)
+            .then(res => res.json())
+            .then(resData => {
+              if (resData.success && resData.data) {
+                const similar = resData.data
+                  .filter((j: DbJob) => j._id !== jobData._id)
+                  .slice(0, 3);
+                setSimilarJobs(similar);
+              }
+            })
+            .catch(err => console.error("Failed to load similar jobs in background:", err));
         }
       } catch (err) {
         console.error("Error loading job details:", err);

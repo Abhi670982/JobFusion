@@ -7,6 +7,7 @@ import { parsePdf, parseDocx } from "@/lib/parser";
 import { extractSkills } from "@/lib/skills-extractor";
 import { analyzeResume } from "@/lib/resume-intelligence";
 import { getOrCreateMongoUser } from "@/lib/auth-sync";
+import { extractProfileDetails } from "@/lib/profile-extractor";
 
 export const dynamic = "force-dynamic";
 
@@ -151,6 +152,65 @@ export async function POST(req: NextRequest) {
       profile.resumeSummary   = intelligence.resumeSummary;
       profile.suggestedRoles  = intelligence.suggestedRoles;
       profile.resumeInsights  = intelligence.insights;
+
+      // Extract detailed profile sections (About Me, experiences, education, projects)
+      console.log("[Resume Upload] Extracting detailed profile sections");
+      try {
+        const details = await extractProfileDetails(extractedText);
+        
+        if (details.bio) {
+          profile.bio = details.bio;
+        }
+        if (details.experiences && details.experiences.length > 0) {
+          profile.experiences = details.experiences.map((exp: any) => ({
+            company: exp.company || "",
+            role: exp.role || "",
+            period: exp.period || "",
+            duration: exp.duration || "",
+            description: exp.description || "",
+            skills: exp.skills || [],
+            companyColor: "#6366f1",
+            logo: (exp.company || "C").charAt(0).toUpperCase()
+          }));
+        }
+        if (details.education && details.education.length > 0) {
+          profile.education = details.education.map((edu: any) => ({
+            school: edu.school || "",
+            degree: edu.degree || "",
+            period: edu.period || "",
+            logo: (edu.school || "S").charAt(0).toUpperCase(),
+            color: "#003580"
+          }));
+        }
+        if (details.projects && details.projects.length > 0) {
+          profile.projects = details.projects.map((proj: any) => ({
+            name: proj.name || "",
+            description: proj.description || "",
+            tech: proj.tech || [],
+            link: "#",
+            stars: "0"
+          }));
+        }
+
+        // Also sync contact details if empty or default
+        if (details.phone && (!profile.phone || profile.phone === "+91 98765 43210")) {
+          profile.phone = details.phone;
+        }
+        if (details.location && !profile.location) {
+          profile.location = details.location;
+        }
+        if (details.portfolioUrl && !profile.portfolioUrl) {
+          profile.portfolioUrl = details.portfolioUrl;
+        }
+        if (details.linkedinUrl && !profile.linkedinUrl) {
+          profile.linkedinUrl = details.linkedinUrl;
+        }
+        if (details.githubUrl && !profile.githubUrl) {
+          profile.githubUrl = details.githubUrl;
+        }
+      } catch (extractErr) {
+        console.error("[Resume Upload] Non-fatal: Failed to extract detailed profile sections:", extractErr);
+      }
 
       await profile.save();
     } catch (dbErr: any) {

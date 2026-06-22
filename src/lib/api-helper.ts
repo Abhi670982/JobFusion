@@ -56,7 +56,8 @@ export interface DbProfile {
   experience?: string;
   resumeUrl?: string;
   resumeName?: string;
-  resumeUpdatedAt?: string | Date;
+  resumeUpdatedAt?: string | Date | null;
+  resumeText?: string;
   experiences: DbExperience[];
   education: DbEducation[];
   certifications: DbCertification[];
@@ -80,7 +81,7 @@ export interface DbProfile {
   resumeCategory?: string;
   resumeSummary?: string;
   suggestedRoles?: string[];
-  lastAnalyzedAt?: string | Date;
+  lastAnalyzedAt?: string | Date | null;
   resumeInsights?: {
     found: string[];
     missing: string[];
@@ -106,6 +107,7 @@ export interface DbJob {
   skills: string[];
   matchScore: number;
   postedAt: string;
+  postedAtDate?: string;
   description: string;
   requirements: string[];
   responsibilities: string[];
@@ -574,6 +576,18 @@ export async function logActivity(activityData: {
   } catch (error) {
     console.error("[Frontend API] Error logging activity:", error);
     return false;
+  }
+}
+
+export async function fetchDashboardNotifications(): Promise<any[]> {
+  try {
+    const res = await fetch('/api/dashboard/notifications');
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+    const data = await res.json();
+    return data.success ? (data.notifications || []) : [];
+  } catch (error) {
+    console.error("[Frontend API] Error fetching dashboard notifications:", error);
+    return [];
   }
 }
 

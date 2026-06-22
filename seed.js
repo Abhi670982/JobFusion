@@ -75,6 +75,7 @@ const JobSchema = new mongoose.Schema({
   skills: [String],
   matchScore: Number,
   postedAt: String,
+  postedAtDate: Date,
   description: String,
   requirements: [String],
   responsibilities: [String],
@@ -84,7 +85,7 @@ const JobSchema = new mongoose.Schema({
   category: String,
   source: String,
   applyUrl: String
-});
+}, { timestamps: true });
 const Job = mongoose.models.Job || mongoose.model("Job", JobSchema);
 
 const ApplicationSchema = new mongoose.Schema({
@@ -487,7 +488,25 @@ async function seed() {
   console.log("Profile seeded for user:", user.fullName);
 
   // Create Jobs
-  const seededJobs = await Job.create(jobsData);
+  const seededJobs = await Promise.all(
+    jobsData.map(async (job, index) => {
+      const now = new Date();
+      if (job.postedAt === '2 hours ago') now.setHours(now.getHours() - 2);
+      else if (job.postedAt === '5 hours ago') now.setHours(now.getHours() - 5);
+      else if (job.postedAt === '1 day ago') now.setDate(now.getDate() - 1);
+      else if (job.postedAt === '2 days ago') now.setDate(now.getDate() - 2);
+      else if (job.postedAt === '3 days ago') now.setDate(now.getDate() - 3);
+      else if (job.postedAt === '4 days ago') now.setDate(now.getDate() - 4);
+      else now.setMinutes(now.getMinutes() - index);
+      
+      return Job.create({
+        ...job,
+        createdAt: now,
+        fetchedAt: now,
+        postedAtDate: now
+      });
+    })
+  );
   console.log(`Seeded ${seededJobs.length} jobs.`);
 
   // Create Applications
