@@ -1,10 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import Profile from "@/models/Profile";
-import Application from "@/models/Application";
 import SavedJob from "@/models/SavedJob";
-import Notification from "@/models/Notification";
 import Activity from "@/models/Activity";
 
 export const dynamic = "force-dynamic";
@@ -27,12 +25,10 @@ export async function GET() {
       profile,
       savedCount,
       visitedJobIds,
-      unreadNotifCount,
     ] = await Promise.all([
       Profile.findOne({ userId }).lean(),
       SavedJob.countDocuments({ userId }),
       Activity.distinct("jobId", { userId, type: "viewed", jobId: { $ne: null } }),
-      Notification.countDocuments({ userId, read: false }),
     ]);
 
     const visitedCount = visitedJobIds.length;
@@ -46,7 +42,7 @@ export async function GET() {
         skillsCount: profile?.skills?.length || 0,
         savedCount,
       },
-      unreadNotificationsCount: unreadNotifCount,
+      unreadNotificationsCount: 0,
     });
   } catch (error: any) {
     console.error("Error in GET /api/dashboard:", error);

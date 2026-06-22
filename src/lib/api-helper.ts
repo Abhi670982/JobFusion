@@ -579,6 +579,18 @@ export async function logActivity(activityData: {
   }
 }
 
+export async function fetchDashboardNotifications(): Promise<any[]> {
+  try {
+    const res = await fetch('/api/dashboard/notifications');
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+    const data = await res.json();
+    return data.success ? (data.notifications || []) : [];
+  } catch (error) {
+    console.error("[Frontend API] Error fetching dashboard notifications:", error);
+    return [];
+  }
+}
+
 export async function fetchDashboardMatches(): Promise<any> {
   try {
     const res = await fetch('/api/dashboard/matches');
