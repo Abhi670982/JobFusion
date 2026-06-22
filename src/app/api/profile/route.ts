@@ -158,7 +158,7 @@ export async function PUT(req: NextRequest) {
         console.log(`[Profile API] Triggering background scraper sync for manually updated skills:`, newSkillNames);
         Promise.resolve().then(async () => {
           const { runSourceSync } = require("@/lib/pipeline");
-          const sources = ["linkedin", "indeed", "wellfound", "internshala"];
+          const sources = ["linkedin", "indeed", "wellfound", "internshala", "careers"];
           
           for (const source of sources) {
             try {

@@ -24,7 +24,8 @@ export async function GET(req: NextRequest) {
       linkedin: 0,
       indeed: 0,
       wellfound: 0,
-      internshala: 0
+      internshala: 0,
+      careers: 0
     };
 
     sourceStats.forEach((stat) => {

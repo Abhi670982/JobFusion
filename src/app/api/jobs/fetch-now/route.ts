@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { source } = body;
 
-    const validSources: JobSource[] = ["linkedin", "indeed", "wellfound", "internshala"];
+    const validSources: JobSource[] = ["linkedin", "indeed", "wellfound", "internshala", "careers"];
     if (!source || !validSources.includes(source)) {
       return NextResponse.json(
         { success: false, error: `Invalid source. Must be one of: ${validSources.join(", ")}` },

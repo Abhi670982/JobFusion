@@ -131,6 +131,8 @@ export default function JobCard({
         return { label: "Wellfound", className: "bg-teal-600/10 text-teal-600 dark:text-teal-400 border-teal-500/20" };
       case "internshala":
         return { label: "Internshala", className: "bg-orange-600/10 text-orange-600 dark:text-orange-400 border-orange-500/20" };
+      case "careers":
+        return { label: "Company Careers", className: "bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" };
       default:
         return null;
     }
