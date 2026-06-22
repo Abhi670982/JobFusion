@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Briefcase, User, FileText, Settings,
-  ChevronLeft, ChevronRight, Bookmark
+  ChevronLeft, ChevronRight, Bookmark, Activity
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -34,13 +34,8 @@ const bottomItems: NavItem[] = [
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
-interface SidebarProps {}
-
 function NavLink({ item, collapsed, pathname, onClick }: {
-  item: NavItem;
-  collapsed: boolean;
-  pathname: string;
-  onClick?: () => void;
+  item: NavItem; collapsed: boolean; pathname: string; onClick?: () => void;
 }) {
   const isActive = pathname === item.href || (item.href !== '/jobs' && pathname.startsWith(item.href + '/'));
   const Icon = item.icon;
@@ -52,17 +47,25 @@ function NavLink({ item, collapsed, pathname, onClick }: {
       className={cn(
         'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative min-h-[44px]',
         isActive
-          ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-sm'
-          : 'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+          ? 'bg-primary/10 dark:bg-primary/15 text-primary font-semibold shadow-sm border border-primary/15 dark:border-primary/20'
+          : 'text-muted-foreground hover:text-foreground hover:bg-accent/60 dark:hover:bg-white/5'
       )}
     >
-      <Icon className={cn('w-5 h-5 flex-shrink-0', isActive && 'text-primary')} />
+      {isActive && (
+        <motion.div
+          layoutId="sidebar-active-pill"
+          className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-full bg-primary"
+          transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+        />
+      )}
+      <Icon className={cn('w-4.5 h-4.5 flex-shrink-0 transition-colors', isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground')} />
       <AnimatePresence>
         {!collapsed && (
           <motion.span
-            initial={false}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            initial={{ opacity: 0, x: -4 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -4 }}
+            transition={{ duration: 0.15 }}
             className="text-sm whitespace-nowrap flex-1 overflow-hidden"
           >
             {item.label}
@@ -70,12 +73,12 @@ function NavLink({ item, collapsed, pathname, onClick }: {
         )}
       </AnimatePresence>
       {item.badge !== undefined && item.badge > 0 && !collapsed && (
-        <Badge className="ml-auto h-5 px-1.5 text-[10px] gradient-brand text-white border-0">
+        <Badge className="ml-auto h-4.5 px-1.5 text-[10px] gradient-brand text-white border-0 min-w-[18px] flex items-center justify-center">
           {item.badge}
         </Badge>
       )}
       {item.badge !== undefined && item.badge > 0 && collapsed && (
-        <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary" />
+        <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
       )}
     </Link>
   );
@@ -84,7 +87,7 @@ function NavLink({ item, collapsed, pathname, onClick }: {
     return (
       <Tooltip delayDuration={0}>
         <TooltipTrigger asChild>{link}</TooltipTrigger>
-        <TooltipContent side="right" className="rounded-lg">{item.label}</TooltipContent>
+        <TooltipContent side="right" className="rounded-lg text-xs font-medium">{item.label}</TooltipContent>
       </Tooltip>
     );
   }
@@ -94,9 +97,7 @@ function NavLink({ item, collapsed, pathname, onClick }: {
 export default function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('sidebar_collapsed') === 'true';
-    }
+    if (typeof window !== 'undefined') return localStorage.getItem('sidebar_collapsed') === 'true';
     return false;
   });
   const [user, setUser] = useState<DbUser | null>(() => {
@@ -114,39 +115,19 @@ export default function Sidebar() {
     return 0;
   });
 
-  // Fetch user details once on mount
   useEffect(() => {
-    async function loadUser() {
-      try {
-        const currentUser = await fetchCurrentUser();
-        if (currentUser) {
-          setUser(currentUser);
-          sessionStorage.setItem('jobfusion_user', JSON.stringify(currentUser));
-        }
-      } catch (err) {
-        console.error("Error fetching sidebar user:", err);
-      }
-    }
-    loadUser();
+    fetchCurrentUser().then(u => {
+      if (u) { setUser(u); sessionStorage.setItem('jobfusion_user', JSON.stringify(u)); }
+    }).catch(() => {});
   }, []);
 
-  // Fetch saved jobs count on mount and route changes
   useEffect(() => {
     if (!user) return;
-    const userId = user._id;
-    async function loadSavedCount() {
-      try {
-        const saved = await fetchSavedJobs(userId);
-        setSavedCount(saved.length);
-        sessionStorage.setItem('jobfusion_saved_count', String(saved.length));
-      } catch (err) {
-        console.error("Error fetching saved count:", err);
-      }
-    }
-    loadSavedCount();
+    fetchSavedJobs(user._id).then(saved => {
+      setSavedCount(saved.length);
+      sessionStorage.setItem('jobfusion_saved_count', String(saved.length));
+    }).catch(() => {});
   }, [pathname, user?._id]);
-
-  const allItems = navItems;
 
   const getInitials = () => {
     if (!user) return 'U';
@@ -162,21 +143,25 @@ export default function Sidebar() {
         'flex items-center gap-3 px-4 h-16 border-b border-sidebar-border flex-shrink-0',
         collapsed && 'justify-center px-3'
       )}>
-        <Link href="/" className="flex items-center gap-2 min-w-0">
-          <Image
-            src="/logo-circle.png"
-            alt="JobFusion Logo"
-            width={36}
-            height={36}
-            className="rounded-full flex-shrink-0 object-cover border border-sidebar-border"
-          />
+        <Link href="/" className="flex items-center gap-2.5 min-w-0">
+          <div className="relative flex-shrink-0">
+            <Image
+              src="/logo-circle.png"
+              alt="JobFusion"
+              width={34}
+              height={34}
+              className="rounded-full object-cover border border-sidebar-border"
+            />
+            <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-sidebar" />
+          </div>
           <AnimatePresence>
             {!collapsed && (
               <motion.span
-                initial={false}
+                initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                className="font-bold text-lg whitespace-nowrap overflow-hidden inline-flex items-center gap-0.5"
+                exit={{ opacity: 0, x: -8 }}
+                transition={{ duration: 0.18 }}
+                className="font-bold text-base whitespace-nowrap overflow-hidden"
                 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
               >
                 <span className="gradient-brand-text">Job</span>
@@ -187,65 +172,60 @@ export default function Sidebar() {
         </Link>
       </div>
 
-      {/* Navigation */}
-      <div className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-        {allItems.map((item) => {
-          // Inject dynamic saved count badge
-          const displayItem = item.href === '/jobs/saved'
-            ? { ...item, badge: savedCount }
-            : item;
-          return (
-            <NavLink
-              key={displayItem.href}
-              item={displayItem}
-              collapsed={collapsed}
-              pathname={pathname}
-            />
-          );
+      {/* Nav */}
+      <div className="flex-1 overflow-y-auto py-4 px-2.5 space-y-0.5 scrollbar-thin">
+        {navItems.map((item) => {
+          const displayItem = item.href === '/jobs/saved' ? { ...item, badge: savedCount } : item;
+          return <NavLink key={displayItem.href} item={displayItem} collapsed={collapsed} pathname={pathname} />;
         })}
 
-        <div className="my-3 border-t border-sidebar-border" />
+        <div className="my-3 mx-1 border-t border-sidebar-border" />
 
         {bottomItems.map((item) => (
-          <NavLink
-            key={item.href}
-            item={item}
-            collapsed={collapsed}
-            pathname={pathname}
-          />
+          <NavLink key={item.href} item={item} collapsed={collapsed} pathname={pathname} />
         ))}
       </div>
 
       {/* User Profile */}
       <div className={cn(
-        'flex items-center gap-3 p-4 border-t border-sidebar-border transition-all flex-shrink-0 bg-sidebar sticky bottom-0 z-10',
+        'flex items-center gap-3 p-3 border-t border-sidebar-border flex-shrink-0 bg-sidebar',
         collapsed && 'justify-center'
       )}>
         {user ? (
-          <Avatar className="w-8 h-8 flex-shrink-0 ring-2 ring-primary/20">
-            <AvatarFallback className="text-xs gradient-brand text-white">{getInitials()}</AvatarFallback>
-          </Avatar>
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <Link href="/profile" className="flex items-center gap-3 flex-1 min-w-0 rounded-xl p-1.5 hover:bg-accent/50 transition-colors touch-auto">
+                <Avatar className="w-8 h-8 flex-shrink-0 ring-2 ring-primary/20">
+                  <AvatarFallback className="text-xs gradient-brand text-white font-semibold">{getInitials()}</AvatarFallback>
+                </Avatar>
+                <AnimatePresence>
+                  {!collapsed && (
+                    <motion.div
+                      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                      className="flex-1 min-w-0"
+                    >
+                      <p className="text-xs font-semibold truncate leading-tight">{user.fullName}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">{user.email}</p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </Link>
+            </TooltipTrigger>
+            {collapsed && <TooltipContent side="right" className="rounded-lg text-xs">{user.fullName}</TooltipContent>}
+          </Tooltip>
         ) : (
-          <Skeleton className="w-8 h-8 rounded-full bg-sidebar-accent/50 animate-pulse flex-shrink-0" />
-        )}
-        <AnimatePresence>
-          {!collapsed && (
-            <motion.div
-              initial={false}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="flex-1 min-w-0"
-            >
-              {user ? (
-                <p className="text-sm font-medium truncate">{user.fullName}</p>
-              ) : (
-                <div className="space-y-1">
-                  <Skeleton className="h-4 w-24 bg-sidebar-accent/50 animate-pulse" />
-                </div>
+          <div className="flex items-center gap-3 flex-1">
+            <Skeleton className="w-8 h-8 rounded-full flex-shrink-0" />
+            <AnimatePresence>
+              {!collapsed && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-1 flex-1">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-2.5 w-28" />
+                </motion.div>
               )}
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </AnimatePresence>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -255,8 +235,8 @@ export default function Sidebar() {
       {/* Desktop Sidebar */}
       <motion.aside
         initial={false}
-        animate={{ width: collapsed ? 72 : 240 }}
-        transition={{ duration: 0.3, ease: 'easeInOut' }}
+        animate={{ width: collapsed ? 68 : 236 }}
+        transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
         className="relative hidden lg:flex flex-col h-screen sticky top-0 bg-sidebar border-r border-sidebar-border overflow-hidden flex-shrink-0"
       >
         <SidebarContent />
@@ -266,48 +246,42 @@ export default function Sidebar() {
             setCollapsed(next);
             localStorage.setItem('sidebar_collapsed', String(next));
           }}
-          className="absolute -right-3 top-20 w-6 h-6 rounded-full bg-background border border-border shadow-md flex items-center justify-center hover:bg-accent transition-colors z-10"
+          className="absolute -right-3 top-[72px] w-6 h-6 rounded-full bg-background border border-border shadow-md flex items-center justify-center hover:bg-accent hover:border-primary/30 transition-all z-20 touch-auto"
         >
           {collapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
         </button>
       </motion.aside>
 
       {/* Mobile Bottom Nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-background/90 backdrop-blur-md border-t border-border/80 flex items-center justify-around px-2 py-2 shadow-lg">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-background/90 backdrop-blur-xl border-t border-border/70 flex items-center justify-around px-1 py-1.5 shadow-2xl">
         {navItems.slice(0, 5).map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href || (item.href !== '/jobs' && pathname.startsWith(item.href + '/'));
-
-          const mobileLabelMap: Record<string, string> = {
-            'Dashboard': 'Home',
-            'Find Jobs': 'Jobs',
-            'Saved Jobs': 'Saved',
-            'My Profile': 'Profile',
-            'Resume': 'Resume',
-          };
-          const label = mobileLabelMap[item.label] || item.label;
-
-          const displayItem = item.href === '/jobs/saved'
-            ? { ...item, badge: savedCount }
-            : item;
+          const labels: Record<string, string> = { 'Dashboard': 'Home', 'Find Jobs': 'Jobs', 'Saved Jobs': 'Saved', 'Resume': 'Resume' };
+          const displayItem = item.href === '/jobs/saved' ? { ...item, badge: savedCount } : item;
 
           return (
             <Link
               key={displayItem.href}
               href={displayItem.href}
               className={cn(
-                'flex flex-col items-center justify-center gap-0.5 py-1 px-2.5 rounded-xl min-w-[56px] relative transition-all duration-200',
-                isActive
-                  ? 'text-primary bg-primary/10 font-semibold'
-                  : 'text-muted-foreground hover:text-foreground'
+                'flex flex-col items-center justify-center gap-0.5 py-1 px-3 rounded-xl min-w-[52px] relative transition-all duration-200',
+                isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
               )}
             >
-              <Icon className="w-5 h-5 flex-shrink-0" />
-              <span className="text-[10px] font-medium leading-none mt-1">
-                {label}
+              {isActive && (
+                <motion.div
+                  layoutId="mobile-active"
+                  className="absolute inset-0 rounded-xl bg-primary/10"
+                  transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                />
+              )}
+              <Icon className="w-5 h-5 flex-shrink-0 relative z-10" />
+              <span className="text-[9px] font-semibold leading-none mt-0.5 relative z-10">
+                {labels[item.label] || item.label}
               </span>
               {displayItem.badge !== undefined && displayItem.badge > 0 && (
-                <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-primary" />
+                <span className="absolute top-0.5 right-1.5 w-2 h-2 rounded-full bg-primary" />
               )}
             </Link>
           );
