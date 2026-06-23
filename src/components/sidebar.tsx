@@ -136,7 +136,7 @@ export default function Sidebar() {
     return names[0].slice(0, 2).toUpperCase();
   };
 
-  const SidebarContent = () => (
+  const sidebarContent = (
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className={cn(
@@ -239,7 +239,7 @@ export default function Sidebar() {
         transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
         className="relative hidden lg:flex flex-col h-screen sticky top-0 bg-sidebar border-r border-sidebar-border overflow-hidden flex-shrink-0"
       >
-        <SidebarContent />
+        {sidebarContent}
         <button
           onClick={() => {
             const next = !collapsed;
