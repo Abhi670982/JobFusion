@@ -140,79 +140,91 @@ export default function Navbar() {
 
             {isLoggedIn ? (
               <>
-                {/* User Menu */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button className="flex items-center gap-1.5 rounded-xl px-2 py-1.5 hover:bg-accent transition-colors cursor-pointer min-h-[40px]">
-                      <Avatar className="w-7 h-7">
-                        <AvatarImage src={user?.imageUrl} alt={getFullName()} />
-                        <AvatarFallback className="text-xs bg-primary/10 text-primary font-semibold">
-                          {getInitials()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="hidden sm:block text-sm font-medium">{getDisplayName()}</span>
-                      <ChevronDown className="hidden sm:block w-3.5 h-3.5 text-muted-foreground" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-60 rounded-2xl p-1.5 shadow-xl border-border bg-popover/95 backdrop-blur-md">
-                    <div className="flex items-center gap-3 px-3 py-2.5 mb-1 bg-muted/40 rounded-xl">
-                      <Avatar className="w-9 h-9 border border-border">
-                        <AvatarImage src={user?.imageUrl} alt={getFullName()} />
-                        <AvatarFallback className="text-xs bg-primary/15 text-primary font-bold">
-                          {getInitials()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold truncate leading-tight">{getFullName()}</p>
-                        <p className="text-xs text-muted-foreground truncate mt-0.5">
-                          {user?.emailAddresses[0]?.emailAddress}
-                        </p>
+                {/* Desktop: avatar + name only, no dropdown (sidebar handles nav) */}
+                <div className="hidden lg:flex items-center gap-1.5 rounded-xl px-2 py-1.5 min-h-[40px]">
+                  <Avatar className="w-7 h-7">
+                    <AvatarImage src={user?.imageUrl} alt={getFullName()} />
+                    <AvatarFallback className="text-xs bg-primary/10 text-primary font-semibold">
+                      {getInitials()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="text-sm font-medium">{getDisplayName()}</span>
+                </div>
+
+                {/* Mobile/Tablet: full dropdown menu */}
+                <div className="lg:hidden">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="flex items-center gap-1.5 rounded-xl px-2 py-1.5 hover:bg-accent transition-colors cursor-pointer min-h-[40px]">
+                        <Avatar className="w-7 h-7">
+                          <AvatarImage src={user?.imageUrl} alt={getFullName()} />
+                          <AvatarFallback className="text-xs bg-primary/10 text-primary font-semibold">
+                            {getInitials()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="hidden sm:block text-sm font-medium">{getDisplayName()}</span>
+                        <ChevronDown className="hidden sm:block w-3.5 h-3.5 text-muted-foreground" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-60 rounded-2xl p-1.5 shadow-xl border-border bg-popover/95 backdrop-blur-md">
+                      <div className="flex items-center gap-3 px-3 py-2.5 mb-1 bg-muted/40 rounded-xl">
+                        <Avatar className="w-9 h-9 border border-border">
+                          <AvatarImage src={user?.imageUrl} alt={getFullName()} />
+                          <AvatarFallback className="text-xs bg-primary/15 text-primary font-bold">
+                            {getInitials()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate leading-tight">{getFullName()}</p>
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">
+                            {user?.emailAddresses[0]?.emailAddress}
+                          </p>
+                        </div>
                       </div>
-                    </div>
 
-                    <div className="p-1 space-y-0.5">
-                      <DropdownMenuItem asChild className="rounded-xl px-3 py-1.5 text-sm cursor-pointer transition-colors">
-                        <Link href="/dashboard" className="flex items-center w-full justify-between">
-                          <span className="flex items-center"><LayoutDashboard className="w-4 h-4 mr-2 text-muted-foreground" />Dashboard</span>
-                          <span className="text-[10px] text-muted-foreground/60 bg-muted px-1.5 py-0.5 rounded">⌘D</span>
-                        </Link>
-                      </DropdownMenuItem>
+                      <div className="p-1 space-y-0.5">
+                        <DropdownMenuItem asChild className="rounded-xl px-3 py-1.5 text-sm cursor-pointer transition-colors">
+                          <Link href="/dashboard" className="flex items-center w-full justify-between">
+                            <span className="flex items-center"><LayoutDashboard className="w-4 h-4 mr-2 text-muted-foreground" />Dashboard</span>
+                            <span className="text-[10px] text-muted-foreground/60 bg-muted px-1.5 py-0.5 rounded">⌘D</span>
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild className="rounded-xl px-3 py-1.5 text-sm cursor-pointer transition-colors">
+                          <Link href="/jobs" className="flex items-center w-full justify-between">
+                            <span className="flex items-center"><Briefcase className="w-4 h-4 mr-2 text-muted-foreground" />Find Jobs</span>
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild className="rounded-xl px-3 py-1.5 text-sm cursor-pointer transition-colors">
+                          <Link href="/jobs/saved" className="flex items-center w-full justify-between">
+                            <span className="flex items-center"><Bookmark className="w-4 h-4 mr-2 text-muted-foreground" />Saved Jobs</span>
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild className="rounded-xl px-3 py-1.5 text-sm cursor-pointer transition-colors">
+                          <Link href="/resume" className="flex items-center w-full justify-between">
+                            <span className="flex items-center"><FileText className="w-4 h-4 mr-2 text-muted-foreground" />Resume</span>
+                          </Link>
+                        </DropdownMenuItem>
+                      </div>
 
-                      <DropdownMenuItem asChild className="rounded-xl px-3 py-1.5 text-sm cursor-pointer transition-colors">
-                        <Link href="/jobs" className="flex items-center w-full justify-between">
-                          <span className="flex items-center"><Briefcase className="w-4 h-4 mr-2 text-muted-foreground" />Find Jobs</span>
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild className="rounded-xl px-3 py-1.5 text-sm cursor-pointer transition-colors">
-                        <Link href="/jobs/saved" className="flex items-center w-full justify-between">
-                          <span className="flex items-center"><Bookmark className="w-4 h-4 mr-2 text-muted-foreground" />Saved Jobs</span>
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild className="rounded-xl px-3 py-1.5 text-sm cursor-pointer transition-colors">
-                        <Link href="/resume" className="flex items-center w-full justify-between">
-                          <span className="flex items-center"><FileText className="w-4 h-4 mr-2 text-muted-foreground" />Resume</span>
-                        </Link>
-                      </DropdownMenuItem>
-                    </div>
-
-                    <DropdownMenuSeparator className="my-1 bg-border/40" />
-                    <div className="p-1 space-y-0.5">
-                      <DropdownMenuItem asChild className="rounded-xl px-3 py-1.5 text-sm cursor-pointer transition-colors">
-                        <Link href="/settings" className="flex items-center w-full">
-                          <Settings className="w-4 h-4 mr-2 text-muted-foreground" />Settings
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={handleSignOut}
-                        className="rounded-xl px-3 py-1.5 text-sm text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer transition-colors"
-                      >
-                        <span className="flex items-center w-full">
-                          <LogOut className="w-4 h-4 mr-2" />Sign Out
-                        </span>
-                      </DropdownMenuItem>
-                    </div>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                      <DropdownMenuSeparator className="my-1 bg-border/40" />
+                      <div className="p-1 space-y-0.5">
+                        <DropdownMenuItem asChild className="rounded-xl px-3 py-1.5 text-sm cursor-pointer transition-colors">
+                          <Link href="/settings" className="flex items-center w-full">
+                            <Settings className="w-4 h-4 mr-2 text-muted-foreground" />Settings
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={handleSignOut}
+                          className="rounded-xl px-3 py-1.5 text-sm text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer transition-colors"
+                        >
+                          <span className="flex items-center w-full">
+                            <LogOut className="w-4 h-4 mr-2" />Sign Out
+                          </span>
+                        </DropdownMenuItem>
+                      </div>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </>
             ) : (
               <div className="flex items-center gap-2">
