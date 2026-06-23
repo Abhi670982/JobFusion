@@ -135,7 +135,7 @@ export default function LandingPage() {
             transition={{ duration: 0.6, delay: 0.3 }}
             className="relative max-w-2xl mx-auto mb-5"
           >
-            <div className="glass rounded-2xl p-1.5 shadow-xl border border-white/30 dark:border-white/10">
+            <div className="glass rounded-2xl p-1.5 shadow-xl border border-white/30 dark:border-white/10 relative z-30">
               <div className="flex flex-col sm:flex-row gap-1.5">
                 <div className="flex items-center gap-2 flex-1 px-3 py-1">
                   <Search className="w-4 h-4 text-muted-foreground flex-shrink-0" />

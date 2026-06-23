@@ -429,7 +429,8 @@ export default function ResumePage() {
               <Input id="skillName" value={newSkillName}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewSkillName(e.target.value)}
                 placeholder="e.g. Tally, Figma, SEO, Recruitment, Python..."
-                className="rounded-xl" />
+                className="rounded-xl"
+                dropdownDirection="up" />
             </div>
           </div>
           <DialogFooter className="gap-2">
