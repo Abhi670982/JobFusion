@@ -58,7 +58,9 @@ export default function JobCard({
       logActivity({ type: 'viewed', jobId: job._id, jobTitle: job.title, company: job.company })
         .catch(() => {});
     }
-    router.push(`/jobs/${job._id}`);
+    // Open apply URL directly (same as Apply button) — no internal page navigation
+    if (job.applyUrl) window.open(job.applyUrl, '_blank', 'noopener,noreferrer');
+    else router.push(`/jobs/${job._id}`);
   };
 
   const handleSaveToggle = async (e: React.MouseEvent) => {

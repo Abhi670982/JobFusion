@@ -117,7 +117,7 @@ function PortalStatusText() {
 
 export default function JobsPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // true on mount — resolved instantly from cache or after fetch
   const [user, setUser] = useState<DbUser | null>(null);
   const [profile, setProfile] = useState<DbProfile | null>(null);
   const [jobs, setJobs] = useState<DbJob[]>([]);
@@ -171,10 +171,38 @@ export default function JobsPage() {
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const initialDataLoaded = useRef(false);
+  
+  // Cache key for sessionStorage based on the current query string
+  const JOBS_CACHE_PREFIX = 'jobfusion_jobs_cache_';
+  const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes — skip re-fetch entirely if cache is fresh
 
-  // 2. Fetch jobs from the backend API
-  const fetchFilteredJobs = async (searchParamsString: string) => {
-    setLoading(true);
+  // 2. Fetch jobs — skips the API call completely if cache is fresh (< 5 min)
+  const fetchFilteredJobs = async (searchParamsString: string, showSkeleton = false) => {
+    const cacheKey = JOBS_CACHE_PREFIX + searchParamsString;
+    const cached = sessionStorage.getItem(cacheKey);
+
+    if (cached) {
+      try {
+        const { jobs: cachedJobs, total, totalPages: tp, sourceCounts: sc, cachedAt } = JSON.parse(cached);
+        const isFresh = cachedAt && (Date.now() - cachedAt) < CACHE_TTL_MS;
+
+        // Restore cached data and turn off skeleton immediately
+        setJobs(cachedJobs || []);
+        setTotalJobsCount(total || 0);
+        setTotalPages(tp || 1);
+        if (sc) setSourceCounts(sc);
+        setLoading(false); // ← skeleton dismissed immediately when cache exists
+
+        if (isFresh) {
+          // Cache is fresh — skip API call entirely, user sees jobs with zero wait
+          return;
+        }
+        // Cache is stale — silently re-fetch in background (jobs already visible, no skeleton)
+      } catch (_) { /* ignore corrupt cache, fall through to fetch */ }
+    }
+    // No cache — skeleton stays on (loading was true from mount) until API responds
+
+    // ── Fetch from API (first load or stale cache) ──
     try {
       const res = await fetch(`/api/jobs?${searchParamsString}`);
       const data = await res.json();
@@ -182,9 +210,15 @@ export default function JobsPage() {
         setJobs(data.data || []);
         setTotalJobsCount(data.total || 0);
         setTotalPages(data.totalPages || 1);
-        if (data.sourceCounts) {
-          setSourceCounts(data.sourceCounts);
-        }
+        if (data.sourceCounts) setSourceCounts(data.sourceCounts);
+        // Save with timestamp so TTL check works on next visit
+        sessionStorage.setItem(cacheKey, JSON.stringify({
+          jobs: data.data || [],
+          total: data.total || 0,
+          totalPages: data.totalPages || 1,
+          sourceCounts: data.sourceCounts || {},
+          cachedAt: Date.now(),
+        }));
       }
     } catch (err) {
       console.error("Failed to fetch jobs from API:", err);
@@ -220,14 +254,23 @@ export default function JobsPage() {
         if (healthData.success && healthData.data) {
           setHealth(healthData.data);
           
-          // Check for outdated sources (>6 hours since last sync or status failed)
+          // Check for outdated sources (status failed OR too long since last sync)
+          // careers source crawls real company pages so allow 48h; others allow 24h
+          const OUTDATED_THRESHOLD: Record<string, number> = {
+            linkedin: 24,
+            indeed: 24,
+            wellfound: 24,
+            internshala: 24,
+            careers: 48,
+          };
           const outdated: string[] = [];
           Object.entries(healthData.data).forEach(([source, info]: [string, any]) => {
             if (info.status === "failed") {
               outdated.push(source);
             } else if (info.lastSync) {
               const hoursSinceSync = (Date.now() - new Date(info.lastSync).getTime()) / (1000 * 60 * 60);
-              if (hoursSinceSync > 6) {
+              const threshold = OUTDATED_THRESHOLD[source] ?? 24;
+              if (hoursSinceSync > threshold) {
                 outdated.push(source);
               }
             }
@@ -279,7 +322,7 @@ export default function JobsPage() {
           // Cache in sessionStorage and update URL
           sessionStorage.setItem('jobfusion_filter_query', queryParams.toString());
           window.history.replaceState(null, '', '?' + queryParams.toString());
-          await fetchFilteredJobs(queryParams.toString());
+          await fetchFilteredJobs(queryParams.toString(), true);
         } else if (!hasExplicitFilters && (!prof || !prof.skills || prof.skills.length === 0)) {
           // No skills found! Show empty state prompting to add skills
           setSkillWarning(true);
@@ -288,7 +331,7 @@ export default function JobsPage() {
           setLoading(false);
         } else {
           // Normal load from search params
-          await fetchFilteredJobs(searchString ? searchString.replace(/^\?/, '') : '');
+          await fetchFilteredJobs(searchString ? searchString.replace(/^\?/, '') : '', true);
         }
         initialDataLoaded.current = true;
       } catch (err) {
@@ -395,6 +438,7 @@ export default function JobsPage() {
     }
     
     setSkillWarning(false);
+    setOutdatedSources([]); // User triggered a fresh fetch — dismiss stale sync banners
     setMatching(true);
     
     try {
@@ -578,7 +622,7 @@ export default function JobsPage() {
         </div>
 
         {/* Search Bar */}
-        <div className="glass rounded-2xl p-2.5 border border-white/20 dark:border-white/8 shadow-sm">
+        <div className="glass rounded-2xl p-2.5 border border-white/20 dark:border-white/8 shadow-sm relative z-30">
           <div className="flex flex-col sm:flex-row gap-2">
             <div className="flex items-center gap-2.5 flex-1 px-3">
               <Search className="w-4 h-4 text-muted-foreground flex-shrink-0" />

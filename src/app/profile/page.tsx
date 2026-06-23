@@ -1223,6 +1223,7 @@ export default function ProfilePage() {
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewSkillName(e.target.value)}
                 placeholder="e.g. Kubernetes, Rust, GraphQL"
                 className="rounded-xl"
+                dropdownDirection="up"
               />
             </div>
           </div>

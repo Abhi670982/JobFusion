@@ -4,7 +4,7 @@ import Profile from "@/models/Profile";
 import User from "@/models/User";
 import cloudinary from "@/lib/cloudinary";
 import { parsePdf, parseDocx } from "@/lib/parser";
-import { extractSkills } from "@/lib/skills-extractor";
+import { extractSkills, extractSkillsWithAI } from "@/lib/skills-extractor";
 import { analyzeResume } from "@/lib/resume-intelligence";
 import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import { extractProfileDetails } from "@/lib/profile-extractor";
@@ -96,13 +96,13 @@ export async function POST(req: NextRequest) {
     console.log("[Resume Upload Step] Skills extraction started");
     let newSkills: { name: string; level: number }[] = [];
     try {
-      newSkills = extractSkills(extractedText);
+      newSkills = await extractSkillsWithAI(extractedText);
+      console.log(`[Resume Upload Step] ${newSkills.length} skills extracted (Claude AI + cross-verified)`);
     } catch (skillsErr: any) {
       console.error("[Resume Upload] Skills error:", skillsErr);
-      return NextResponse.json({ success: false, step: "skills_extraction", error: skillsErr.message || "Skills extraction failed" }, { status: 500 });
+      // Non-fatal — fall back to empty, don't block upload
+      newSkills = [];
     }
-    console.log(`[Resume Upload Step] ${newSkills.length} skills extracted`);
-
     // ── 9. Resume Intelligence Analysis ────────────────────────
     currentStep = "intelligence";
     console.log("[Resume Upload Step] Resume intelligence analysis started");

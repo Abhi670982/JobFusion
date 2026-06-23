@@ -239,7 +239,7 @@ function escapeRegExp(str: string): string {
 }
 
 /**
- * Universal resume skill extractor.
+ * Universal resume skill extractor (regex-based fallback).
  * Matches skills from ALL domains — Tech, Design, Marketing, Finance, HR,
  * Operations, Sales, Soft Skills, and more. Works for any career background.
  */
@@ -275,3 +275,237 @@ export function extractSkills(text: string): { name: string; level: number }[] {
     level: 80,
   }));
 }
+
+// ── Gemini AI Skill Extractor (Free Tier) ────────────────────────────────────
+// Uses gemini-1.5-flash — Free: 15 RPM, 1M tokens/day, 1500 req/day
+// Reuses the existing GEMINI_API_KEY already configured in the project.
+
+/**
+ * Extracts only the Skills / Technical Skills section from a resume.
+ * Stops at the next section header (Experience, Education, Projects, etc.)
+ * Returns the isolated skills block, or the full text if no skills section found.
+ */
+function extractSkillsSectionFromResume(resumeText: string): {
+  skillsSection: string;
+  isSectionFound: boolean;
+} {
+  // Common section header patterns for skills
+  const SKILLS_HEADERS = [
+    "technical skills",
+    "skills",
+    "core competencies",
+    "key skills",
+    "areas of expertise",
+    "technologies",
+    "tools & technologies",
+    "tools and technologies",
+    "programming skills",
+    "professional skills",
+    "competencies",
+    "tech stack",
+  ];
+
+  // Common non-skills section headers — stop here
+  const STOP_HEADERS = [
+    "experience",
+    "work experience",
+    "professional experience",
+    "employment",
+    "internship",
+    "education",
+    "academic",
+    "projects",
+    "certifications",
+    "achievements",
+    "awards",
+    "publications",
+    "languages",
+    "interests",
+    "hobbies",
+    "references",
+    "summary",
+    "objective",
+    "about",
+  ];
+
+  const lines = resumeText.split(/\r?\n/);
+  let startIdx = -1;
+  let endIdx = lines.length;
+
+  // Find the start of the skills section
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim().toLowerCase().replace(/[:\-_•*#]/g, "").trim();
+    if (SKILLS_HEADERS.some((h) => line === h || line.startsWith(h))) {
+      startIdx = i + 1; // start from the line after the header
+      break;
+    }
+  }
+
+  if (startIdx === -1) {
+    // No skills section found — return full resume text as fallback
+    return { skillsSection: resumeText, isSectionFound: false };
+  }
+
+  // Find where the skills section ends (next section header)
+  for (let i = startIdx; i < lines.length; i++) {
+    const line = lines[i].trim().toLowerCase().replace(/[:\-_•*#]/g, "").trim();
+    if (
+      line.length > 2 &&
+      STOP_HEADERS.some((h) => line === h || line.startsWith(h))
+    ) {
+      endIdx = i;
+      break;
+    }
+  }
+
+  const skillsSection = lines.slice(startIdx, endIdx).join("\n").trim();
+  return { skillsSection, isSectionFound: skillsSection.length > 10 };
+}
+
+const extractSkillsPrompt = (skillsSection: string, isSectionFound: boolean) => `
+You are a precise resume skill extractor.
+
+${
+  isSectionFound
+    ? `## IMPORTANT: You are given ONLY the "Skills" section of a resume — NOT the full resume.
+Extract skills ONLY from this section. Do NOT invent or assume anything.`
+    : `## NOTE: No dedicated skills section was found. The full resume text is provided.
+Focus ONLY on explicitly listed technical/professional skills. Ignore skills merely mentioned in experience or project descriptions.`
+}
+
+## STRICT RULES (You MUST follow ALL of these):
+1. ONLY extract skills that are **explicitly and clearly listed** as skills
+2. DO NOT pick up skills that only appear in job descriptions, bullet points, or project narratives
+3. DO NOT infer skills from job titles (e.g. "Software Engineer" does NOT imply Python)
+4. DO NOT hallucinate or add skills from your own knowledge
+5. IGNORE action verbs like "developed", "built", "managed", "worked" — these are NOT skills
+6. DO NOT extract soft skills unless they are listed explicitly in a skills section
+7. If uncertain whether something is a skill — SKIP IT
+
+## CATEGORIES to extract (only if explicitly listed):
+- Programming Languages (e.g. Python, JavaScript, Java, C++)
+- Frameworks & Libraries (e.g. React, Django, Spring Boot, Express)
+- Tools & Platforms (e.g. Docker, Git, AWS, Figma, Jira)
+- Databases (e.g. MySQL, MongoDB, PostgreSQL, Firebase)
+- Methodologies (e.g. Agile, Scrum, CI/CD, REST APIs)
+- Soft Skills (ONLY if explicitly in a skills list — e.g. "Leadership", "Communication")
+- Domain Knowledge (e.g. Machine Learning, Data Analysis, SEO, Cloud Computing)
+
+## OUTPUT FORMAT:
+Return ONLY a valid JSON object. No explanation, no markdown, no extra text.
+
+{
+  "skills": {
+    "programmingLanguages": [],
+    "frameworksAndLibraries": [],
+    "toolsAndPlatforms": [],
+    "databases": [],
+    "methodologies": [],
+    "softSkills": [],
+    "domainKnowledge": []
+  },
+  "confidence": "high | medium | low",
+  "warning": "mention here if text was unclear, too short, or no clear skills section found"
+}
+
+## SKILLS SECTION TEXT:
+"""
+${skillsSection}
+"""
+
+Remember: Only extract what is clearly listed here as a skill. Return JSON only.
+`;
+
+/**
+ * AI-powered skill extractor using Google Gemini 1.5 Flash (free tier).
+ *
+ * Optimized flow:
+ *  1. Extract the "Skills" section from the resume (stops before Experience/Projects/Education)
+ *  2. Send ONLY that section to Gemini — prevents picking up skills from job descriptions
+ *  3. Cross-verify each result against the skills section text (not full resume)
+ *  4. Falls back to regex-based extractSkills() if GEMINI_API_KEY is missing or API fails
+ */
+export async function extractSkillsWithAI(
+  resumeText: string,
+): Promise<{ name: string; level: number }[]> {
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (!apiKey || apiKey.includes("AIzaSyCt4XyZ8aB_C9dEfG_HiJkLmNoPqRsTuVw")) {
+    console.warn("[Skills Extractor] GEMINI_API_KEY not set — using regex fallback.");
+    return extractSkills(resumeText);
+  }
+
+  // Step 1: Isolate the skills section
+  const { skillsSection, isSectionFound } = extractSkillsSectionFromResume(resumeText);
+  console.log(
+    `[Skills Extractor] Skills section ${isSectionFound ? "found" : "NOT found — using full resume"}. Length: ${skillsSection.length} chars.`,
+  );
+
+  try {
+    console.log("[Skills Extractor] Calling Gemini 1.5 Flash for skill extraction...");
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [{ text: extractSkillsPrompt(skillsSection, isSectionFound) }],
+          },
+        ],
+        generationConfig: {
+          responseMimeType: "application/json", // Forces clean JSON — no markdown fences
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Gemini API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const raw: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+
+    if (!raw) throw new Error("Empty response from Gemini API");
+
+    const parsed = JSON.parse(raw.trim());
+
+    // Flatten all skill categories into one array
+    const allSkills: string[] = Object.values(
+      parsed.skills as Record<string, string[]>,
+    ).flat();
+
+    // Step 2: Cross-verify against the skills section ONLY (not the full resume)
+    // This prevents verifying skills that appear in experience/projects descriptions
+    const verifyAgainst = isSectionFound ? skillsSection : resumeText;
+    const lowerVerify = verifyAgainst.toLowerCase();
+
+    const verified = allSkills.filter(
+      (skill) =>
+        typeof skill === "string" &&
+        skill.trim().length > 0 &&
+        lowerVerify.includes(skill.toLowerCase()),
+    );
+
+    console.log(
+      `[Skills Extractor] Gemini extracted ${allSkills.length} skills, ${verified.length} verified against ${isSectionFound ? "skills section" : "full resume"}.`,
+    );
+
+    if (parsed.warning) {
+      console.warn("[Skills Extractor] Gemini warning:", parsed.warning);
+    }
+
+    // Deduplicate and return in the standard format
+    const unique = [...new Set(verified.map((s) => s.trim()))];
+    return unique.map((name) => ({ name, level: 80 }));
+  } catch (err: any) {
+    console.error(
+      "[Skills Extractor] Gemini API failed — falling back to regex extractor:",
+      err.message,
+    );
+    return extractSkills(resumeText);
+  }
+}
+
