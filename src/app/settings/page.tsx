@@ -32,118 +32,6 @@ function SettingRow({ label, description, children }: { label: string; descripti
   );
 }
 
-// ── Autocomplete data ──────────────────────────────────────────────
-const LOCATION_SUGGESTIONS = [
-  'Mumbai, Maharashtra', 'Delhi, India', 'Bengaluru, Karnataka',
-  'Hyderabad, Telangana', 'Chennai, Tamil Nadu', 'Pune, Maharashtra',
-  'Kolkata, West Bengal', 'Ahmedabad, Gujarat', 'Jaipur, Rajasthan',
-  'Surat, Gujarat', 'Lucknow, Uttar Pradesh', 'Noida, Uttar Pradesh',
-  'Gurgaon, Haryana', 'Chandigarh, Punjab', 'Indore, Madhya Pradesh',
-  'Bhopal, Madhya Pradesh', 'Patna, Bihar', 'Kochi, Kerala',
-  'Coimbatore, Tamil Nadu', 'Nagpur, Maharashtra', 'Visakhapatnam, Andhra Pradesh',
-  'San Francisco, CA', 'New York, NY', 'Seattle, WA',
-  'Austin, TX', 'London, UK', 'Singapore', 'Dubai, UAE', 'Remote',
-];
-
-const HEADLINE_SUGGESTIONS = [
-  'Software Engineer', 'Senior Software Engineer', 'Full Stack Developer',
-  'Frontend Developer', 'Backend Developer', 'React Developer',
-  'Node.js Developer', 'Python Developer', 'Java Developer',
-  'Data Scientist', 'Data Analyst', 'Machine Learning Engineer',
-  'DevOps Engineer', 'Cloud Engineer', 'Site Reliability Engineer',
-  'Product Manager', 'Product Designer', 'UI/UX Designer',
-  'Android Developer', 'iOS Developer', 'Mobile Developer',
-  'QA Engineer', 'Test Automation Engineer', 'Security Engineer',
-  'Blockchain Developer', 'Embedded Systems Engineer',
-  'Technical Lead', 'Engineering Manager', 'CTO', 'Fresher | Seeking Opportunities',
-];
-
-// ── AutocompleteInput Component ────────────────────────────────────
-function AutocompleteInput({
-  id, value, onChange, suggestions, placeholder, className,
-}: {
-  id: string;
-  value: string;
-  onChange: (val: string) => void;
-  suggestions: string[];
-  placeholder?: string;
-  className?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const [activeIdx, setActiveIdx] = useState(-1);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const filtered = value.trim().length > 0
-    ? suggestions.filter(s => s.toLowerCase().includes(value.toLowerCase())).slice(0, 7)
-    : [];
-
-  // Close on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setActiveIdx(-1);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!open || filtered.length === 0) return;
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setActiveIdx(i => Math.min(i + 1, filtered.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setActiveIdx(i => Math.max(i - 1, 0));
-    } else if (e.key === 'Enter' && activeIdx >= 0) {
-      e.preventDefault();
-      onChange(filtered[activeIdx]);
-      setOpen(false);
-      setActiveIdx(-1);
-    } else if (e.key === 'Escape') {
-      setOpen(false);
-      setActiveIdx(-1);
-    }
-  };
-
-  return (
-    <div ref={containerRef} className="relative">
-      <input
-        id={id}
-        value={value}
-        placeholder={placeholder}
-        autoComplete="off"
-        onChange={e => { onChange(e.target.value); setOpen(true); setActiveIdx(-1); }}
-        onFocus={() => setOpen(true)}
-        onKeyDown={handleKeyDown}
-        className={`flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${className ?? ''}`}
-      />
-      {open && filtered.length > 0 && (
-        <ul
-          className="absolute z-50 mt-1 w-full rounded-xl border border-border bg-popover shadow-xl overflow-hidden"
-          style={{ maxHeight: '220px', overflowY: 'auto' }}
-        >
-          {filtered.map((item, idx) => (
-            <li
-              key={item}
-              onMouseDown={e => { e.preventDefault(); onChange(item); setOpen(false); setActiveIdx(-1); }}
-              onMouseEnter={() => setActiveIdx(idx)}
-              className={`px-3 py-2 text-sm cursor-pointer transition-colors ${
-                idx === activeIdx
-                  ? 'bg-primary text-primary-foreground'
-                  : 'hover:bg-muted text-foreground'
-              }`}
-            >
-              {item}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -423,21 +311,20 @@ export default function SettingsPage() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="location">Location</Label>
-                      <AutocompleteInput
-                        id="location"
-                        value={location}
-                        onChange={setLocation}
-                        suggestions={LOCATION_SUGGESTIONS}
-                        placeholder="e.g. Mumbai, Maharashtra"
+                      <Input 
+                        id="location" 
+                        value={location} 
+                        onChange={(e) => setLocation(e.target.value)} 
+                        className="rounded-xl h-10" 
                       />
                     </div>
                     <div className="space-y-2 sm:col-span-2">
                       <Label htmlFor="headline">Headline / Job Title</Label>
-                      <AutocompleteInput
-                        id="headline"
-                        value={headline}
-                        onChange={setHeadline}
-                        suggestions={HEADLINE_SUGGESTIONS}
+                      <Input 
+                        id="headline" 
+                        value={headline} 
+                        onChange={(e) => setHeadline(e.target.value)} 
+                        className="rounded-xl h-10" 
                         placeholder="e.g. Senior Full Stack Engineer | React & Node.js"
                       />
                     </div>
