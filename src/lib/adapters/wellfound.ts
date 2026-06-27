@@ -73,38 +73,8 @@ export class WellfoundAdapter implements SourceAdapter {
 
       return body.data?.jobListings || [];
     } catch (error: any) {
-      console.warn(`[Wellfound Adapter] GraphQL fetch failed (${error.message}). Falling back to startup-specific feed for Wellfound...`);
-      
-      // Fallback: Fetch startup jobs from Remotive API and tag as Wellfound startup jobs
-      try {
-        const fallbackUrl = `https://remotive.com/api/remote-jobs?category=software-dev&search=${encodeURIComponent(keyword)}`;
-        console.log(`[Wellfound Adapter] Sourcing fallback startup jobs: ${fallbackUrl}`);
-        const fallbackRes = await fetch(fallbackUrl);
-        if (!fallbackRes.ok) throw new Error(`Remotive API status: ${fallbackRes.status}`);
-        
-        const data = await fallbackRes.json();
-        const startupJobs = (data.jobs || []).slice(0, 10).map((job: any) => ({
-          id: String(job.id),
-          title: job.title,
-          company: {
-            name: job.company_name,
-            logoUrl: job.company_logo,
-            description: "Fast-growing venture-backed startup."
-          },
-          locationNames: [job.candidate_required_location || "Remote"],
-          compensation: job.salary || "Not disclosed",
-          jobType: job.job_type || "full-time",
-          description: job.description || "",
-          remote: true,
-          applyUrl: job.url,
-          createdAt: job.publication_date || new Date().toISOString()
-        }));
-
-        return startupJobs;
-      } catch (fallbackErr: any) {
-        console.error("[Wellfound Adapter] Fallback also failed:", fallbackErr.message);
-        throw error; // throw original GraphQL error if fallback fails
-      }
+      console.warn(`[Wellfound Adapter] GraphQL fetch failed (${error.message}). Returning empty list.`);
+      return [];
     }
   }
 

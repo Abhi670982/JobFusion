@@ -141,7 +141,10 @@ export default function Navbar() {
             {isLoggedIn ? (
               <>
                 {/* Desktop: avatar + name only, no dropdown (sidebar handles nav) */}
-                <div className="hidden lg:flex items-center gap-1.5 rounded-xl px-2 py-1.5 min-h-[40px]">
+                <Link
+                  href="/profile"
+                  className="hidden lg:flex items-center gap-1.5 rounded-xl px-2 py-1.5 min-h-[40px] hover:bg-accent transition-colors cursor-pointer"
+                >
                   <Avatar className="w-7 h-7">
                     <AvatarImage src={user?.imageUrl} alt={getFullName()} />
                     <AvatarFallback className="text-xs bg-primary/10 text-primary font-semibold">
@@ -149,7 +152,7 @@ export default function Navbar() {
                     </AvatarFallback>
                   </Avatar>
                   <span className="text-sm font-medium">{getDisplayName()}</span>
-                </div>
+                </Link>
 
                 {/* Mobile/Tablet: full dropdown menu */}
                 <div className="lg:hidden">

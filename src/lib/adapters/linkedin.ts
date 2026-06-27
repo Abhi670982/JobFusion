@@ -213,110 +213,6 @@ export class LinkedInAdapter implements SourceAdapter {
     };
   }
 
-  private generateMockJobs(keyword: string): any[] {
-    const kw = keyword.toLowerCase();
-    const mockTemplates = [
-      {
-        title: "Senior React Engineer",
-        company: "Google",
-        location: "Bengaluru, Karnataka",
-        description: "Join the Google Cloud team building next-generation cloud consoles using React, TypeScript, and Tailwind. Optimize high-performance interfaces and design scalable frontend systems.",
-        applyUrl: "https://www.google.com/about/careers/applications/",
-        skills: ["react", "typescript", "javascript", "tailwindcss", "git"],
-        salaryMin: 3200000,
-        salaryMax: 4800000,
-      },
-      {
-        title: "Frontend Developer",
-        company: "Meta",
-        location: "Remote, India",
-        description: "Help build the future of connection at Meta. We are looking for product-focused frontend engineers who excel in React, GraphQL, and state management frameworks like Redux.",
-        applyUrl: "https://www.metacareers.com/",
-        skills: ["react", "graphql", "redux", "javascript", "figma"],
-        salaryMin: 2800000,
-        salaryMax: 4200000,
-      },
-      {
-        title: "Full Stack Software Engineer",
-        company: "Netflix",
-        location: "Mumbai, Maharashtra",
-        description: "Netflix is seeking a Full Stack Software Engineer to build internal content management portals. You will build APIs in Node.js/Go and frontend views in Next.js/React.",
-        applyUrl: "https://netflix.ationaljobs.com/",
-        skills: ["react", "next.js", "node.js", "go", "rest apis"],
-        salaryMin: 3500000,
-        salaryMax: 5500000,
-      },
-      {
-        title: "Backend Engineer (Node/Python)",
-        company: "Amazon",
-        location: "Hyderabad, Telangana",
-        description: "Scale Amazon Web Services backend logic. Implement distributed queues, microservices, and databases in Node.js, Python, or Java. Familiarity with AWS is highly valued.",
-        applyUrl: "https://www.amazon.jobs/",
-        skills: ["node.js", "python", "aws", "docker", "kubernetes", "postgresql"],
-        salaryMin: 2200000,
-        salaryMax: 3600000,
-      },
-      {
-        title: "TypeScript Specialist",
-        company: "Microsoft",
-        location: "Noida, Uttar Pradesh",
-        description: "Contribute to VS Code and Azure dev tools. Work directly with TypeScript, compiler internals, and core language services to build cutting-edge developer features.",
-        applyUrl: "https://careers.microsoft.com/",
-        skills: ["typescript", "javascript", "git", "unit testing"],
-        salaryMin: 2500000,
-        salaryMax: 4000000,
-      }
-    ];
-
-    // Filter templates where title, company, description, or skills contain query keyword
-    const matched = mockTemplates.filter(t => 
-      t.title.toLowerCase().includes(kw) ||
-      t.company.toLowerCase().includes(kw) ||
-      t.skills.some(s => s.toLowerCase().includes(kw)) ||
-      t.description.toLowerCase().includes(kw)
-    );
-
-    // If no match, return all templates
-    const finalSelection = matched.length > 0 ? matched : mockTemplates;
-
-    return finalSelection.map((m, index) => {
-      const rawHashInput = `${m.title}${m.company}${m.location}`.toLowerCase();
-      const dedupeHash = crypto.createHash("sha256").update(rawHashInput).digest("hex");
-
-      const mockJob: UnifiedJob = {
-        sourceId: `mock-li-${index}`,
-        source: this.source,
-        sourceUrl: `https://www.linkedin.com/jobs/view/mock-${index}`,
-        applyUrl: m.applyUrl,
-        title: m.title,
-        company: m.company,
-        companyLogoUrl: m.company.charAt(0),
-        location: m.location,
-        city: m.location.split(",")[0],
-        country: "India",
-        isRemote: m.location.toLowerCase().includes("remote"),
-        jobType: "full-time",
-        experienceLevel: m.title.toLowerCase().includes("senior") ? "senior" : "mid",
-        skills: m.skills,
-        salaryMin: m.salaryMin,
-        salaryMax: m.salaryMax,
-        salaryCurrency: "INR",
-        salaryPeriod: "annual",
-        description: m.description,
-        descriptionHtml: `<p>${m.description}</p>`,
-        postedAt: new Date(Date.now() - index * 24 * 60 * 60 * 1000), // days ago
-        expiresAt: null,
-        fetchedAt: new Date(),
-        dedupeHash,
-      };
-
-      return {
-        ...mockJob,
-        _isMock: true
-      };
-    });
-  }
-
   private async scrapeGuestJobs(keyword: string): Promise<any[]> {
     const cheerio = require("cheerio");
     const url = `https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=${encodeURIComponent(keyword)}&location=India`;
@@ -371,8 +267,8 @@ export class LinkedInAdapter implements SourceAdapter {
 
       return jobs;
     } catch (err: any) {
-      console.warn(`[LinkedIn Adapter] Guest scrape failed (${err.message}). Falling back to mock jobs...`);
-      return this.generateMockJobs(keyword);
+      console.warn(`[LinkedIn Adapter] Guest scrape failed (${err.message}). Returning empty list.`);
+      return [];
     }
   }
 }

@@ -73,7 +73,7 @@ export async function startScheduler() {
     // ─── BullMQ Scheduler Mode ───────────────────────────────────────────────
     console.log("[Scheduler] Initializing BullMQ queues and workers...");
 
-    const sources: JobSource[] = ["linkedin", "indeed", "wellfound", "internshala", "careers"];
+    const sources: JobSource[] = ["linkedin", "indeed", "wellfound", "internshala", "careers", "aggregator"];
     
     // Define Queue and Workers
     for (const source of sources) {
@@ -109,6 +109,7 @@ export async function startScheduler() {
       else if (source === "wellfound") cronExpression = "0 */4 * * *";
       else if (source === "internshala") cronExpression = "0 */6 * * *";
       else if (source === "careers") cronExpression = "0 */6 * * *";
+      else if (source === "aggregator") cronExpression = "0 */4 * * *";
 
       // Add repeatable job to queue
       await queue.add(
@@ -144,6 +145,7 @@ export async function startScheduler() {
       indeed: 2 * 60 * 60 * 1000,       // 2 hours
       wellfound: 4 * 60 * 60 * 1000,    // 4 hours
       internshala: 6 * 60 * 60 * 1000,  // 6 hours
+      aggregator: 4 * 60 * 60 * 1000,   // 4 hours
       cleanup: 24 * 60 * 60 * 1000      // 24 hours
     };
 
@@ -172,6 +174,10 @@ export async function startScheduler() {
     setTimeout(() => {
       setupInterval("careers", () => runSourceSync("careers", FETCH_KEYWORDS), 6 * 60 * 60 * 1000);
     }, 15 * 60 * 1000);
+    // Aggregator scraper — offset by 45 mins, then every 4h
+    setTimeout(() => {
+      setupInterval("aggregator", () => runSourceSync("aggregator", FETCH_KEYWORDS), intervals.aggregator);
+    }, 45 * 60 * 1000);
     setupInterval("cleanup", cleanupExpiredJobs, intervals.cleanup);
   }
 }

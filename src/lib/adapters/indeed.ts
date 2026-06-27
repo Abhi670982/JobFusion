@@ -16,24 +16,8 @@ export class IndeedAdapter implements SourceAdapter {
     const location = query.location || "India";
 
     if (!this.apiKey) {
-      console.warn("[Indeed Adapter] SERPAPI_KEY is not set. Sourcing Indeed-style jobs from Jobicy public API...");
-      try {
-        const url = `https://jobicy.com/api/v2/remote-jobs?count=10&tag=${encodeURIComponent(keyword)}`;
-        const res = await fetch(url, {
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-          }
-        });
-        if (!res.ok) throw new Error(`Jobicy API status: ${res.status}`);
-        const data = await res.json();
-        
-        // Tag jobs so mapToUnified knows they are Jobicy format
-        const jobs = (data.jobs || []).map((j: any) => ({ ...j, _isJobicy: true }));
-        return jobs;
-      } catch (err: any) {
-        console.error("[Indeed Adapter] Jobicy fetch failed:", err.message);
-        return [];
-      }
+      console.warn("[Indeed Adapter] SERPAPI_KEY is not set. Returning empty list.");
+      return [];
     }
 
     const url = `https://serpapi.com/search?engine=google_jobs&q=${encodeURIComponent(keyword)}&location=${encodeURIComponent(location)}&api_key=${this.apiKey}`;
