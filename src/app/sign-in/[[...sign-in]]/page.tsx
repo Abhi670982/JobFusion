@@ -116,7 +116,7 @@ export default function CustomSignInPage() {
             alt="JobFusion Logo"
             width={36}
             height={36}
-            className="rounded-full object-cover border border-white/20"
+            className="rounded-full object-cover border-[3px] border-white/40 shadow-sm"
           />
           <span className="font-bold text-xl text-white font-sans">JobFusion</span>
         </Link>
@@ -169,7 +169,7 @@ export default function CustomSignInPage() {
               alt="JobFusion Logo"
               width={32}
               height={32}
-              className="rounded-full object-cover border border-border/40"
+              className="rounded-full object-cover border-[3px] border-border/70 shadow-sm"
             />
             <span className="font-bold text-xl gradient-brand-text font-sans">JobFusion</span>
           </div>

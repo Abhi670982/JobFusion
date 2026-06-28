@@ -93,7 +93,7 @@ export default function Navbar() {
                 alt="JobFusion Logo"
                 width={32}
                 height={32}
-                className="rounded-full object-cover group-hover:scale-105 transition-transform border border-border/40"
+                className="rounded-full object-cover group-hover:scale-105 transition-transform border-[3px] border-border/70 shadow-sm"
               />
               <span
                 className="font-bold text-lg sm:text-xl tracking-tight"

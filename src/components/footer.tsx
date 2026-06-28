@@ -28,7 +28,7 @@ const footerLinks = {
 
 export default function Footer() {
   return (
-    <footer className="border-t border-border/60 bg-card/30 mt-24">
+    <footer className="relative z-10 bg-card/30 mt-24">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-10">
           {/* Brand */}
@@ -39,7 +39,7 @@ export default function Footer() {
                 alt="JobFusion Logo"
                 width={32}
                 height={32}
-                className="rounded-full object-cover border border-border/40"
+                className="rounded-full object-cover border-[3px] border-border/70 shadow-sm"
               />
               <span className="font-bold text-xl" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
                 <span className="gradient-brand-text">Job</span>
@@ -82,7 +82,7 @@ export default function Footer() {
           ))}
         </div>
 
-        <div className="border-t border-border/60 mt-12 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="mt-12 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-muted-foreground">
             © 2025 JobFusion, Inc. All rights reserved.
           </p>

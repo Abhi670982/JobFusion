@@ -5,6 +5,7 @@ import './globals.css';
 import { ThemeProvider } from '@/components/theme-provider';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import LayoutWrapper from '@/components/layout-wrapper';
+import GlobalParticles from '@/components/global-particles';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -41,6 +42,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} ${plusJakarta.variable} font-sans antialiased overflow-x-hidden`}>
+        {/* Global Dark Mode Background */}
+        <div className="fixed inset-0 z-[-50] pointer-events-none hidden dark:block" style={{
+          backgroundColor: '#000000'
+        }} />
+        <GlobalParticles />
+
         <ClerkProvider>
           <ThemeProvider
           attribute="class"

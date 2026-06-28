@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import Navbar from '@/components/navbar';
 import Footer from '@/components/footer';
+import HeroBackground from '@/components/hero-background';
 import { features } from '@/lib/data';
 
 const iconMap: Record<string, React.ComponentType<any>> = {
@@ -67,27 +68,20 @@ export default function LandingPage() {
         const active = Object.values(j.data.bySource || {}).filter((c) => (c as number) > 0).length || 4;
         setStats({ totalJobs: j.data.total || 0, activeSources: active, addedLast24h: j.data.addedInLast24h || 0, isLoaded: true });
       }
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   return (
-    <div className="min-h-screen bg-background mesh-bg overflow-x-hidden">
+    <div className="min-h-screen bg-background dark:bg-transparent overflow-x-hidden">
       <Navbar />
 
       {/* ── HERO ──────────────────────────────────────────────────── */}
-      <section ref={heroRef} className="relative pt-24 pb-36 px-4 overflow-hidden">
+      <section ref={heroRef} className="relative pt-24 pb-36 px-4 overflow-hidden isolate bg-transparent">
 
-        {/* Ambient glow blobs */}
-        <div className="absolute inset-0 pointer-events-none -z-10">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[600px] rounded-full opacity-30 dark:opacity-20"
-            style={{ background: 'radial-gradient(ellipse at center, oklch(0.53 0.24 258 / 0.15) 0%, transparent 70%)' }} />
-          <div className="absolute top-32 left-1/4 w-80 h-80 rounded-full blur-3xl animate-float"
-            style={{ background: 'oklch(0.53 0.24 258 / 0.08)' }} />
-          <div className="absolute top-48 right-1/4 w-64 h-64 rounded-full blur-3xl animate-float-delayed"
-            style={{ background: 'oklch(0.5 0.25 272 / 0.07)' }} />
-        </div>
+        {/* Premium Animated Hero Background */}
+        <HeroBackground />
 
-        <motion.div style={{ opacity: heroOpacity, y: heroY }} className="max-w-5xl mx-auto text-center">
+        <motion.div style={{ opacity: heroOpacity, y: heroY }} className="relative z-10 max-w-5xl mx-auto text-center">
 
           {/* Eyebrow pill */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="flex justify-center mb-8">
@@ -135,7 +129,7 @@ export default function LandingPage() {
             transition={{ duration: 0.6, delay: 0.3 }}
             className="relative max-w-2xl mx-auto mb-5"
           >
-            <div className="glass rounded-2xl p-1.5 shadow-xl border border-white/30 dark:border-white/10 relative z-30">
+            <div className="glass bg-white/90 dark:bg-black/60 backdrop-blur-3xl rounded-2xl p-1.5 glow-brand border border-white/30 dark:border-white/10 relative z-30">
               <div className="flex flex-col sm:flex-row gap-1.5">
                 <div className="flex items-center gap-2 flex-1 px-3 py-1">
                   <Search className="w-4 h-4 text-muted-foreground flex-shrink-0" />
@@ -206,13 +200,13 @@ export default function LandingPage() {
         {/* Trusted by */}
         <motion.div
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }}
-          className="max-w-3xl mx-auto mt-16 text-center"
+          className="relative z-10 max-w-3xl mx-auto mt-16 text-center"
         >
           <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-5">Aggregating live jobs from</p>
           <div className="flex flex-wrap justify-center gap-3">
-            {trustedBy.map((source) => (
-              <div key={source} className="px-4 py-2 rounded-full glass border border-border/60 text-xs font-semibold text-muted-foreground hover:text-foreground hover:border-primary/30 transition-all">
-                {source}
+            {trustedBy.map((company) => (
+              <div key={company} className="px-5 py-2 rounded-full glass border border-border/60 text-sm font-semibold text-muted-foreground hover:text-foreground hover:border-primary/30 transition-all">
+                {company}
               </div>
             ))}
           </div>
@@ -262,7 +256,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── HOW IT WORKS ──────────────────────────────────────────── */}
-      <section className="py-28 px-4">
+      <section className="py-28 px-4 relative">
         <div className="max-w-5xl mx-auto">
           <div className="text-center max-w-2xl mx-auto mb-16">
             <Badge className="mb-4 rounded-full px-4 py-1.5 border border-primary/20 bg-primary/8 text-primary font-semibold text-xs">
@@ -307,7 +301,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── TESTIMONIALS ─────────────────────────────────────────── */}
-      <section className="py-24 px-4">
+      <section className="py-24 px-4 relative">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-14">
             <Badge className="mb-4 rounded-full px-4 py-1.5 border border-primary/20 bg-primary/8 text-primary font-semibold text-xs">
@@ -376,7 +370,7 @@ export default function LandingPage() {
                   </Button>
                 </Link>
                 <Link href="/jobs">
-                  <Button size="lg" variant="outline" className="border-white/30 text-white hover:bg-white/10 rounded-xl font-semibold px-8 h-12">
+                  <Button size="lg" variant="outline" className="bg-transparent border-white/30 text-white hover:bg-white/10 hover:text-white rounded-xl font-semibold px-8 h-12">
                     Browse Jobs
                   </Button>
                 </Link>

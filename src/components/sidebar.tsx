@@ -150,7 +150,7 @@ export default function Sidebar() {
               alt="JobFusion"
               width={34}
               height={34}
-              className="rounded-full object-cover border border-sidebar-border"
+              className="rounded-full object-cover border-[3px] border-border/70 shadow-sm"
             />
             <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-sidebar" />
           </div>

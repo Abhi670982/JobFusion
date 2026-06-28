@@ -622,7 +622,7 @@ export default function JobsPage() {
         </div>
 
         {/* Search Bar */}
-        <div className="glass rounded-2xl p-2.5 border border-white/20 dark:border-white/8 shadow-sm relative z-30">
+        <div className="glass bg-white/90 dark:bg-black/60 backdrop-blur-3xl rounded-2xl p-2.5 border border-white/20 dark:border-white/8 shadow-sm relative z-30">
           <div className="flex flex-col sm:flex-row gap-2">
             <div className="flex items-center gap-2.5 flex-1 px-3">
               <Search className="w-4 h-4 text-muted-foreground flex-shrink-0" />
