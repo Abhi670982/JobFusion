@@ -5,7 +5,6 @@ const FetchLogSchema = new Schema(
     source: {
       type: String,
       required: true,
-      enum: ["linkedin", "indeed", "wellfound", "internshala"],
     },
     status: {
       type: String,
@@ -32,6 +31,9 @@ const FetchLogSchema = new Schema(
 
 FetchLogSchema.index({ source: 1, timestamp: -1 });
 
-const FetchLog = models.FetchLog || model("FetchLog", FetchLogSchema);
+if (models.FetchLog) {
+  delete (models as any).FetchLog;
+}
+const FetchLog = model("FetchLog", FetchLogSchema);
 
 export default FetchLog;

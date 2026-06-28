@@ -19,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { fetchCurrentUser, fetchProfile, updateProfile, DbUser, DbProfile } from '@/lib/api-helper';
 import { useClerk } from '@clerk/nextjs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 
 function SettingRow({ label, description, children }: { label: string; description?: string; children: React.ReactNode }) {
   return (
@@ -44,6 +45,7 @@ export default function SettingsPage() {
   const [uploading, setUploading] = useState(false);
   const [user, setUser] = useState<DbUser | null>(null);
   const [profile, setProfile] = useState<DbProfile | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   // Form states
   const [fullName, setFullName] = useState('');
@@ -164,9 +166,11 @@ export default function SettingsPage() {
 
   const handleDeleteAccount = async () => {
     if (!user) return;
-    const confirm = window.confirm("Are you absolutely sure you want to delete your account? This action is permanent and cannot be undone.");
-    if (!confirm) return;
+    setDeleteConfirmOpen(true);
+  };
 
+  const executeDeleteAccount = async () => {
+    if (!user) return;
     try {
       const res = await fetch(`/api/profile?userId=${user._id}`, {
         method: 'DELETE',
@@ -174,9 +178,11 @@ export default function SettingsPage() {
 
       const data = await res.json();
       if (data.success) {
-        alert("Your account has been deleted. Logging you out...");
-        await signOut();
-        window.location.href = '/';
+        showToast('success', 'Your account has been deleted. Logging you out...');
+        setTimeout(async () => {
+          await signOut();
+          window.location.href = '/';
+        }, 2000);
       } else {
         showToast('error', data.error || 'Failed to delete account.');
       }
@@ -400,6 +406,32 @@ export default function SettingsPage() {
               </motion.div>
             </TabsContent>
           </Tabs>
+
+          {/* Delete Account Confirmation Dialog */}
+          <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+            <DialogContent className="max-w-sm rounded-2xl p-6">
+              <DialogHeader>
+                <DialogTitle className="text-lg font-bold text-destructive">Delete Account</DialogTitle>
+              </DialogHeader>
+              <div className="py-2">
+                <p className="text-sm text-muted-foreground">Are you absolutely sure you want to delete your account? This action is permanent and cannot be undone.</p>
+              </div>
+              <DialogFooter className="gap-2 sm:gap-0 mt-4">
+                <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)} className="rounded-xl flex-1 sm:flex-none">
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={() => {
+                    setDeleteConfirmOpen(false);
+                    executeDeleteAccount();
+                  }} 
+                  className="rounded-xl bg-destructive hover:bg-destructive/90 text-destructive-foreground flex-1 sm:flex-none"
+                >
+                  Delete Permanently
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </main>
   );
 }

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import {
   Briefcase, MapPin, GraduationCap, Sparkles, Upload, Plus, X,
-  ChevronRight, ChevronLeft, Loader2, CheckCircle2, AlertCircle, FileText
+  ChevronRight, ChevronLeft, Loader2, CheckCircle2, AlertCircle, FileText, Smile, Rocket
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -302,8 +302,8 @@ export default function OnboardingPage() {
                   className="space-y-5"
                 >
                   <div className="space-y-1.5">
-                    <h2 className="text-xl font-bold text-foreground" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-                      Welcome, {getGreetingName()}! 👋
+                    <h2 className="text-xl font-bold text-foreground flex items-center gap-1.5" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                      Welcome, {getGreetingName()}! <Smile className="w-5.5 h-5.5 text-amber-500" />
                     </h2>
                     <p className="text-muted-foreground text-sm leading-relaxed">
                       Let's set up your professional profile to tailor job matches. What role are you looking for?
@@ -366,8 +366,8 @@ export default function OnboardingPage() {
                   className="space-y-5"
                 >
                   <div className="space-y-1.5">
-                    <h2 className="text-xl font-bold text-foreground animate-fade-in" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-                      Where are you based? 📍
+                    <h2 className="text-xl font-bold text-foreground flex items-center gap-1.5 animate-fade-in" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                      Where are you based? <MapPin className="w-5 h-5 text-primary" />
                     </h2>
                     <p className="text-muted-foreground text-sm leading-relaxed">
                       We match candidates to local, hybrid, and remote roles.
@@ -453,8 +453,8 @@ export default function OnboardingPage() {
                   className="space-y-5"
                 >
                   <div className="space-y-1.5">
-                    <h2 className="text-xl font-bold text-foreground" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-                      Resume & Skills 🚀
+                    <h2 className="text-xl font-bold text-foreground flex items-center gap-1.5" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                      Resume & Skills <Rocket className="w-5 h-5 text-primary" />
                     </h2>
                     <p className="text-muted-foreground text-sm leading-relaxed">
                       Upload your resume and JobFusion will parse it to auto-extract your skills.

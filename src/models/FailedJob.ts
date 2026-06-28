@@ -5,7 +5,6 @@ const FailedJobSchema = new Schema(
     source: {
       type: String,
       required: true,
-      enum: ["linkedin", "indeed", "wellfound", "internshala"],
     },
     rawPayload: {
       type: Schema.Types.Mixed,
@@ -27,6 +26,9 @@ const FailedJobSchema = new Schema(
 
 FailedJobSchema.index({ source: 1, timestamp: -1 });
 
-const FailedJob = models.FailedJob || model("FailedJob", FailedJobSchema);
+if (models.FailedJob) {
+  delete (models as any).FailedJob;
+}
+const FailedJob = model("FailedJob", FailedJobSchema);
 
 export default FailedJob;

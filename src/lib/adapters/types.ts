@@ -1,4 +1,4 @@
-export type JobSource = "linkedin" | "indeed" | "wellfound" | "internshala";
+export type JobSource = "linkedin" | "indeed" | "wellfound" | "internshala" | "careers";
 
 export interface FetchQuery {
   keywords: string[];   // e.g. ["software engineer", "react developer"]

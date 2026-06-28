@@ -10,7 +10,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { DbJob, saveJob, unsaveJob } from '@/lib/api-helper';
+import { DbJob, saveJob, unsaveJob, logActivity } from '@/lib/api-helper';
 import { trackVisitedJob } from '@/lib/visited-jobs';
 
 interface JobCardProps {
@@ -24,125 +24,112 @@ interface JobCardProps {
 }
 
 const locationTypeConfig = {
-  remote: { icon: Wifi, label: 'Remote', className: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' },
-  hybrid: { icon: Home, label: 'Hybrid', className: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' },
+  remote: { icon: Wifi,  label: 'Remote',  className: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' },
+  hybrid: { icon: Home,  label: 'Hybrid',  className: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' },
   onsite: { icon: Users, label: 'On-site', className: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20' },
 };
 
-const matchColor = (score: number) => {
-  if (score >= 90) return 'text-emerald-500';
-  if (score >= 75) return 'text-blue-500';
-  if (score >= 60) return 'text-amber-500';
-  return 'text-muted-foreground';
+const getSourceStyle = (src: string) => {
+  switch (src) {
+    case 'linkedin':   return { label: 'LinkedIn',        cls: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' };
+    case 'indeed':     return { label: 'Indeed',          cls: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20' };
+    case 'wellfound':  return { label: 'Wellfound',       cls: 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20' };
+    case 'internshala':return { label: 'Internshala',     cls: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20' };
+    case 'careers':    return { label: 'Company Careers', cls: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' };
+    default: return null;
+  }
 };
 
 export default function JobCard({
-  job,
-  index = 0,
-  variant = 'default',
-  userId,
-  initialIsSaved = false,
-  initialIsApplied = false,
-  onSavedToggle
+  job, index = 0, variant = 'default', userId,
+  initialIsSaved = false, initialIsApplied = false, onSavedToggle
 }: JobCardProps) {
   const [saved, setSaved] = useState(initialIsSaved);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  useEffect(() => { setSaved(initialIsSaved); }, [initialIsSaved]);
+
   const handleCardClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
-    if (target.closest('button') || target.closest('a') || target.closest('input')) {
-      return;
-    }
+    if (target.closest('button') || target.closest('a') || target.closest('input')) return;
     trackVisitedJob(job);
-    router.push(`/jobs/${job._id}`);
+    if (userId) {
+      logActivity({ type: 'viewed', jobId: job._id, jobTitle: job.title, company: job.company })
+        .catch(() => {});
+    }
+    // Open apply URL directly (same as Apply button) — no internal page navigation
+    if (job.applyUrl) window.open(job.applyUrl, '_blank', 'noopener,noreferrer');
+    else router.push(`/jobs/${job._id}`);
   };
 
-  useEffect(() => {
-    setSaved(initialIsSaved);
-  }, [initialIsSaved]);
-
-  const locType = locationTypeConfig[job.locationType] || locationTypeConfig.remote;
-  const LocIcon = locType.icon;
-
   const handleSaveToggle = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
     if (!userId || loading) return;
-
     setLoading(true);
     const nextSaved = !saved;
-    setSaved(nextSaved); // Optimistic UI update
-
+    setSaved(nextSaved);
     try {
       if (nextSaved) {
         const result = await saveJob(userId, job._id);
-        if (!result) {
-          setSaved(saved); // Revert on failure
-        } else if (onSavedToggle) {
-          onSavedToggle(job._id, true);
-        }
+        if (!result) { setSaved(saved); } else if (onSavedToggle) onSavedToggle(job._id, true);
       } else {
         const success = await unsaveJob(userId, job._id);
-        if (!success) {
-          setSaved(saved); // Revert on failure
-        } else if (onSavedToggle) {
-          onSavedToggle(job._id, false);
-        }
+        if (!success) { setSaved(saved); } else if (onSavedToggle) onSavedToggle(job._id, false);
       }
-    } catch (err) {
-      console.error("Error toggling save state:", err);
-      setSaved(saved); // Revert on error
-    } finally {
-      setLoading(false);
-    }
+    } catch { setSaved(saved); }
+    finally { setLoading(false); }
   };
 
   const handleApplyClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     trackVisitedJob(job);
-    if (job.applyUrl) {
-      window.open(job.applyUrl, "_blank", "noopener,noreferrer");
-    } else {
-      // If no applyUrl, navigate to local details page
-      router.push(`/jobs/${job._id}`);
+    if (userId) {
+      logActivity({ type: 'viewed', jobId: job._id, jobTitle: job.title, company: job.company }).catch(() => {});
     }
+    if (job.applyUrl) window.open(job.applyUrl, '_blank', 'noopener,noreferrer');
+    else router.push(`/jobs/${job._id}`);
   };
 
-  // Determine Source Badge styling
-  const getSourceBadge = () => {
-    const src = (job.source || "").toLowerCase();
-    switch (src) {
-      case "linkedin":
-        return { label: "LinkedIn", className: "bg-blue-600/10 text-blue-600 dark:text-blue-400 border-blue-500/20" };
-      case "indeed":
-        return { label: "Indeed", className: "bg-purple-600/10 text-purple-600 dark:text-purple-400 border-purple-500/20" };
-      case "wellfound":
-        return { label: "Wellfound", className: "bg-teal-600/10 text-teal-600 dark:text-teal-400 border-teal-500/20" };
-      case "internshala":
-        return { label: "Internshala", className: "bg-orange-600/10 text-orange-600 dark:text-orange-400 border-orange-500/20" };
-      default:
-        return null;
-    }
-  };
+  const locType = locationTypeConfig[job.locationType] || locationTypeConfig.remote;
+  const LocIcon = locType.icon;
+  const source = getSourceStyle((job.source || '').toLowerCase());
 
-  const sourceBadge = getSourceBadge();
+  // Relative time
+  const getTimeAgo = () => {
+    const d = job.postedAtDate ? new Date(job.postedAtDate) : null;
+    if (!d || isNaN(d.getTime())) return typeof job.postedAt === 'string' ? job.postedAt : 'Just now';
+    const mins = Math.floor((Date.now() - d.getTime()) / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    if (days < 30) return `${days}d ago`;
+    return `${Math.floor(days / 30)}mo ago`;
+  };
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: index * 0.07 }}
-      className="card-premium card-hover group cursor-pointer"
+      transition={{ duration: 0.35, delay: index * 0.06, ease: [0.22, 1, 0.36, 1] }}
+      whileHover={{ y: -2 }}
+      className="card-premium cursor-pointer group relative overflow-hidden"
       onClick={handleCardClick}
+      style={{ transition: 'box-shadow 0.25s ease, border-color 0.25s ease, transform 0.25s ease' }}
     >
-      <div className="p-5">
+      {/* Hover glow */}
+      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl pointer-events-none"
+        style={{ background: `radial-gradient(ellipse at top left, ${job.companyColor || '#6366f1'}08, transparent 70%)` }} />
+
+      <div className="p-5 relative z-10">
         {/* Header */}
         <div className="flex items-start justify-between gap-3 mb-4">
           <div className="flex items-center gap-3">
             {/* Company Logo */}
             <div
-              className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-md flex-shrink-0 overflow-hidden"
+              className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-base shadow-md flex-shrink-0 overflow-hidden transition-transform group-hover:scale-105 duration-300"
               style={{ backgroundColor: job.companyColor || '#6366f1' }}
             >
               {job.companyLogo && (job.companyLogo.startsWith('http') || job.companyLogo.includes('/')) ? (
@@ -151,23 +138,20 @@ export default function JobCard({
                 job.companyLogo || job.company.charAt(0)
               )}
             </div>
+
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <h3 className="font-semibold text-sm leading-tight group-hover:text-primary transition-colors line-clamp-1">
                   {job.title}
                 </h3>
                 {job.featured && (
-                  <Badge className="text-[10px] h-4 px-1.5 gradient-brand text-white border-0 flex-shrink-0">
-                    Featured
-                  </Badge>
+                  <Badge className="text-[10px] h-4 px-1.5 gradient-brand text-white border-0 flex-shrink-0 rounded-full">Featured</Badge>
                 )}
                 {initialIsApplied && (
-                  <Badge className="text-[10px] h-4 px-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 flex-shrink-0 font-medium">
-                    Visited
-                  </Badge>
+                  <Badge className="text-[10px] h-4 px-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 flex-shrink-0 rounded-full">Visited</Badge>
                 )}
               </div>
-              <div className="flex items-center gap-1.5 mt-0.5">
+              <div className="flex items-center gap-1 mt-0.5">
                 <Building2 className="w-3 h-3 text-muted-foreground" />
                 <span className="text-xs text-muted-foreground">{job.company}</span>
               </div>
@@ -180,49 +164,44 @@ export default function JobCard({
               onClick={handleSaveToggle}
               disabled={loading}
               className={cn(
-                'rounded-xl p-2 transition-all duration-200 flex-shrink-0 z-10',
+                'rounded-xl p-2 transition-all duration-200 flex-shrink-0 z-10 touch-auto',
                 saved
-                  ? 'text-primary bg-primary/10 hover:bg-primary/20'
-                  : 'text-muted-foreground hover:text-primary hover:bg-primary/10',
+                  ? 'text-primary bg-primary/12 hover:bg-primary/20'
+                  : 'text-muted-foreground hover:text-primary hover:bg-primary/8',
                 loading && 'opacity-50 cursor-not-allowed'
               )}
             >
-              {saved
-                ? <BookmarkCheck className="w-4 h-4" />
-                : <Bookmark className="w-4 h-4" />
-              }
+              {saved ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
             </button>
           )}
         </div>
 
         {/* Tags */}
-        <div className="flex flex-wrap gap-2 mb-4">
-          <Badge variant="secondary" className={cn('rounded-lg text-xs border', locType.className)}>
+        <div className="flex flex-wrap gap-1.5 mb-3.5">
+          <Badge variant="secondary" className={cn('rounded-full text-xs border', locType.className)}>
             <LocIcon className="w-3 h-3 mr-1" />
             {locType.label}
           </Badge>
-          <Badge variant="secondary" className="rounded-lg text-xs">
-            {job.type}
-          </Badge>
+          <Badge variant="secondary" className="rounded-full text-xs">{job.type}</Badge>
           {job.experience && (
-            <Badge variant="secondary" className="rounded-lg text-xs">
-              {job.experience}
-            </Badge>
+            <Badge variant="secondary" className="rounded-full text-xs">{job.experience}</Badge>
           )}
-          {sourceBadge && (
-            <Badge variant="outline" className={cn('rounded-lg text-xs border font-medium', sourceBadge.className)}>
-              {sourceBadge.label}
+          {source && (
+            <Badge variant="outline" className={cn('rounded-full text-xs border font-medium', source.cls)}>
+              {source.label}
             </Badge>
           )}
         </div>
 
         {/* Location & Salary */}
-        <div className="flex items-center justify-between text-xs text-muted-foreground mb-4">
+        <div className="flex items-center justify-between text-xs text-muted-foreground mb-3.5">
           <div className="flex items-center gap-1">
             <MapPin className="w-3 h-3" />
-            {job.location}
+            <span className="truncate max-w-[140px]">{job.location}</span>
           </div>
-          <span className="font-medium text-foreground">{job.salary}</span>
+          {job.salary && job.salary !== 'Not disclosed' && (
+            <span className="font-semibold text-foreground text-xs">{job.salary}</span>
+          )}
         </div>
 
         {/* Skills */}
@@ -230,44 +209,45 @@ export default function JobCard({
           {job.skills.slice(0, 4).map((skill) => (
             <span
               key={skill}
-              className="text-[11px] px-2 py-0.5 rounded-lg bg-accent text-accent-foreground border border-border/60"
+              className="text-[10px] px-2 py-0.5 rounded-full bg-accent text-accent-foreground border border-border/60 font-medium"
             >
               {skill}
             </span>
           ))}
           {job.skills.length > 4 && (
-            <span className="text-[11px] px-2 py-0.5 rounded-lg bg-accent text-muted-foreground">
-              +{job.skills.length - 4}
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+              +{job.skills.length - 4} more
             </span>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between pt-3 border-t border-border/60">
-          <div className="flex items-center gap-3">
-            {/* Match Score */}
-            <div className="flex items-center gap-1.5">
-              <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
-                <span className="text-[8px] font-bold text-primary">AI</span>
-              </div>
-              <span className={cn('text-xs font-semibold', matchColor(job.matchScore))}>
-                {job.matchScore}% match
-              </span>
-            </div>
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Clock className="w-3 h-3" />
-              {typeof job.postedAt === "string" ? job.postedAt : "Just now"}
-            </div>
+        <div className="flex items-center justify-between pt-3 border-t border-border/50">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Clock className="w-3 h-3" />
+            <span>{getTimeAgo()}</span>
           </div>
 
-          <Button
-            onClick={handleApplyClick}
-            size="sm"
-            className="h-7 px-3 text-xs rounded-lg gradient-brand text-white border-0 hover:opacity-90 z-10"
-          >
-            <Zap className="w-3 h-3 mr-1" />
-            Apply
-          </Button>
+          <div className="flex items-center gap-2">
+            {job.matchScore && (
+              <div className={cn(
+                'text-xs font-bold px-2 py-0.5 rounded-full',
+                job.matchScore >= 85
+                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                  : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+              )}>
+                {job.matchScore}% match
+              </div>
+            )}
+            <Button
+              onClick={handleApplyClick}
+              size="sm"
+              className="h-7 px-3 text-xs rounded-full gradient-brand text-white border-0 hover:opacity-90 transition-opacity z-10 shadow-sm"
+            >
+              <Zap className="w-3 h-3 mr-1" />
+              Apply
+            </Button>
+          </div>
         </div>
       </div>
     </motion.div>

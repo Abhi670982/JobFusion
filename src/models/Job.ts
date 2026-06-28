@@ -67,6 +67,10 @@ const JobSchema = new Schema(
       type: String,
       default: "Just now",
     },
+    postedAtDate: {
+      type: Date,
+      default: Date.now,
+    },
     description: {
       type: String,
       trim: true,
@@ -152,6 +156,10 @@ const JobSchema = new Schema(
       unique: true,
       sparse: true,
       trim: true,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
     }
   },
   {
@@ -163,9 +171,13 @@ const JobSchema = new Schema(
 JobSchema.index({ source: 1 });
 JobSchema.index({ title: 1, company: 1 });
 JobSchema.index({ createdAt: -1 });
+JobSchema.index({ postedAtDate: -1 });
 JobSchema.index({ skills: 1 });
 JobSchema.index({ city: 1, country: 1 });
 
-const Job = models.Job || model("Job", JobSchema);
+if (models.Job) {
+  delete (models as any).Job;
+}
+const Job = model("Job", JobSchema);
 
 export default Job;

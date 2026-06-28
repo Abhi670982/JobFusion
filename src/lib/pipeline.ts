@@ -8,6 +8,7 @@ import { LinkedInAdapter } from "./adapters/linkedin";
 import { IndeedAdapter } from "./adapters/indeed";
 import { WellfoundAdapter } from "./adapters/wellfound";
 import { InternshalaAdapter } from "./adapters/internshala";
+import { CareersAdapter } from "./adapters/careers";
 
 // Helper to clean HTML from descriptions
 export function stripHtml(html: string | null | undefined): string {
@@ -29,9 +30,28 @@ export function getCompanyColor(source: JobSource): string {
       return "#0a85ea";
     case "internshala":
       return "#f97316";
+    case "careers":
+      return "#14b8a6";
     default:
       return "#6366f1";
   }
+}
+
+// Convert a Date to a human-readable relative string like "2 hours ago"
+export function toRelativeTimeString(date: Date | null | undefined): string {
+  if (!date) return "Just now";
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHrs = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+  if (diffHrs < 24) return `${diffHrs} hour${diffHrs > 1 ? 's' : ''} ago`;
+  if (diffDays < 30) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  const diffMonths = Math.floor(diffDays / 30);
+  return `${diffMonths} month${diffMonths > 1 ? 's' : ''} ago`;
 }
 
 // Fetch and process jobs for a specific source
@@ -53,6 +73,9 @@ export async function runSourceSync(source: JobSource, keywords: string[]): Prom
         break;
       case "internshala":
         adapter = new InternshalaAdapter();
+        break;
+      case "careers":
+        adapter = new CareersAdapter();
         break;
       default:
         throw new Error(`Unknown source: ${source}`);
@@ -108,6 +131,9 @@ export async function runSourceSync(source: JobSource, keywords: string[]): Prom
           existingJob.fetchedAt = new Date();
           existingJob.applyUrl = unified.applyUrl || existingJob.applyUrl;
           existingJob.sourceUrl = unified.sourceUrl || existingJob.sourceUrl;
+          const updatedDate = unified.postedAt || existingJob.postedAtDate || new Date();
+          existingJob.postedAtDate = updatedDate;
+          existingJob.postedAt = toRelativeTimeString(updatedDate instanceof Date ? updatedDate : new Date(updatedDate));
           await existingJob.save();
           console.log(`[Pipeline] Updated existing job: ${unified.title} at ${unified.company} (${source})`);
         } else {
@@ -137,7 +163,8 @@ export async function runSourceSync(source: JobSource, keywords: string[]): Prom
             jobType: unified.jobType,
             skills: unified.skills,
             matchScore: 70 + Math.floor(Math.random() * 25), // Random Match Score for AI feature
-            postedAt: unified.postedAt || new Date(),
+            postedAt: toRelativeTimeString(unified.postedAt),
+            postedAtDate: unified.postedAt || new Date(),
             description: unified.description,
             descriptionHtml: unified.descriptionHtml,
             source: source,
@@ -176,6 +203,19 @@ export async function runSourceSync(source: JobSource, keywords: string[]): Prom
       status: "success",
       jobsFetched: successCount,
     });
+
+    // Mark jobs from this source not seen in 12h as inactive
+    // (missed 2+ crawl cycles at 6h intervals)
+    if (source === "careers") {
+      await Job.updateMany(
+        {
+          source: "careers",
+          fetchedAt: { $lt: new Date(Date.now() - 12 * 60 * 60 * 1000) },
+          isActive: { $ne: false },
+        },
+        { $set: { isActive: false } }
+      );
+    }
 
     return { success: true, count: successCount };
   } catch (error: any) {
