@@ -83,18 +83,7 @@ export default function LandingPage() {
 
         <motion.div style={{ opacity: heroOpacity, y: heroY }} className="relative z-10 max-w-5xl mx-auto text-center">
 
-          {/* Eyebrow pill */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="flex justify-center mb-8">
-            <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full glass border border-primary/20 text-sm font-medium shadow-sm">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-              </span>
-              <Sparkles className="w-3.5 h-3.5 text-primary" />
-              <span className="text-foreground/80">AI-Powered Career Intelligence</span>
-              <Badge className="text-[10px] h-4 px-1.5 gradient-brand text-white border-0 rounded-full">New</Badge>
-            </div>
-          </motion.div>
+
 
           {/* Headline */}
           <motion.h1
