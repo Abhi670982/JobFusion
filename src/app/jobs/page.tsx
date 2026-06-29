@@ -469,32 +469,140 @@ export default function JobsPage() {
           setSelectedSkills(loadedSkills);
         }
 
-        const hasExplicitFilters = params.get('q') || params.get('location') || params.get('remote') || params.get('source') || params.get('jobType') || params.get('experienceLevel') || params.get('skills');
+        const hasExplicitFilters = params.get('q') || params.get('location') || params.get('remote') ||
+          params.get('source') || params.get('jobType') || params.get('experienceLevel') ||
+          params.get('skills') || params.get('salaryMin');
 
-        if (!hasExplicitFilters && prof && prof.skills && prof.skills.length > 0) {
-          const userSkills = prof.skills.map((s: any) => s.name.toLowerCase());
-          setSelectedSkills(userSkills);
-          
-          const queryParams = new URLSearchParams();
-          queryParams.set('skills', userSkills.join(','));
-          queryParams.set('sortBy', 'postedAt');
-          queryParams.set('order', 'desc');
-          
-          // Cache in sessionStorage and update URL
-          sessionStorage.setItem('jobfusion_filter_query', queryParams.toString());
-          window.history.replaceState(null, '', '?' + queryParams.toString());
-          await fetchFilteredJobs(queryParams.toString(), true);
-        } else if (!hasExplicitFilters && (!prof || !prof.skills || prof.skills.length === 0)) {
-          // No skills found! Show empty state prompting to add skills
-          setSkillWarning(true);
-          setJobs([]);
-          setTotalJobsCount(0);
-          setLoading(false);
+        if (!hasExplicitFilters && prof) {
+
+          // ── inferExpLevel ──────────────────────────────────────────────────
+          // Converts a free-text experience string OR a work history array into
+          // one of: 'entry' | 'mid' | 'senior' | 'lead' | null
+          const inferExpLevel = (expStr?: string | null, expHistory?: any[]): string | null => {
+            const yearsToLevel = (y: number): string => {
+              if (y <= 2)  return 'entry';
+              if (y <= 5)  return 'mid';
+              if (y <= 8)  return 'senior';
+              return 'lead';
+            };
+
+            // 1️⃣  Try the free-text experience field first
+            if (expStr && expStr.trim()) {
+              const s = expStr.toLowerCase().trim();
+
+              // Direct keyword matches (fast path)
+              if (/\b(fresher|0\s*year|no\s*exp|intern)\b/.test(s)) return 'entry';
+              if (/\b(junior|jr\.?)\b/.test(s)) return 'entry';
+              if (/\b(entry[\s-]?level)\b/.test(s)) return 'entry';
+              if (/\b(mid[\s-]?level|intermediate)\b/.test(s)) return 'mid';
+              if (/\b(senior|sr\.?)\b/.test(s)) return 'senior';
+              if (/\b(lead|principal|staff|architect)\b/.test(s)) return 'lead';
+              if (/\b(manager|director|vp|head\s+of)\b/.test(s)) return 'lead';
+
+              // Extract numeric year value — handles:
+              //   "6 years", "6+ years", "6-8 years", "1.5 years", "~3 years"
+              //   "3 to 5 years", "around 4 years"
+              const numMatch = s.match(/(\d+(?:\.\d+)?)\s*(?:to|-|–|and)?\s*(\d+)?\s*(?:\+|plus)?\s*(?:yr|year|yrs|years)/);
+              if (numMatch) {
+                // Use the lower bound of a range (more conservative)
+                const years = parseFloat(numMatch[1]);
+                return yearsToLevel(years);
+              }
+
+              // Bare number fallback: "6", "2+"
+              const bareNum = s.match(/^(\d+(?:\.\d+)?)\s*\+?$/);
+              if (bareNum) return yearsToLevel(parseFloat(bareNum[1]));
+            }
+
+            // 2️⃣  Fall back to counting work history entries
+            if (expHistory && expHistory.length > 0) {
+              // Each job entry ≈ ~2 years on average; cap at reasonable max
+              const estimatedYears = Math.min(expHistory.length * 2, 15);
+              return yearsToLevel(estimatedYears);
+            }
+
+            return null; // Can't infer — leave filter unselected
+          };
+
+          // ── inferSalaryMin ─────────────────────────────────────────────────
+          // Parses expected salary free text → minimum salary in lakhs (integer)
+          // Returns 0 if nothing can be parsed → salary filter stays unset
+          const inferSalaryMin = (salStr?: string | null): number => {
+            if (!salStr || !salStr.trim()) return 0;
+
+            // Strip currency symbols, commas, spaces → work with digits and units only
+            const s = salStr.replace(/[₹$€£,\s]/g, '').toLowerCase();
+
+            // Pattern: number (optional decimal) optionally followed by unit
+            // Captures the FIRST (minimum) value in a range like "28l–45l" → 28
+            const match = s.match(/(\d+(?:\.\d+)?)\s*(?:l(?:pa|akh)?|k|cr)?/);
+            if (!match) return 0;
+
+            const raw = parseFloat(match[1]);
+            const unit = match[0].replace(/[\d.]/g, '').trim(); // e.g. "l", "lpa", "k", "cr"
+
+            let lakhs: number;
+            if (raw > 100000) {
+              // Looks like a full rupee amount (e.g. 2800000)
+              lakhs = Math.floor(raw / 100000);
+            } else if (unit.startsWith('cr')) {
+              // Crore → lakhs
+              lakhs = Math.floor(raw * 100);
+            } else if (unit === 'k') {
+              // Thousands (USD context) — convert roughly: ₹1000k ≈ unlikely, skip
+              lakhs = 0;
+            } else {
+              // Already in lakhs (L / LPA / lakh)
+              lakhs = Math.floor(raw);
+            }
+
+            // Sanity check: ignore implausible values (< 1L or > 500L)
+            if (lakhs < 1 || lakhs > 500) return 0;
+            return lakhs;
+          };
+
+          // ── Apply inferred filters ─────────────────────────────────────────
+          const hasSkills = prof.skills && prof.skills.length > 0;
+          const inferredExpLevel = inferExpLevel(prof.experience, prof.experiences);
+          const inferredSalaryMin = inferSalaryMin(prof.expectedSalary);
+
+          if (hasSkills || inferredExpLevel) {
+            const userSkills = hasSkills ? prof.skills.map((s: any) => s.name.toLowerCase()) : [];
+
+            // Update filter UI state
+            if (userSkills.length > 0) setSelectedSkills(userSkills);
+            if (inferredExpLevel)      setSelectedExpLevels([inferredExpLevel]);
+            if (inferredSalaryMin > 0) setSalaryRange(inferredSalaryMin);
+
+            // Build query string for API + URL bar
+            const queryParams = new URLSearchParams();
+            if (userSkills.length > 0)  queryParams.set('skills', userSkills.join(','));
+            if (inferredExpLevel)        queryParams.set('experienceLevel', inferredExpLevel);
+            if (inferredSalaryMin > 0)   queryParams.set('salaryMin', String(inferredSalaryMin * 100000));
+            queryParams.set('sortBy', 'postedAt');
+            queryParams.set('order', 'desc');
+
+            sessionStorage.setItem('jobfusion_filter_query', queryParams.toString());
+            window.history.replaceState(null, '', '?' + queryParams.toString());
+            await fetchFilteredJobs(queryParams.toString(), true);
+
+          } else {
+            // Profile exists but has no usable data — load all jobs with filters unselected
+            setSkillWarning(false);
+            await fetchFilteredJobs('', true);
+          }
+
+        } else if (!hasExplicitFilters && !prof) {
+          // No profile at all
+          setSkillWarning(false);
+          await fetchFilteredJobs('', true);
         } else {
-          // Normal load from search params
+          // Explicit filters present (URL/sessionStorage) — load normally
           await fetchFilteredJobs(searchString ? searchString.replace(/^\?/, '') : '', true);
         }
         initialDataLoaded.current = true;
+
+
       } catch (err) {
         console.error("Error loading initial jobs data:", err);
         setLoading(false);
@@ -502,6 +610,8 @@ export default function JobsPage() {
     }
     loadData();
   }, []);
+
+
 
   // 3. Build search params, update browser URL, and trigger fetch
   const handleFilterChange = (page = currentPage) => {
@@ -534,18 +644,7 @@ export default function JobsPage() {
 
     params.set('page', String(page));
 
-    const hasSkillsFilter = selectedSkills.length > 0;
-    const hasSearchQuery = !!queryInput || !!locationInput || selectedSources.length > 0 || selectedJobTypes.length > 0 || selectedExpLevels.length > 0 || remoteOnly || salaryRange > 0 || datePosted;
-
-    if (!hasSkillsFilter && !hasSearchQuery) {
-      setSkillWarning(true);
-      setJobs([]);
-      setTotalJobsCount(0);
-      setLoading(false);
-      return;
-    } else {
-      setSkillWarning(false);
-    }
+    setSkillWarning(false);
 
     const newQueryString = params.toString();
 
@@ -806,6 +905,8 @@ export default function JobsPage() {
             </div>
           </div>
         </div>
+
+
 
         {/* Core Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">

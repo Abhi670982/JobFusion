@@ -193,6 +193,11 @@ export default function Navbar() {
                           </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild className="rounded-xl px-3 py-1.5 text-sm cursor-pointer transition-colors">
+                          <Link href="/profile" className="flex items-center w-full justify-between">
+                            <span className="flex items-center"><User className="w-4 h-4 mr-2 text-muted-foreground" />My Profile</span>
+                          </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild className="rounded-xl px-3 py-1.5 text-sm cursor-pointer transition-colors">
                           <Link href="/jobs" className="flex items-center w-full justify-between">
                             <span className="flex items-center"><Briefcase className="w-4 h-4 mr-2 text-muted-foreground" />Find Jobs</span>
                           </Link>

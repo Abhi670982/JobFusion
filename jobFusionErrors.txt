@@ -1,0 +1,239 @@
+console log
+1. theme-provider.tsx:7 Encountered a script tag while rendering React component. Scripts inside React components are never executed when rendering on the client. Consider using template tag instead (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/template).
+error	@	intercept-console-error.ts:48
+completeWork	@	react-dom-client.development.js:12961
+runWithFiberInDEV	@	react-dom-client.development.js:986
+completeUnitOfWork	@	react-dom-client.development.js:19132
+performUnitOfWork	@	react-dom-client.development.js:19005
+workLoopSync	@	react-dom-client.development.js:18816
+renderRootSync	@	react-dom-client.development.js:18797
+performWorkOnRoot	@	react-dom-client.development.js:17902
+performWorkOnRootViaSchedulerTask	@	react-dom-client.development.js:20471
+performWorkUntilDeadline	@	scheduler.development.js:45
+<script>		
+(anonymous)	@	react.development.js:1137
+(anonymous)	@	index.mjs:1
+react_stack_bottom_frame	@	react-dom-client.development.js:28241
+renderWithHooksAgain	@	react-dom-client.development.js:8025
+renderWithHooks	@	react-dom-client.development.js:7937
+updateFunctionComponent	@	react-dom-client.development.js:10442
+updateSimpleMemoComponent	@	react-dom-client.development.js:10106
+updateMemoComponent	@	react-dom-client.development.js:10039
+beginWork	@	react-dom-client.development.js:12522
+runWithFiberInDEV	@	react-dom-client.development.js:986
+performUnitOfWork	@	react-dom-client.development.js:18988
+workLoopSync	@	react-dom-client.development.js:18816
+renderRootSync	@	react-dom-client.development.js:18797
+performWorkOnRoot	@	react-dom-client.development.js:17902
+performWorkOnRootViaSchedulerTask	@	react-dom-client.development.js:20471
+performWorkUntilDeadline	@	scheduler.development.js:45
+<Memo>		
+(anonymous)	@	react.development.js:1137
+(anonymous)	@	index.mjs:1
+react_stack_bottom_frame	@	react-dom-client.development.js:28241
+renderWithHooksAgain	@	react-dom-client.development.js:8025
+renderWithHooks	@	react-dom-client.development.js:7937
+updateFunctionComponent	@	react-dom-client.development.js:10442
+beginWork	@	react-dom-client.development.js:12112
+runWithFiberInDEV	@	react-dom-client.development.js:986
+performUnitOfWork	@	react-dom-client.development.js:18988
+workLoopSync	@	react-dom-client.development.js:18816
+renderRootSync	@	react-dom-client.development.js:18797
+performWorkOnRoot	@	react-dom-client.development.js:17902
+performWorkOnRootViaSchedulerTask	@	react-dom-client.development.js:20471
+performWorkUntilDeadline	@	scheduler.development.js:45
+<V>		
+(anonymous)	@	react.development.js:1137
+e	@	index.mjs:1
+react_stack_bottom_frame	@	react-dom-client.development.js:28241
+renderWithHooksAgain	@	react-dom-client.development.js:8025
+renderWithHooks	@	react-dom-client.development.js:7937
+updateFunctionComponent	@	react-dom-client.development.js:10442
+beginWork	@	react-dom-client.development.js:12112
+runWithFiberInDEV	@	react-dom-client.development.js:986
+performUnitOfWork	@	react-dom-client.development.js:18988
+workLoopSync	@	react-dom-client.development.js:18816
+renderRootSync	@	react-dom-client.development.js:18797
+performWorkOnRoot	@	react-dom-client.development.js:17902
+performWorkOnRootViaSchedulerTask	@	react-dom-client.development.js:20471
+performWorkUntilDeadline	@	scheduler.development.js:45
+<J>		
+(anonymous)	@	react-jsx-dev-runtime.development.js:342
+ThemeProvider	@	theme-provider.tsx:7
+react_stack_bottom_frame	@	react-dom-client.development.js:28241
+renderWithHooksAgain	@	react-dom-client.development.js:8025
+renderWithHooks	@	react-dom-client.development.js:7937
+updateFunctionComponent	@	react-dom-client.development.js:10442
+beginWork	@	react-dom-client.development.js:12052
+runWithFiberInDEV	@	react-dom-client.development.js:986
+performUnitOfWork	@	react-dom-client.development.js:18988
+workLoopSync	@	react-dom-client.development.js:18816
+renderRootSync	@	react-dom-client.development.js:18797
+performWorkOnRoot	@	react-dom-client.development.js:17902
+performWorkOnRootViaSchedulerTask	@	react-dom-client.development.js:20471
+performWorkUntilDeadline	@	scheduler.development.js:45
+"use client"		
+(anonymous)	@	layout.tsx:52
+initializeElement	@	react-server-dom-tur…development.js:1975
+reviveModel	@	react-server-dom-tur…development.js:4702
+reviveModel	@	react-server-dom-tur…development.js:4713
+reviveModel	@	react-server-dom-tur…development.js:4632
+parseModel	@	react-server-dom-tur…development.js:4622
+initializeModelChunk	@	react-server-dom-tur…development.js:1860
+readChunk	@	react-server-dom-tur…development.js:1477
+react_stack_bottom_frame	@	react-dom-client.development.js:28348
+resolveLazy	@	react-dom-client.development.js:6269
+createChild	@	react-dom-client.development.js:6621
+reconcileChildrenArray	@	react-dom-client.development.js:6928
+reconcileChildFibersImpl	@	react-dom-client.development.js:7252
+(anonymous)	@	react-dom-client.development.js:7351
+reconcileChildren	@	react-dom-client.development.js:9977
+beginWork	@	react-dom-client.development.js:12311
+runWithFiberInDEV	@	react-dom-client.development.js:986
+performUnitOfWork	@	react-dom-client.development.js:18988
+workLoopConcurrentByScheduler	@	react-dom-client.development.js:18982
+renderRootConcurrent	@	react-dom-client.development.js:18964
+performWorkOnRoot	@	react-dom-client.development.js:17822
+performWorkOnRootViaSchedulerTask	@	react-dom-client.development.js:20471
+performWorkUntilDeadline	@	scheduler.development.js:45
+<RootLayout>		
+initializeFakeTask	@	react-server-dom-tur…development.js:3454
+initializeDebugInfo	@	react-server-dom-tur…development.js:3479
+fulfillReference	@	react-server-dom-tur…development.js:2118
+wakeChunk	@	react-server-dom-tur…development.js:1549
+fulfillReference	@	react-server-dom-tur…development.js:2159
+wakeChunk	@	react-server-dom-tur…development.js:1549
+fulfillReference	@	react-server-dom-tur…development.js:2159
+wakeChunk	@	react-server-dom-tur…development.js:1549
+wakeChunkIfInitialized	@	react-server-dom-tur…development.js:1591
+resolveModelChunk	@	react-server-dom-tur…development.js:1701
+processFullStringRow	@	react-server-dom-tur…development.js:4512
+processFullBinaryRow	@	react-server-dom-tur…development.js:4370
+processBinaryChunk	@	react-server-dom-tur…development.js:4593
+progress	@	react-server-dom-tur…development.js:4910
+"use server"		
+ResponseInstance	@	react-server-dom-tur…development.js:2833
+createResponseFromOptions	@	react-server-dom-tur…development.js:4788
+(anonymous)	@	react-server-dom-tur…development.js:5191
+(anonymous)	@	app-index.tsx:265
+(anonymous)	@	hmr-runtime.ts:650
+runModuleExecutionHooks	@	dev-base.ts:213
+instantiateModuleShared	@	hmr-runtime.ts:648
+instantiateModule	@	dev-base.ts:181
+(anonymous)	@	dev-base.ts:135
+commonJsRequire	@	runtime-utils.ts:440
+(anonymous)	@	app-next-turbopack.ts:12
+(anonymous)	@	app-bootstrap.ts:79
+loadScriptsInSequence	@	app-bootstrap.ts:23
+appBootstrap	@	app-bootstrap.ts:61
+(anonymous)	@	app-next-turbopack.ts:11
+(anonymous)	@	hmr-runtime.ts:650
+runModuleExecutionHooks	@	dev-base.ts:213
+instantiateModuleShared	@	hmr-runtime.ts:648
+instantiateModule	@	dev-base.ts:181
+getOrInstantiateRuntimeModule	@	dev-base.ts:101
+registerChunk	@	runtime-backend-dom.ts:65
+await in registerChunk		
+registerChunk	@	dev-base.ts:562
+(anonymous)	@	dev-backend-dom.ts:145
+(anonymous)	@	dev-backend-dom.ts:145
+
+2. Uncaught Error: Hydration failed because the server rendered HTML didn't match the client. As a result this tree will be regenerated on the client. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <LayoutWrapper>
+      <div className="flex min-h...">
+        <Sidebar>
+          <motion.aside initial={false} animate={{width:236}} transition={{duration:0.25, ...}} className="relative h...">
+            <aside className="relative h..." style={{width:"236px"}} ref={function useMotionRef.useCallback}>
+              <div className="flex flex-...">
+                <div>
+                <div className="flex-1 ove...">
+                  <NavLink>
+                  <NavLink>
+                  <NavLink item={{href:"/job...", ...}} collapsed={false} pathname="/jobs">
+                    <LinkComponent href="/jobs/saved" onClick={undefined} className="flex items...">
+                      <a className="flex items..." ref={function} onClick={function onClick} ...>
+                        <Bookmark>
+                        <AnimatePresence>
+                        <Badge className="ml-auto h-...">
++                         <div
++                           className="rounded-full py-0.5 font-semibold transition-colors focus:outline-none focus:ri..."
++                         >
+                  ...
+                  ...
+                ...
+              ...
+          ...
+        ...
+
+    at throwOnHydrationMismatch (react-dom-client.development.js:5465:11)
+    at beginWork (react-dom-client.development.js:12361:17)
+    at runWithFiberInDEV (react-dom-client.development.js:986:30)
+    at performUnitOfWork (react-dom-client.development.js:18988:22)
+    at workLoopConcurrentByScheduler (react-dom-client.development.js:18982:9)
+    at renderRootConcurrent (react-dom-client.development.js:18964:15)
+    at performWorkOnRoot (react-dom-client.development.js:17822:11)
+    at performWorkOnRootViaSchedulerTask (react-dom-client.development.js:20471:7)
+    at MessagePort.performWorkUntilDeadline (scheduler.development.js:45:48)
+
+3. VM393 <anonymous>:1 Detected `scroll-behavior: smooth` on the `<html>` element. To disable smooth scrolling during route transitions, add `data-scroll-behavior="smooth"` to your <html> element. Learn more: 
+
+4. api-helper.ts:584 
+ GET http://localhost:3000/api/dashboard/notifications 404 (Not Found)
+
+5. api-helper.ts:589 [Frontend API] Error fetching dashboard notifications: Error: HTTP error! status: 404
+    at fetchDashboardNotifications (api-helper.ts:585:24)
+    at async Promise.all (index 1)
+    at async loadData (page.tsx:139:48)
+
+6. api-helper.ts:584 
+ GET http://localhost:3000/api/dashboard/notifications 404 (Not Found)
+
+7. api-helper.ts:589 [Frontend API] Error fetching dashboard notifications: Error: HTTP error! status: 404
+    at fetchDashboardNotifications (api-helper.ts:585:24)
+    at async Promise.all (index 1)
+    at async loadData (page.tsx:139:48)
+8. api-helper.ts:472 
+ POST http://localhost:3000/api/upload-resume 500 (Internal Server Error)
+
+9. api-helper.ts:490 [Frontend API] Error uploading resume for user 6a33b3c036d9fcb1ca3c8458: Error: Failed to parse PDF resume
+    at uploadResume (api-helper.ts:479:13)
+    at async processFile (page.tsx:69:22)
+    at async handleFileChange (page.tsx:83:106)
+
+10. faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://tcs.com&size=128:1  GET https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=http://tcs.com&size=128 404 (Not Found)
+
+
+network
+1. Request URL
+https://jobicy.com/data/server-nyc0409/galaxy/mercury/2021/08/c3bd5aba21a63e4eff764a44f44a9245.png
+Request Method
+GET
+Status Code
+403 Forbidden
+Referrer Policy
+strict-origin-when-cross-origin
+
+2. Request URL
+http://localhost:3000/api/dashboard/notifications
+Request Method
+GET
+Status Code
+404 Not Found
+Remote Address
+[::1]:3000
+Referrer Policy
+strict-origin-when-cross-origin
+
+3. 
