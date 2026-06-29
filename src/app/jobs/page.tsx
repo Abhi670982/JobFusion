@@ -60,23 +60,184 @@ const DATE_POSTED = [
   { label: 'Last 30 Days', value: '30d' }
 ];
 
-function JobCardSkeleton() {
+function PremiumJobsLoader() {
+  const [msgIndex, setMsgIndex] = useState(0);
+  const loadingMessages = [
+    "Searching LinkedIn...",
+    "Checking Company Careers...",
+    "Matching your skills...",
+    "Ranking opportunities...",
+    "Building personalized recommendations...",
+    "Aggregating Indeed listings...",
+    "Scanning Wellfound startup boards...",
+    "Connecting to Internshala...",
+    "Filtering roles based on experience..."
+  ];
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setMsgIndex((prev) => (prev + 1) % loadingMessages.length);
+    }, 1500);
+    return () => clearInterval(timer);
+  }, []);
+
   return (
-    <div className="card-premium p-5 flex flex-col justify-between h-56 skeleton-shimmer">
-      <div className="flex gap-3">
-        <Skeleton className="w-11 h-11 rounded-xl" />
-        <div className="space-y-2 flex-1">
-          <Skeleton className="w-2/3 h-5" />
-          <Skeleton className="w-1/3 h-4" />
+    <div className="col-span-full card-premium p-8 sm:p-12 flex flex-col items-center justify-center min-h-[450px] relative overflow-hidden bg-gradient-to-br from-card/30 via-primary/5 to-card/30 border border-border/80 rounded-3xl">
+      {/* Background Subtle Grid / Ambient Glow */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(99,102,241,0.12),rgba(255,255,255,0))]" />
+      
+      {/* Moving scanner line */}
+      <motion.div
+        className="absolute left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-primary/40 to-transparent z-10"
+        initial={{ top: "0%" }}
+        animate={{ top: "100%" }}
+        transition={{
+          duration: 3,
+          repeat: Infinity,
+          ease: "easeInOut"
+        }}
+      />
+
+      {/* Floating Particles / Nodes */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-40">
+        {Array.from({ length: 12 }).map((_, i) => (
+          <motion.div
+            key={i}
+            className="absolute rounded-full bg-primary/20"
+            style={{
+              width: Math.random() * 8 + 4,
+              height: Math.random() * 8 + 4,
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 100}%`,
+            }}
+            animate={{
+              y: [0, -40, 0],
+              x: [0, Math.random() * 20 - 10, 0],
+              opacity: [0.2, 0.8, 0.2],
+            }}
+            transition={{
+              duration: 4 + Math.random() * 4,
+              repeat: Infinity,
+              ease: "easeInOut",
+              delay: Math.random() * 2,
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Core AI Visualization */}
+      <div className="relative z-10 flex flex-col items-center max-w-md w-full text-center space-y-8">
+        
+        {/* Pulsing Central Node with orbiting source items */}
+        <div className="relative w-40 h-40 flex items-center justify-center">
+          {/* Outer Ripple Rings */}
+          <motion.div
+            className="absolute inset-0 rounded-full border border-primary/20"
+            animate={{ scale: [0.9, 1.4, 0.9], opacity: [0.6, 0.1, 0.6] }}
+            transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+          />
+          <motion.div
+            className="absolute inset-2 rounded-full border border-purple-500/20"
+            animate={{ scale: [0.95, 1.25, 0.95], opacity: [0.8, 0.2, 0.8] }}
+            transition={{ duration: 2.5, repeat: Infinity, ease: "linear", delay: 0.5 }}
+          />
+          
+          {/* AI Center Hub */}
+          <motion.div
+            className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-primary to-purple-600 flex items-center justify-center text-white shadow-[0_0_30px_rgba(99,102,241,0.5)] z-20"
+            animate={{
+              boxShadow: [
+                "0 0 20px rgba(99,102,241,0.4)",
+                "0 0 35px rgba(139,92,246,0.6)",
+                "0 0 20px rgba(99,102,241,0.4)"
+              ],
+              rotate: [0, 360],
+            }}
+            transition={{
+              boxShadow: { duration: 2, repeat: Infinity, ease: "easeInOut" },
+              rotate: { duration: 20, repeat: Infinity, ease: "linear" }
+            }}
+          >
+            <Sparkles className="w-8 h-8" />
+          </motion.div>
+
+          {/* Orbiting Sources */}
+          {[
+            { label: 'LinkedIn', color: 'bg-blue-500', delay: 0, x: -60, y: -40 },
+            { label: 'Indeed', color: 'bg-purple-500', delay: 1.2, x: 60, y: -40 },
+            { label: 'Wellfound', color: 'bg-teal-500', delay: 2.4, x: -50, y: 50 },
+            { label: 'Internshala', color: 'bg-orange-500', delay: 3.6, x: 50, y: 50 },
+          ].map((node, idx) => (
+            <motion.div
+              key={idx}
+              className="absolute w-4 h-4 rounded-full flex items-center justify-center shadow-lg"
+              animate={{
+                x: [node.x, node.x * 1.15, node.x],
+                y: [node.y, node.y * 1.15, node.y],
+                scale: [1, 1.2, 1],
+              }}
+              transition={{
+                duration: 3,
+                repeat: Infinity,
+                ease: "easeInOut",
+                delay: node.delay,
+              }}
+            >
+              <span className={`w-3.5 h-3.5 rounded-full ${node.color} ring-4 ring-background shadow-md`} />
+              <span className={`absolute w-3.5 h-3.5 rounded-full ${node.color} animate-ping opacity-75`} />
+            </motion.div>
+          ))}
         </div>
-      </div>
-      <div className="flex gap-2 my-3">
-        <Skeleton className="w-16 h-5 rounded-lg" />
-        <Skeleton className="w-16 h-5 rounded-lg" />
-      </div>
-      <div className="flex justify-between items-center mt-3 pt-3 border-t border-border">
-        <Skeleton className="w-24 h-4" />
-        <Skeleton className="w-16 h-7 rounded-lg" />
+
+        {/* Text Area */}
+        <div className="space-y-3">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary font-bold tracking-wide uppercase animate-pulse">
+            <span className="w-2 h-2 rounded-full bg-primary animate-ping" />
+            AI Aggregator Active
+          </div>
+          
+          <h3 className="text-xl font-bold tracking-tight text-foreground" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+            Unified Search in Progress
+          </h3>
+          
+          {/* Rotating Message */}
+          <div className="h-6 flex items-center justify-center overflow-hidden">
+            <AnimatePresence mode="wait">
+              <motion.p
+                key={msgIndex}
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+                className="text-sm text-muted-foreground font-medium"
+              >
+                {loadingMessages[msgIndex]}
+              </motion.p>
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* Modern progress track */}
+        <div className="w-full max-w-xs space-y-1">
+          <div className="w-full h-1 bg-muted/60 rounded-full overflow-hidden relative">
+            <motion.div
+              className="absolute top-0 bottom-0 left-0 bg-gradient-to-r from-primary via-purple-500 to-primary rounded-full"
+              initial={{ width: "0%" }}
+              animate={{ width: "100%" }}
+              transition={{
+                duration: 4,
+                repeat: Infinity,
+                ease: "easeInOut"
+              }}
+            />
+          </div>
+          <div className="flex justify-between text-[9px] text-muted-foreground/80 font-bold uppercase tracking-wider px-1">
+            <span>Query Sent</span>
+            <span>Gathering</span>
+            <span>Filtering</span>
+          </div>
+        </div>
+
       </div>
     </div>
   );
@@ -948,7 +1109,7 @@ export default function JobsPage() {
             {/* Main Jobs Listing */}
             <div className={cn('grid gap-4', viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1')}>
               {(loading && !skillWarning) ? (
-                Array.from({ length: 4 }).map((_, i) => <JobCardSkeleton key={i} />)
+                <PremiumJobsLoader />
               ) : skillWarning ? (
                 <div className="col-span-full flex flex-col items-center justify-center py-20 text-center bg-card/10 border border-dashed border-red-500/30 rounded-3xl p-8 space-y-4">
                   <div className="w-16 h-16 rounded-2xl bg-red-500/5 border border-red-500/15 flex items-center justify-center text-red-500 mb-2">

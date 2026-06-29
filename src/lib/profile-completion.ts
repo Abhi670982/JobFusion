@@ -14,33 +14,23 @@ export function calculateCompletion(profile: DbProfile | null, user: DbUser | nu
   // 3. Email (5%)
   if (user?.email && user.email.trim().length > 0) score += 5;
   
-  // 4. Phone (5%)
-  if (profile.phone && profile.phone.trim().length > 0) score += 5;
+  // 4. Phone (10%)
+  if (profile.phone && profile.phone.trim().length > 0) score += 10;
   
-  // 5. Location (10%)
-  if (profile.location && profile.location.trim().length > 0) score += 10;
+  // 5. Location (15%)
+  if (profile.location && profile.location.trim().length > 0) score += 15;
   
-  // 6. Education (15%) - has at least one education entry
-  if (profile.education && profile.education.length > 0) score += 15;
+  // 6. Skills (20%) - has at least one skill
+  if (profile.skills && profile.skills.length > 0) score += 20;
   
-  // 7. Experience (15%) - has at least one experience entry or experience set
-  const hasExperience = (profile.experiences && profile.experiences.length > 0) || (profile.experience && profile.experience.trim().length > 0);
-  if (hasExperience) score += 15;
+  // 7. Resume uploaded (25%)
+  if (profile.resumeUrl && profile.resumeUrl.trim().length > 0) score += 25;
   
-  // 8. Skills (10%) - has at least one skill
-  if (profile.skills && profile.skills.length > 0) score += 10;
+  // 8. LinkedIn (5%)
+  if (profile.linkedinUrl && profile.linkedinUrl.trim().length > 0) score += 5;
   
-  // 9. Resume uploaded (15%)
-  if (profile.resumeUrl && profile.resumeUrl.trim().length > 0) score += 15;
-  
-  // 10. LinkedIn (4%)
-  if (profile.linkedinUrl && profile.linkedinUrl.trim().length > 0) score += 4;
-  
-  // 11. Portfolio (3%)
-  if (profile.portfolioUrl && profile.portfolioUrl.trim().length > 0) score += 3;
-  
-  // 12. Certifications (4%) - has at least one certification
-  if (profile.certifications && profile.certifications.length > 0) score += 4;
+  // 9. Portfolio (5%)
+  if (profile.portfolioUrl && profile.portfolioUrl.trim().length > 0) score += 5;
   
   return score;
 }

@@ -185,7 +185,7 @@ export default function DashboardPage() {
         </div>
         <div className="flex gap-2">
           <Link href="/jobs">
-            <Button size="sm" className="rounded-xl gradient-brand text-white border-0 hover:opacity-90 shadow-sm font-medium">
+            <Button size="sm" variant="secondary" className="rounded-xl border border-border/60 font-medium">
               <Briefcase className="w-3.5 h-3.5 mr-1.5" />
               Browse Jobs
             </Button>
