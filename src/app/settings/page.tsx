@@ -33,6 +33,7 @@ function SettingRow({ label, description, children }: { label: string; descripti
   );
 }
 
+
 export default function SettingsPage() {
   const router = useRouter();
   const { signOut } = useClerk();

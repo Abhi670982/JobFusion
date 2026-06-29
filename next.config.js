@@ -1,6 +1,5 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   images: {
     formats: ["image/avif", "image/webp"],
     remotePatterns: [
@@ -27,4 +26,4 @@ const nextConfig: NextConfig = {
   // Using 'standalone' on Vercel causes deployment failures.
 };
 
-export default nextConfig;
+module.exports = nextConfig;
