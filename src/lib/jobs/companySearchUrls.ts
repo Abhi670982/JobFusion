@@ -1,389 +1,85 @@
-// Company career page search URL patterns and API configurations
-// Supports HTML scraping (static/dynamic) as well as Greenhouse and Lever JSON APIs
-
 export interface CompanyCareerSite {
   name: string;
-  baseUrl: string; // Used for resolving relative URLs
-  searchUrl?: (skill: string) => string;
-  crawlerType?: "static" | "dynamic";
-  apiType?: "greenhouse" | "lever";
-  apiIdentifier?: string; // board name for greenhouse, company name for lever
+  atsType: "greenhouse" | "lever" | "ashby" | "smartrecruiters" | "recruitee";
+  slug: string;
+  category?: string;
 }
 
 export const companies: CompanyCareerSite[] = [
-  // ── GREENHOUSE API COMPLEMENTS ─────────────────────────────────────────────
-  {
-    name: "Vercel",
-    baseUrl: "https://vercel.com",
-    apiType: "greenhouse",
-    apiIdentifier: "vercel",
-  },
+  // ── GREENHOUSE API COMPANIES (VERIFIED WORKING) ──────────────────────────
+  { name: "Airbnb", atsType: "greenhouse", slug: "airbnb", category: "Travel/Tech" },
+  { name: "Stripe", atsType: "greenhouse", slug: "stripe", category: "Fintech" },
+  { name: "Figma", atsType: "greenhouse", slug: "figma", category: "Design/SaaS" },
+  { name: "Vercel", atsType: "greenhouse", slug: "vercel", category: "Dev Tools" },
+  { name: "Datadog", atsType: "greenhouse", slug: "datadog", category: "Monitoring" },
+  { name: "MongoDB", atsType: "greenhouse", slug: "mongodb", category: "Databases" },
+  { name: "Twilio", atsType: "greenhouse", slug: "twilio", category: "API/Communications" },
+  { name: "Cloudflare", atsType: "greenhouse", slug: "cloudflare", category: "Security/CDN" },
+  { name: "PhonePe", atsType: "greenhouse", slug: "phonepe", category: "Fintech/India" },
+  { name: "Dropbox", atsType: "greenhouse", slug: "dropbox", category: "SaaS/Storage" },
+  { name: "Coinbase", atsType: "greenhouse", slug: "coinbase", category: "Crypto/Fintech" },
+  { name: "Databricks", atsType: "greenhouse", slug: "databricks", category: "AI/Data" },
+  { name: "Lyft", atsType: "greenhouse", slug: "lyft", category: "Ride Sharing" },
+  { name: "Anthropic", atsType: "greenhouse", slug: "anthropic", category: "AI" },
+  { name: "Pinterest", atsType: "greenhouse", slug: "pinterest", category: "Social Media" },
+  { name: "HubSpot", atsType: "greenhouse", slug: "hubspot", category: "SaaS/Marketing" },
+  { name: "Okta", atsType: "greenhouse", slug: "okta", category: "Identity" },
+  { name: "Affirm", atsType: "greenhouse", slug: "affirm", category: "Fintech/BNPL" },
+  { name: "Gusto", atsType: "greenhouse", slug: "gusto", category: "HR Tech" },
+  { name: "Instacart", atsType: "greenhouse", slug: "instacart", category: "Delivery" },
+  { name: "Reddit", atsType: "greenhouse", slug: "reddit", category: "Social Media" },
+  { name: "Robinhood", atsType: "greenhouse", slug: "robinhood", category: "Fintech" },
+  { name: "Asana", atsType: "greenhouse", slug: "asana", category: "Productivity" },
+  { name: "GitLab", atsType: "greenhouse", slug: "gitlab", category: "Dev Tools" },
+  { name: "Postman", atsType: "greenhouse", slug: "postman", category: "Dev Tools" },
+  { name: "Elastic", atsType: "greenhouse", slug: "elastic", category: "Search" },
+  { name: "PagerDuty", atsType: "greenhouse", slug: "pagerduty", category: "Dev Tools" },
+  { name: "Groww", atsType: "greenhouse", slug: "groww", category: "Fintech/India" },
+  { name: "Scale AI", atsType: "greenhouse", slug: "scaleai", category: "AI/Data" },
+  { name: "Tailscale", atsType: "greenhouse", slug: "tailscale", category: "Security" },
+  { name: "CircleCI", atsType: "greenhouse", slug: "circleci", category: "Dev Tools" },
 
-  {
-    name: "Figma",
-    baseUrl: "https://www.figma.com",
-    apiType: "greenhouse",
-    apiIdentifier: "figma",
-  },
-  {
-    name: "Supabase",
-    baseUrl: "https://supabase.com",
-    apiType: "greenhouse",
-    apiIdentifier: "supabase",
-  },
-  {
-    name: "Airbnb",
-    baseUrl: "https://careers.airbnb.com",
-    apiType: "greenhouse",
-    apiIdentifier: "airbnb",
-  },
-  {
-    name: "Dropbox",
-    baseUrl: "https://www.dropbox.com",
-    apiType: "greenhouse",
-    apiIdentifier: "dropbox",
-  },
-  {
-    name: "Datadog",
-    baseUrl: "https://www.datadoghq.com",
-    apiType: "greenhouse",
-    apiIdentifier: "datadog",
-  },
-  {
-    name: "MongoDB",
-    baseUrl: "https://www.mongodb.com",
-    apiType: "greenhouse",
-    apiIdentifier: "mongodb",
-  },
-  {
-    name: "Twilio",
-    baseUrl: "https://careers.twilio.com",
-    apiType: "greenhouse",
-    apiIdentifier: "twilio",
-  },
+  // ── LEVER API COMPANIES (VERIFIED WORKING) ───────────────────────────────
+  { name: "Netflix", atsType: "lever", slug: "netflix", category: "Streaming/Entertainment" },
+  { name: "Spotify", atsType: "lever", slug: "spotify", category: "Music/Streaming" },
+  { name: "Freshworks", atsType: "lever", slug: "freshworks", category: "SaaS/India" },
+  { name: "Lever", atsType: "lever", slug: "lever", category: "HR Tech" },
+  { name: "Hotstar", atsType: "lever", slug: "hotstar", category: "Streaming/India" },
+  { name: "Medium", atsType: "lever", slug: "medium", category: "Publishing" },
+  { name: "15Five", atsType: "lever", slug: "15five", category: "HR Tech" },
+  { name: "Palantir", atsType: "lever", slug: "palantir", category: "Data Analytics" },
 
-  {
-    name: "Cloudflare",
-    baseUrl: "https://www.cloudflare.com",
-    apiType: "greenhouse",
-    apiIdentifier: "cloudflare",
-  },
+  // ── ASHBY API COMPANIES (VERIFIED WORKING) ───────────────────────────────
+  { name: "OpenAI", atsType: "ashby", slug: "openai", category: "AI" },
+  { name: "Notion", atsType: "ashby", slug: "notion", category: "Productivity" },
+  { name: "Ramp", atsType: "ashby", slug: "ramp", category: "Fintech" },
+  { name: "Linear", atsType: "ashby", slug: "linear", category: "Productivity" },
+  { name: "Cursor", atsType: "ashby", slug: "cursor", category: "AI/Dev Tools" },
+  { name: "Deel", atsType: "ashby", slug: "deel", category: "HR Tech/Fintech" },
+  { name: "PostHog", atsType: "ashby", slug: "posthog", category: "Analytics" },
+  { name: "Vanta", atsType: "ashby", slug: "vanta", category: "Compliance" },
+  { name: "Confluent", atsType: "ashby", slug: "confluent", category: "Data Streaming" },
+  { name: "Snowflake", atsType: "ashby", slug: "snowflake", category: "Data Warehouse" },
+  { name: "ElevenLabs", atsType: "ashby", slug: "elevenlabs", category: "AI/Voice" },
+  { name: "LangChain", atsType: "ashby", slug: "langchain", category: "AI/Dev Tools" },
+  { name: "Pinecone", atsType: "ashby", slug: "pinecone", category: "Vector Databases" },
+  { name: "Weaviate", atsType: "ashby", slug: "weaviate", category: "Vector Databases" },
+  { name: "Temporal", atsType: "ashby", slug: "temporal", category: "Backend Orchestration" },
+  { name: "Railway", atsType: "ashby", slug: "railway", category: "Cloud Hosting" },
+  { name: "Clerk", atsType: "ashby", slug: "clerk", category: "Auth/Identity" },
+  { name: "Resend", atsType: "ashby", slug: "resend", category: "Email API" },
+  { name: "Neon", atsType: "ashby", slug: "neon", category: "Serverless Postgres" },
 
-  {
-    name: "PhonePe",
-    baseUrl: "https://www.phonepe.com",
-    apiType: "greenhouse",
-    apiIdentifier: "phonepe",
-  },
+  // ── SMARTRECRUITERS COMPANIES (VERIFIED WORKING) ─────────────────────────
+  { name: "Visa", atsType: "smartrecruiters", slug: "visa", category: "Fintech/Payments" },
+  { name: "IKEA", atsType: "smartrecruiters", slug: "ikea", category: "Retail" },
+  { name: "Bosch", atsType: "smartrecruiters", slug: "bosch", category: "Industrial/Hardware" },
+  { name: "Equinix", atsType: "smartrecruiters", slug: "equinix", category: "Data Centers" },
+  { name: "Sanofi", atsType: "smartrecruiters", slug: "sanofi", category: "Pharma" },
+  { name: "Ubisoft", atsType: "smartrecruiters", slug: "ubisoft", category: "Gaming" },
+  { name: "Colliers", atsType: "smartrecruiters", slug: "colliers", category: "Real Estate" },
+  { name: "Skechers", atsType: "smartrecruiters", slug: "skechers", category: "Retail" },
 
-
-  // ── LEVER API COMPLEMENTS ──────────────────────────────────────────────────
-  {
-    name: "Netflix",
-    baseUrl: "https://jobs.netflix.com",
-    apiType: "lever",
-    apiIdentifier: "netflix",
-  },
-
-  {
-    name: "Freshworks",
-    baseUrl: "https://www.freshworks.com",
-    apiType: "lever",
-    apiIdentifier: "freshworks",
-  },
-
-  // ── HTML SCRAPING & WORKDAY SITES ──────────────────────────────────────────
-  {
-    name: "Snowflake",
-    baseUrl: "https://careers.snowflake.com",
-    crawlerType: "dynamic",
-    searchUrl: () => `https://careers.snowflake.com/`,
-  },
-  {
-    name: "Razorpay",
-    baseUrl: "https://razorpay.com",
-    crawlerType: "dynamic",
-    searchUrl: () => `https://razorpay.com/jobs/`,
-  },
-  {
-    name: "Notion",
-    baseUrl: "https://www.notion.so",
-    crawlerType: "static",
-    searchUrl: (skill: string) =>
-      `https://www.notion.so/careers?search=${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "Linear",
-    baseUrl: "https://linear.app",
-    crawlerType: "static",
-    searchUrl: () => `https://linear.app/careers`,
-  },
-  {
-    name: "Swiggy",
-    baseUrl: "https://careers.swiggy.com",
-    crawlerType: "dynamic",
-    searchUrl: () => `https://careers.swiggy.com/`,
-  },
-  {
-    name: "Zomato",
-    baseUrl: "https://www.zomato.com",
-    crawlerType: "dynamic",
-    searchUrl: () => `https://www.zomato.com/careers`,
-  },
-  {
-    name: "CRED",
-    baseUrl: "https://careers.cred.club",
-    crawlerType: "dynamic",
-    searchUrl: () => `https://careers.cred.club/`,
-  },
-  {
-    name: "Juspay",
-    baseUrl: "https://juspay.in",
-    crawlerType: "dynamic",
-    searchUrl: () => `https://juspay.in/careers`,
-  },
-  {
-    name: "Meesho",
-    baseUrl: "https://meesho.careers",
-    crawlerType: "dynamic",
-    searchUrl: () => `https://meesho.careers/`,
-  },
-  {
-    name: "Google",
-    baseUrl: "https://www.google.com",
-    crawlerType: "dynamic",
-    searchUrl: (skill: string) =>
-      `https://www.google.com/about/careers/applications/jobs/results/?q=${encodeURIComponent(skill)}&target_level=EARLY&target_level=MID&target_level=ADVANCED`,
-  },
-  {
-    name: "Stripe",
-    baseUrl: "https://stripe.com",
-    crawlerType: "dynamic",
-    searchUrl: (skill: string) =>
-      `https://stripe.com/jobs/search?query=${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "Shopify",
-    baseUrl: "https://www.shopify.com",
-    crawlerType: "dynamic",
-    searchUrl: (skill: string) =>
-      `https://www.shopify.com/careers/search?keywords=${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "Microsoft",
-    baseUrl: "https://careers.microsoft.com",
-    crawlerType: "dynamic",
-    searchUrl: (skill: string) =>
-      `https://careers.microsoft.com/v2/global/en/search.html?q=${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "Amazon",
-    baseUrl: "https://www.amazon.jobs",
-    crawlerType: "dynamic",
-    searchUrl: (skill: string) =>
-      `https://www.amazon.jobs/en/search?base_query=${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "Apple",
-    baseUrl: "https://jobs.apple.com",
-    crawlerType: "dynamic",
-    searchUrl: (skill: string) =>
-      `https://jobs.apple.com/en-us/search?search=${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "Meta",
-    baseUrl: "https://www.metacareers.com",
-    crawlerType: "dynamic",
-    searchUrl: (skill: string) =>
-      `https://www.metacareers.com/jobs/?q=${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "Adobe",
-    baseUrl: "https://adobe.wd5.myworkdayjobs.com",
-    crawlerType: "static",
-    searchUrl: (skill: string) =>
-      `https://adobe.wd5.myworkdayjobs.com/external_careers?q=${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "Salesforce",
-    baseUrl: "https://salesforce.wd1.myworkdayjobs.com",
-    crawlerType: "static",
-    searchUrl: (skill: string) =>
-      `https://salesforce.wd1.myworkdayjobs.com/External_Career_Site?q=${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "Oracle",
-    baseUrl: "https://careers.oracle.com",
-    crawlerType: "dynamic",
-    searchUrl: (skill: string) =>
-      `https://careers.oracle.com/jobs/?search=${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "SAP",
-    baseUrl: "https://jobs.sap.com",
-    crawlerType: "dynamic",
-    searchUrl: (skill: string) =>
-      `https://jobs.sap.com/search/?q=${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "IBM",
-    baseUrl: "https://www.ibm.com",
-    crawlerType: "dynamic",
-    searchUrl: (skill: string) =>
-      `https://www.ibm.com/careers/search?q=${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "Intel",
-    baseUrl: "https://jobs.intel.com",
-    crawlerType: "dynamic",
-    searchUrl: (skill: string) =>
-      `https://jobs.intel.com/en/search-jobs/${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "NVIDIA",
-    baseUrl: "https://nvidia.wd5.myworkdayjobs.com",
-    crawlerType: "static",
-    searchUrl: (skill: string) =>
-      `https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite?q=${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "AMD",
-    baseUrl: "https://careers.amd.com",
-    crawlerType: "dynamic",
-    searchUrl: (skill: string) =>
-      `https://careers.amd.com/jobs/search?query=${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "Cisco",
-    baseUrl: "https://jobs.cisco.com",
-    crawlerType: "dynamic",
-    searchUrl: (skill: string) =>
-      `https://jobs.cisco.com/jobs/SearchJobs/${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "Atlassian",
-    baseUrl: "https://www.atlassian.com",
-    crawlerType: "dynamic",
-    searchUrl: (skill: string) =>
-      `https://www.atlassian.com/company/careers/all-jobs?search=${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "GitHub",
-    baseUrl: "https://github.com",
-    crawlerType: "static",
-    searchUrl: (skill: string) =>
-      `https://github.com/about/careers?q=${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "Uber",
-    baseUrl: "https://www.uber.com",
-    crawlerType: "dynamic",
-    searchUrl: (skill: string) =>
-      `https://www.uber.com/global/en/careers/list/?q=${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "LinkedIn",
-    baseUrl: "https://www.linkedin.com",
-    crawlerType: "dynamic",
-    searchUrl: (skill: string) =>
-      `https://www.linkedin.com/careers/search?keywords=${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "PayPal",
-    baseUrl: "https://paypal.wd1.myworkdayjobs.com",
-    crawlerType: "static",
-    searchUrl: (skill: string) =>
-      `https://paypal.wd1.myworkdayjobs.com/jobs?q=${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "Spotify",
-    baseUrl: "https://www.lifeatspotify.com",
-    crawlerType: "dynamic",
-    searchUrl: (skill: string) =>
-      `https://www.lifeatspotify.com/jobs?q=${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "ServiceNow",
-    baseUrl: "https://careers.servicenow.com",
-    crawlerType: "dynamic",
-    searchUrl: (skill: string) =>
-      `https://careers.servicenow.com/jobs/?q=${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "TCS",
-    baseUrl: "https://www.tcs.com",
-    crawlerType: "dynamic",
-    searchUrl: () => `https://www.tcs.com/careers`,
-  },
-  {
-    name: "Infosys",
-    baseUrl: "https://career.infosys.com",
-    crawlerType: "dynamic",
-    searchUrl: () => `https://career.infosys.com/`,
-  },
-  {
-    name: "Wipro",
-    baseUrl: "https://careers.wipro.com",
-    crawlerType: "dynamic",
-    searchUrl: () => `https://careers.wipro.com/`,
-  },
-  {
-    name: "HCLTech",
-    baseUrl: "https://www.hcltech.com",
-    crawlerType: "dynamic",
-    searchUrl: () => `https://www.hcltech.com/careers`,
-  },
-  {
-    name: "Tech Mahindra",
-    baseUrl: "https://careers.techmahindra.com",
-    crawlerType: "dynamic",
-    searchUrl: () => `https://careers.techmahindra.com/`,
-  },
-  {
-    name: "Accenture",
-    baseUrl: "https://www.accenture.com",
-    crawlerType: "dynamic",
-    searchUrl: (skill: string) =>
-      `https://www.accenture.com/in-en/careers/jobsearch?jk=${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "Capgemini",
-    baseUrl: "https://www.capgemini.com",
-    crawlerType: "dynamic",
-    searchUrl: (skill: string) =>
-      `https://www.capgemini.com/careers/job-search/?q=${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "Cognizant",
-    baseUrl: "https://careers.cognizant.com",
-    crawlerType: "dynamic",
-    searchUrl: (skill: string) =>
-      `https://careers.cognizant.com/global/en/search-results?q=${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "Deloitte",
-    baseUrl: "https://jobsindia.deloitte.com",
-    crawlerType: "dynamic",
-    searchUrl: (skill: string) =>
-      `https://jobsindia.deloitte.com/search/?q=${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "PwC",
-    baseUrl: "https://jobs.us.pwc.com",
-    crawlerType: "dynamic",
-    searchUrl: (skill: string) =>
-      `https://jobs.us.pwc.com/search-jobs/${encodeURIComponent(skill)}`,
-  },
-  {
-    name: "Zoho",
-    baseUrl: "https://www.zoho.com",
-    crawlerType: "static",
-    searchUrl: () => `https://www.zoho.com/careers/jobs.html`,
-  },
-  {
-    name: "Flipkart",
-    baseUrl: "https://www.flipkartcareers.com",
-    crawlerType: "dynamic",
-    searchUrl: () => `https://www.flipkartcareers.com/jobs`,
-  },
+  // ── RECRUITEE COMPANIES (VERIFIED WORKING) ───────────────────────────────
+  { name: "bunq", atsType: "recruitee", slug: "bunq", category: "Fintech" }
 ];

@@ -18,8 +18,8 @@ export class InternshalaAdapter implements SourceAdapter {
       try {
         return await this.scrapeWithCheerio(url);
       } catch (cheerioErr: any) {
-        console.warn(`[Internshala Adapter] Cheerio failed (${cheerioErr.message}). Generating mock internships fallback...`);
-        return this.generateMockInternships(keyword);
+        console.warn(`[Internshala Adapter] Cheerio failed (${cheerioErr.message}). Returning empty list.`);
+        return [];
       }
     }
 
@@ -30,8 +30,8 @@ export class InternshalaAdapter implements SourceAdapter {
       try {
         return await this.scrapeWithCheerio(url);
       } catch (cheerioErr: any) {
-        console.warn(`[Internshala Adapter] Cheerio also failed (${cheerioErr.message}). Generating mock internships fallback...`);
-        return this.generateMockInternships(keyword);
+        console.warn(`[Internshala Adapter] Cheerio also failed (${cheerioErr.message}). Returning empty list.`);
+        return [];
       }
     }
   }
@@ -272,101 +272,5 @@ export class InternshalaAdapter implements SourceAdapter {
       fetchedAt: new Date(),
       dedupeHash,
     };
-  }
-
-  private generateMockInternships(keyword: string): any[] {
-    const kw = keyword.toLowerCase();
-    const mockTemplates = [
-      {
-        title: "React Web Development Intern",
-        company: "TechSolutions Pvt Ltd",
-        location: "Work From Home",
-        salaryText: "₹ 15,000 /month",
-        skills: ["react", "javascript", "css"],
-        salaryMin: 15000,
-        salaryMax: 18000,
-      },
-      {
-        title: "Mobile App Development Intern",
-        company: "AppWorks Lab",
-        location: "Bengaluru, Karnataka",
-        salaryText: "₹ 20,000 /month",
-        skills: ["react native", "javascript", "git"],
-        salaryMin: 20000,
-        salaryMax: 25000,
-      },
-      {
-        title: "Python & Data Science Intern",
-        company: "Analyzo Systems",
-        location: "Work From Home",
-        salaryText: "₹ 12,000 /month",
-        skills: ["python", "data structures", "machine learning"],
-        salaryMin: 12000,
-        salaryMax: 15000,
-      },
-      {
-        title: "Software Engineering Intern",
-        company: "SoftCorp Technologies",
-        location: "Noida, Uttar Pradesh",
-        salaryText: "₹ 25,000 /month",
-        skills: ["node.js", "typescript", "rest apis"],
-        salaryMin: 25000,
-        salaryMax: 30000,
-      },
-      {
-        title: "UI/UX & Product Design Intern",
-        company: "CreativeEdge Studios",
-        location: "Remote",
-        salaryText: "₹ 10,000 /month",
-        skills: ["figma", "ui/ux design"],
-        salaryMin: 10000,
-        salaryMax: 12000,
-      }
-    ];
-
-    const matched = mockTemplates.filter(t => 
-      t.title.toLowerCase().includes(kw) ||
-      t.company.toLowerCase().includes(kw) ||
-      t.skills.some(s => s.toLowerCase().includes(kw))
-    );
-
-    const finalSelection = matched.length > 0 ? matched : mockTemplates;
-
-    return finalSelection.map((m, index) => {
-      const rawHashInput = `${m.title}${m.company}${m.location}`.toLowerCase();
-      const dedupeHash = crypto.createHash("sha256").update(rawHashInput).digest("hex");
-
-      const mockJob: UnifiedJob = {
-        sourceId: `mock-is-${index}`,
-        source: this.source,
-        sourceUrl: `https://internshala.com/internship/detail/mock-${index}`,
-        applyUrl: `https://internshala.com/internships/keywords-${encodeURIComponent(kw)}`,
-        title: m.title,
-        company: m.company,
-        companyLogoUrl: null,
-        location: m.location,
-        city: m.location.split(",")[0],
-        country: "India",
-        isRemote: m.location.toLowerCase().includes("home") || m.location.toLowerCase().includes("remote"),
-        jobType: "internship",
-        experienceLevel: "entry",
-        skills: m.skills,
-        salaryMin: m.salaryMin,
-        salaryMax: m.salaryMax,
-        salaryCurrency: "INR",
-        salaryPeriod: "monthly",
-        description: `Exciting internship opportunity at ${m.company} for a ${m.title}. Gain practical hands-on experience working on real-world projects.`,
-        descriptionHtml: `<p>Exciting internship opportunity at ${m.company} for a ${m.title}. Gain practical hands-on experience working on real-world projects.</p>`,
-        postedAt: new Date(Date.now() - index * 3 * 24 * 60 * 60 * 1000), // days ago
-        expiresAt: null,
-        fetchedAt: new Date(),
-        dedupeHash,
-      };
-
-      return {
-        ...mockJob,
-        _isMock: true
-      };
-    });
   }
 }

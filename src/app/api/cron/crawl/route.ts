@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
 
     const keywords = isCustom ? customKeywords : (process.env.FETCH_KEYWORDS || "software engineer,frontend developer,backend developer").split(",");
     
-    let sources: JobSource[] = ["linkedin", "indeed", "wellfound", "internshala", "careers"];
+    let sources: JobSource[] = ["linkedin", "indeed", "wellfound", "internshala", "careers", "aggregator"];
     if (targetSource && sources.includes(targetSource as JobSource)) {
       sources = [targetSource as JobSource];
     }
