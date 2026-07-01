@@ -12,17 +12,13 @@ const footerLinks = {
     { label: 'AI Matching', href: '/' },
   ],
   Company: [
-    { label: 'About Us', href: '/' },
-    { label: 'Blog', href: '/' },
-    { label: 'Careers', href: '/' },
-    { label: 'Press', href: '/' },
-    { label: 'Partners', href: '/' },
+    { label: 'About Us', href: '/about-us' },
   ],
   Legal: [
-    { label: 'Privacy Policy', href: '/' },
-    { label: 'Terms of Service', href: '/' },
-    { label: 'Cookie Policy', href: '/' },
-    { label: 'GDPR', href: '/' },
+    { label: 'Privacy Policy', href: '/privacy-policy' },
+    { label: 'Terms of Service', href: '/terms-of-service' },
+    { label: 'Cookie Policy', href: '/cookie-policy' },
+    { label: 'GDPR Compliance', href: '/gdpr-compliance' },
   ],
 };
 
@@ -47,9 +43,10 @@ export default function Footer() {
               </span>
             </Link>
             <p className="text-sm text-muted-foreground leading-relaxed max-w-xs mb-6">
-              The AI-powered job platform that aggregates job openings and matches you with your perfect role.
+              Search once. Discover opportunities everywhere.<br />
+              Find thousands of jobs from leading platforms—all in one place.
             </p>
-            <div className="flex gap-3">
+            {/* <div className="flex gap-3">
               {[MessageCircle, Link2, Code2, Play].map((Icon, i) => (
                 <a
                   key={i}
@@ -59,7 +56,7 @@ export default function Footer() {
                   <Icon className="w-4 h-4" />
                 </a>
               ))}
-            </div>
+            </div> */}
           </div>
 
           {/* Links */}
