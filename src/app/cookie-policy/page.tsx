@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Cookie Policy | JobFusion',
-  description: 'Understand how JobFusion uses cookies to improve your experience.',
+  description: 'Cookie Policy for JobFusion.',
 };
 
 export default function CookiePolicyPage() {
@@ -14,52 +14,28 @@ export default function CookiePolicyPage() {
             <span className="gradient-brand-text">Cookie </span>
             Policy
           </h1>
-          <p className="text-muted-foreground mb-10">Last Updated: July 1, 2026</p>
+          <p className="text-muted-foreground mb-10">Last Updated: July 01, 2026</p>
           
           <div className="space-y-8 text-foreground/90 leading-relaxed">
+            <p className="text-muted-foreground">This Cookie Policy explains what cookies are and how we use them on Job Fusion.</p>
+            
             <section>
-              <h2 className="text-2xl font-semibold text-foreground mb-4">1. What Are Cookies?</h2>
-              <p>Cookies are small text files that are placed on your computer or mobile device when you visit a website. They are widely used in order to make websites work, or work more efficiently, as well as to provide reporting information to the site owners.</p>
+              <h2 className="text-2xl font-semibold text-foreground mb-4">What Are Cookies?</h2>
+              <p className="text-muted-foreground">Cookies are small text files that are used to store small pieces of information. They are stored on your device when the website is loaded on your browser. They help us make the website function properly, make it more secure, and provide a better user experience.</p>
             </section>
             
             <section>
-              <h2 className="text-2xl font-semibold text-foreground mb-4">2. How We Use Cookies</h2>
-              <p>We use cookies for a variety of reasons detailed below. Unfortunately, in most cases, there are no industry standard options for disabling cookies without completely disabling the functionality and features they add to this site. It is recommended that you leave on all cookies if you are not sure whether you need them or not in case they are used to provide a service that you use.</p>
-            </section>
-
-            <section>
-              <h2 className="text-2xl font-semibold text-foreground mb-4">3. The Cookies We Set</h2>
-              <ul className="list-disc pl-6 mt-4 space-y-4 text-muted-foreground">
-                <li>
-                  <strong className="text-foreground block mb-1">Account related cookies</strong>
-                  If you create an account with us, we will use cookies for the management of the signup process and general administration. These cookies will usually be deleted when you log out; however, in some cases, they may remain afterwards to remember your site preferences when logged out.
-                </li>
-                <li>
-                  <strong className="text-foreground block mb-1">Login related cookies</strong>
-                  We use cookies when you are logged in so that we can remember this fact. This prevents you from having to log in every single time you visit a new page. These cookies are typically removed or cleared when you log out.
-                </li>
-                <li>
-                  <strong className="text-foreground block mb-1">Site preferences cookies</strong>
-                  In order to provide you with a great experience on this site, we provide the functionality to set your preferences for how this site runs when you use it. In order to remember your preferences, we need to set cookies so that this information can be called whenever you interact with a page affected by your preferences.
-                </li>
+              <h2 className="text-2xl font-semibold text-foreground mb-4">How We Use Cookies</h2>
+              <ul className="list-disc pl-6 space-y-4 text-muted-foreground">
+                <li><strong className="text-foreground">Essential/Authentication Cookies:</strong> These are necessary for the core functionality of our site. For example, staying logged into your Job Fusion account as you browse different pages requires these cookies.</li>
+                <li><strong className="text-foreground">Preference Cookies:</strong> These allow our website to remember choices you make (like language preferences or dark/light mode configurations).</li>
+                <li><strong className="text-foreground">Analytics & Performance Cookies:</strong> We may use third-party analytics services (such as Google Analytics) to monitor and analyze the use of our service, helping us improve the job-searching experience.</li>
               </ul>
             </section>
-
-            <section>
-              <h2 className="text-2xl font-semibold text-foreground mb-4">4. Third-Party Cookies</h2>
-              <p>In some special cases, we also use cookies provided by trusted third parties. The following section details which third party cookies you might encounter through this site.</p>
-              <p className="mt-4">This site uses Google Analytics, which is one of the most widespread and trusted analytics solutions on the web, for helping us to understand how you use the site and ways that we can improve your experience. These cookies may track things such as how long you spend on the site and the pages that you visit so we can continue to produce engaging content.</p>
-            </section>
-
-            <section>
-              <h2 className="text-2xl font-semibold text-foreground mb-4">5. Disabling Cookies</h2>
-              <p>You can prevent the setting of cookies by adjusting the settings on your browser (see your browser Help for how to do this). Be aware that disabling cookies will affect the functionality of this and many other websites that you visit. Disabling cookies will usually result in also disabling certain functionality and features of this site. Therefore, it is recommended that you do not disable cookies.</p>
-            </section>
             
             <section>
-              <h2 className="text-2xl font-semibold text-foreground mb-4">6. More Information</h2>
-              <p>Hopefully, that has clarified things for you. If there is something that you aren't sure whether you need or not, it's usually safer to leave cookies enabled in case it does interact with one of the features you use on our site.</p>
-              <p className="mt-4">For more information, please contact us at privacy@jobfusion.com.</p>
+              <h2 className="text-2xl font-semibold text-foreground mb-4">Managing Your Cookie Preferences</h2>
+              <p className="text-muted-foreground">You can choose to disable cookies through your individual browser options. To know more detailed information about cookie management with specific web browsers, it can be found at the browsers' respective websites.</p>
             </section>
           </div>
         </div>

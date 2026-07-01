@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy | JobFusion',
-  description: 'Learn how JobFusion collects, uses, and protects your personal data.',
+  description: 'Privacy Policy for JobFusion.',
 };
 
 export default function PrivacyPolicyPage() {
@@ -14,48 +14,37 @@ export default function PrivacyPolicyPage() {
             <span className="gradient-brand-text">Privacy </span>
             Policy
           </h1>
-          <p className="text-muted-foreground mb-10">Last Updated: July 1, 2026</p>
+          <p className="text-muted-foreground mb-10">Last Updated: July 01, 2026</p>
           
           <div className="space-y-8 text-foreground/90 leading-relaxed">
+            <p className="text-muted-foreground">At Job Fusion, accessible from job-fusion-omega.vercel.app, one of our main priorities is the privacy of our visitors. This Privacy Policy document contains types of information that is collected and recorded by Job Fusion and how we use it.</p>
+            
             <section>
-              <h2 className="text-2xl font-semibold text-foreground mb-4">1. Introduction</h2>
-              <p>Welcome to JobFusion ("Company", "we", "our", "us"). We respect your privacy and are committed to protecting your personal data. This privacy policy will inform you as to how we look after your personal data when you visit our website and tell you about your privacy rights and how the law protects you.</p>
+              <h2 className="text-2xl font-semibold text-foreground mb-4">Information We Collect</h2>
+              <ul className="list-disc pl-6 space-y-4 text-muted-foreground">
+                <li><strong className="text-foreground">Account Information:</strong> When you register for an account (as a Job Seeker or Employer), we may ask for your contact information, including items such as name, company name, email address, and telephone number.</li>
+                <li><strong className="text-foreground">Profile & Resume Data:</strong> Job Seekers may upload resumes, CVs, work experience, education history, and skills to build their profiles.</li>
+                <li><strong className="text-foreground">Log Files:</strong> Job Fusion follows a standard procedure of using log files. These files log visitors when they visit websites. The information collected includes internet protocol (IP) addresses, browser type, Internet Service Provider (ISP), date and time stamp, referring/exit pages, and possibly the number of clicks.</li>
+              </ul>
             </section>
             
             <section>
-              <h2 className="text-2xl font-semibold text-foreground mb-4">2. The Data We Collect About You</h2>
-              <p>Personal data, or personal information, means any information about an individual from which that person can be identified. We may collect, use, store and transfer different kinds of personal data about you which we have grouped together as follows:</p>
-              <ul className="list-disc pl-6 mt-4 space-y-2 text-muted-foreground">
-                <li><strong className="text-foreground">Identity Data</strong> includes first name, last name, username or similar identifier.</li>
-                <li><strong className="text-foreground">Contact Data</strong> includes email address and telephone numbers.</li>
-                <li><strong className="text-foreground">Technical Data</strong> includes internet protocol (IP) address, your login data, browser type and version, time zone setting and location, browser plug-in types and versions, operating system and platform.</li>
-                <li><strong className="text-foreground">Profile Data</strong> includes your username and password, your interests, preferences, feedback and survey responses.</li>
+              <h2 className="text-2xl font-semibold text-foreground mb-4">How We Use Your Information</h2>
+              <ul className="list-disc pl-6 space-y-2 text-muted-foreground">
+                <li>To provide, operate, and maintain our job portal platform.</li>
+                <li>To connect Job Seekers with prospective Employers.</li>
+                <li>To improve, personalize, and expand our website features.</li>
+                <li>To communicate with you, either directly or through one of our partners, including for customer service, to provide you with updates and other information relating to the website.</li>
+                <li>To send you automated emails regarding job alerts or application statuses.</li>
               </ul>
             </section>
-
+            
             <section>
-              <h2 className="text-2xl font-semibold text-foreground mb-4">3. How We Use Your Personal Data</h2>
-              <p>We will only use your personal data when the law allows us to. Most commonly, we will use your personal data in the following circumstances:</p>
-              <ul className="list-disc pl-6 mt-4 space-y-2 text-muted-foreground">
-                <li>Where we need to perform the contract we are about to enter into or have entered into with you.</li>
-                <li>Where it is necessary for our legitimate interests (or those of a third party) and your interests and fundamental rights do not override those interests.</li>
-                <li>Where we need to comply with a legal obligation.</li>
+              <h2 className="text-2xl font-semibold text-foreground mb-4">Data Sharing and Disclosure</h2>
+              <ul className="list-disc pl-6 space-y-4 text-muted-foreground">
+                <li><strong className="text-foreground">With Employers/Recruiters:</strong> If you apply for a job, your profile and resume data will be shared with the respective employer.</li>
+                <li><strong className="text-foreground">Third-Party Service Providers:</strong> We may share your data with trusted third-party services that host our infrastructure, handle analytics, or manage email dispatching. We do not sell or rent your personal information to third parties.</li>
               </ul>
-            </section>
-
-            <section>
-              <h2 className="text-2xl font-semibold text-foreground mb-4">4. Data Security</h2>
-              <p>We have put in place appropriate security measures to prevent your personal data from being accidentally lost, used, or accessed in an unauthorised way, altered, or disclosed. In addition, we limit access to your personal data to those employees, agents, contractors, and other third parties who have a business need to know.</p>
-            </section>
-
-            <section>
-              <h2 className="text-2xl font-semibold text-foreground mb-4">5. Your Legal Rights</h2>
-              <p>Under certain circumstances, you have rights under data protection laws in relation to your personal data, including the right to request access, correction, erasure, restriction, transfer, to object to processing, to portability of data and (where the lawful ground of processing is consent) to withdraw consent.</p>
-            </section>
-
-            <section>
-              <h2 className="text-2xl font-semibold text-foreground mb-4">6. Contact Us</h2>
-              <p>If you have any questions about this privacy policy or our privacy practices, please contact us at privacy@jobfusion.com.</p>
             </section>
           </div>
         </div>
