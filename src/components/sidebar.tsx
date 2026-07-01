@@ -96,26 +96,18 @@ function NavLink({ item, collapsed, pathname, onClick }: {
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(() => {
-    if (typeof window !== 'undefined') return localStorage.getItem('sidebar_collapsed') === 'true';
-    return false;
-  });
-  const [user, setUser] = useState<DbUser | null>(() => {
-    if (typeof window !== 'undefined') {
-      const cached = sessionStorage.getItem('jobfusion_user');
-      return cached ? JSON.parse(cached) : null;
-    }
-    return null;
-  });
-  const [savedCount, setSavedCount] = useState<number>(() => {
-    if (typeof window !== 'undefined') {
-      const cached = sessionStorage.getItem('jobfusion_saved_count');
-      return cached ? parseInt(cached, 10) : 0;
-    }
-    return 0;
-  });
+  const [collapsed, setCollapsed] = useState(false);
+  const [user, setUser] = useState<DbUser | null>(null);
+  const [savedCount, setSavedCount] = useState<number>(0);
 
   useEffect(() => {
+    // Safely read client-only storage after mount to avoid hydration mismatch
+    setCollapsed(localStorage.getItem('sidebar_collapsed') === 'true');
+    const cachedUser = sessionStorage.getItem('jobfusion_user');
+    if (cachedUser) setUser(JSON.parse(cachedUser));
+    const cachedCount = sessionStorage.getItem('jobfusion_saved_count');
+    if (cachedCount) setSavedCount(parseInt(cachedCount, 10));
+
     fetchCurrentUser().then(u => {
       if (u) { setUser(u); sessionStorage.setItem('jobfusion_user', JSON.stringify(u)); }
     }).catch(() => {});

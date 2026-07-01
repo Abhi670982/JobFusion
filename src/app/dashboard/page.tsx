@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   TrendingUp, Briefcase, Bookmark, Eye, MessageSquare,
   Sparkles, ArrowRight, CheckCircle2, XCircle,
-  Calendar, Star, ChevronRight, Zap, Code2, Smile, Bell
+  Calendar, Star, ChevronRight, Zap, Code2, Smile, FileText, User
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { calculateCompletion } from '@/lib/profile-completion';
 import {
-  fetchDashboardData, fetchDashboardActivity, fetchDashboardNotifications,
+  fetchDashboardData, fetchDashboardActivity,
   fetchDashboardMatches, DbUser, DbProfile
 } from '@/lib/api-helper';
 
@@ -121,8 +121,6 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<any>({ visitedCount: 0, skillsCount: 0, savedCount: 0 });
   const [activities, setActivities] = useState<any[]>([]);
   const [chartData, setChartData] = useState<any[]>([]);
-  const [notifs, setNotifs] = useState<any[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const [matchesCount, setMatchesCount] = useState(0);
 
   useEffect(() => {
@@ -134,13 +132,11 @@ export default function DashboardPage() {
           if (dash.profile?.isOnboarded === false) { router.push('/onboarding'); return; }
           setProfile(dash.profile);
           setStats(dash.stats);
-          setUnreadCount(dash.unreadNotificationsCount || 0);
 
-          const [actRes, notifRes, matchRes] = await Promise.all([
-            fetchDashboardActivity(), fetchDashboardNotifications(), fetchDashboardMatches()
+          const [actRes, matchRes] = await Promise.all([
+            fetchDashboardActivity(), fetchDashboardMatches()
           ]);
           if (actRes) { setActivities(actRes.recentActivities || []); setChartData(actRes.chartData || []); }
-          if (notifRes) setNotifs(notifRes);
           if (matchRes) setMatchesCount(matchRes.totalMatches || 0);
         } else {
           router.push('/sign-in');
@@ -175,11 +171,7 @@ export default function DashboardPage() {
           </h1>
           <p className="text-muted-foreground text-sm mt-0.5">
             {loading ? '...' : (
-              <>
-                <span className="font-semibold text-foreground">{matchesCount > 0 ? `${matchesCount} job matches` : 'No matches yet'}</span>
-                {' · '}
-                <span className="font-semibold text-foreground">{unreadCount} notification{unreadCount !== 1 ? 's' : ''}</span>
-              </>
+              <span className="font-semibold text-foreground">{matchesCount > 0 ? `${matchesCount} job matches found` : 'No matches yet — upload your resume!'}</span>
             )}
           </p>
         </div>
@@ -383,7 +375,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Activity + Notifications ── */}
+      {/* ── Activity + Quick Links ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Recent Activity */}
         <div className="card-premium p-5">
@@ -433,51 +425,32 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Notifications */}
+        {/* Quick Links */}
         <div className="card-premium p-5">
           <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-sm">Notifications</h3>
-              {unreadCount > 0 && (
-                <Badge className="h-5 px-1.5 text-[10px] gradient-brand text-white border-0 rounded-full">{unreadCount} new</Badge>
-              )}
-            </div>
-            <Link href="/jobs" className="text-xs text-primary hover:underline flex items-center gap-1 touch-auto">
-              Browse Jobs <ChevronRight className="w-3 h-3" />
-            </Link>
+            <h3 className="font-semibold text-sm">Quick Links</h3>
           </div>
           <div className="space-y-2">
-            {loading ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-muted/30">
-                  <Skeleton className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" />
-                  <div className="flex-1 space-y-1.5">
-                    <Skeleton className="h-3.5 w-1/3 rounded" />
-                    <Skeleton className="h-3 w-2/3 rounded" />
-                  </div>
+            {[
+              { href: '/jobs', icon: Briefcase,  color: '#6366f1', label: 'Browse Jobs',       sub: 'Search all available listings' },
+              { href: '/jobs/saved', icon: Bookmark,   color: '#f59e0b', label: 'Saved Jobs',        sub: 'View your bookmarked roles' },
+              { href: '/resume', icon: FileText,  color: '#10b981', label: 'Manage Resume',     sub: 'Upload or update your CV' },
+              { href: '/profile', icon: User,      color: '#ec4899', label: 'Edit Profile',      sub: 'Update your skills & experience' },
+              { href: '/settings', icon: Star,      color: '#8b5cf6', label: 'Settings',          sub: 'Appearance and preferences' },
+            ].map(({ href, icon: Icon, color, label, sub }) => (
+              <Link key={href} href={href}
+                className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted/50 transition-colors group">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{ backgroundColor: `${color}14` }}>
+                  <Icon className="w-4 h-4" style={{ color }} />
                 </div>
-              ))
-            ) : notifs.length === 0 ? (
-              <div className="text-center py-8">
-                <div className="w-10 h-10 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-2 text-muted-foreground">
-                  <Bell className="w-5 h-5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium group-hover:text-primary transition-colors">{label}</p>
+                  <p className="text-xs text-muted-foreground">{sub}</p>
                 </div>
-                <p className="text-sm text-muted-foreground">No new notifications.</p>
-                <p className="text-xs text-muted-foreground/70 mt-0.5">You're all caught up!</p>
-              </div>
-            ) : (
-              notifs.slice(0, 5).map((notif) => (
-                <div key={notif._id || notif.id}
-                  className={cn('flex items-start gap-3 p-3 rounded-xl transition-all', !notif.read ? 'bg-primary/5 border border-primary/10' : 'hover:bg-muted/40')}>
-                  <div className={cn('w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0', !notif.read ? 'bg-primary' : 'bg-border')} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold leading-tight">{notif.title}</p>
-                    <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">{notif.message}</p>
-                    <p className="text-[10px] text-muted-foreground/70 mt-1">{formatTime(notif.createdAt)}</p>
-                  </div>
-                </div>
-              ))
-            )}
+                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/50 flex-shrink-0" />
+              </Link>
+            ))}
           </div>
         </div>
       </div>

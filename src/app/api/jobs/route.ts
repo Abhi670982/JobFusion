@@ -165,7 +165,10 @@ export async function GET(req: NextRequest) {
         andConditions.push({
           $or: [
             { salaryMax: { $gte: parseInt(salaryMin, 10) } },
-            { salaryMin: { $gte: parseInt(salaryMin, 10) } }
+            { salaryMin: { $gte: parseInt(salaryMin, 10) } },
+            { salaryMin: { $eq: 0 } },
+            { salaryMin: { $eq: null } },
+            { salaryMin: { $exists: false } }
           ]
         });
       }
@@ -173,7 +176,10 @@ export async function GET(req: NextRequest) {
         andConditions.push({
           $or: [
             { salaryMin: { $lte: parseInt(salaryMax, 10) } },
-            { salaryMax: { $lte: parseInt(salaryMax, 10) } }
+            { salaryMax: { $lte: parseInt(salaryMax, 10) } },
+            { salaryMin: { $eq: 0 } },
+            { salaryMin: { $eq: null } },
+            { salaryMin: { $exists: false } }
           ]
         });
       }
