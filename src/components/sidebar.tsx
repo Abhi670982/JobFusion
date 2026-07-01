@@ -118,7 +118,7 @@ export default function Sidebar() {
   useEffect(() => {
     fetchCurrentUser().then(u => {
       if (u) { setUser(u); sessionStorage.setItem('jobfusion_user', JSON.stringify(u)); }
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   useEffect(() => {
@@ -126,7 +126,7 @@ export default function Sidebar() {
     fetchSavedJobs(user._id).then(saved => {
       setSavedCount(saved.length);
       sessionStorage.setItem('jobfusion_saved_count', String(saved.length));
-    }).catch(() => {});
+    }).catch(() => { });
   }, [pathname, user?._id]);
 
   const getInitials = () => {

@@ -57,7 +57,7 @@ function getRandomPosition(isMobile: boolean): { x: number; y: number } {
   while (inCenter) {
     x = isMobile ? (8 + Math.random() * 84) : (5 + Math.random() * 90);
     y = isMobile ? (8 + Math.random() * 84) : (5 + Math.random() * 90);
-    
+
     if (x > centerMinX && x < centerMaxX && y > centerMinY && y < centerMaxY) {
       inCenter = true;
     } else {
@@ -76,22 +76,22 @@ export default function HeroBackground() {
   useEffect(() => {
     const isMobile = window.innerWidth < 768;
     // Pick random companies to float
-    const logoCount = isMobile ? 7 : 14; 
+    const logoCount = isMobile ? 7 : 14;
     const shuffled = [...companies].sort(() => 0.5 - Math.random()).slice(0, logoCount);
-    
+
     const generatedLogos: LogoItem[] = [];
     const minDistance = isMobile ? 18 : 12; // Minimum % distance to prevent overlap
-    
+
     for (let i = 0; i < logoCount; i++) {
       let placed = false;
       let attempts = 0;
       let pos = { x: 0, y: 0 };
-      
+
       // Collision detection loop
       while (!placed && attempts < 100) {
         pos = getRandomPosition(isMobile);
         let collides = false;
-        
+
         for (const existing of generatedLogos) {
           const dx = existing.x - pos.x;
           const dy = existing.y - pos.y;
@@ -101,14 +101,14 @@ export default function HeroBackground() {
             break;
           }
         }
-        
+
         if (!collides) placed = true;
         attempts++;
       }
 
       const size = isMobile ? Math.random() * 15 + 30 : Math.random() * 25 + 45;
       const floatRange = isMobile ? 35 : 90; // Increased movement range significantly
-      
+
       generatedLogos.push({
         ...shuffled[i],
         x: pos.x,
@@ -131,8 +131,8 @@ export default function HeroBackground() {
   // Static placeholder on server — no random values
   if (!mounted) return null;
 
-  // Light mode: render nothing — let the original page background show
-  if (resolvedTheme !== 'dark') return null;
+  // Light mode: render floating logos but hide the original grid pattern
+  // if (resolvedTheme !== 'dark') return null;
 
   return (
     <>
@@ -140,17 +140,20 @@ export default function HeroBackground() {
 
       {/* ── Hero-specific animated layer (absolute, scoped to hero section) ── */}
       {/* ── Hero-specific background pattern (absolute, scoped to hero section) ── */}
-      <div className="absolute inset-0 pointer-events-none z-0" style={{
-        backgroundImage: `
-          url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.08'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")
-        `,
-        backgroundSize: '60px 60px',
-        maskImage: 'linear-gradient(to bottom, black 50%, transparent 100%)',
-        WebkitMaskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)'
-      }}>
-      </div>
+      {resolvedTheme === 'dark' && (
+        <div className="absolute inset-0 pointer-events-none z-0" style={{
+          backgroundImage: `
+            url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.08'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")
+          `,
+          backgroundSize: '60px 60px',
+          maskImage: 'linear-gradient(to bottom, black 50%, transparent 100%)',
+          WebkitMaskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)'
+        }}>
+        </div>
+      )}
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-10">
-      <style dangerouslySetInnerHTML={{ __html: `
+        <style dangerouslySetInnerHTML={{
+          __html: `
         @keyframes floatComplex {
           0%   { transform: translate3d(0, 0, 0) rotate(0deg); }
           33%  { transform: translate3d(var(--fx1), var(--fy1), 0) rotate(var(--rot)); }
@@ -159,46 +162,48 @@ export default function HeroBackground() {
         }
       ` }} />
 
-      {/* 5. Floating company logos with inline SVG */}
-      {logoItems.map((item, i) => (
-        <div
-          key={i}
-          className="absolute flex items-center justify-center rounded-full backdrop-blur-sm"
-          style={{
-            left: `calc(${item.x}% - ${item.size / 2}px)`,
-            top: `calc(${item.y}% - ${item.size / 2}px)`,
-            width: `${item.size}px`,
-            height: `${item.size}px`,
-            background: 'rgba(255,255,255,0.05)',
-            border: `1px solid rgba(255,255,255,0.12)`,
-            boxShadow: `0 0 18px rgba(56,189,248,0.18), inset 0 0 12px rgba(255,255,255,0.03)`,
-            animation: `floatComplex ${item.duration}s ease-in-out infinite`,
-            animationDelay: `${item.delay}s`,
-            '--fx1': `${item.floatX1}px`,
-            '--fy1': `${item.floatY1}px`,
-            '--fx2': `${item.floatX2}px`,
-            '--fy2': `${item.floatY2}px`,
-            '--rot': `${item.rotate}deg`,
-          } as React.CSSProperties}
-        >
+        {/* 5. Floating company logos with inline SVG */}
+        {logoItems.map((item, i) => (
           <div
+            key={i}
+            className="absolute flex items-center justify-center rounded-full backdrop-blur-sm"
             style={{
-              width: '52%',
-              height: '52%',
-              opacity: 0.85,
-              filter: `drop-shadow(0 0 6px ${item.color}80)`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
+              left: `calc(${item.x}% - ${item.size / 2}px)`,
+              top: `calc(${item.y}% - ${item.size / 2}px)`,
+              width: `${item.size}px`,
+              height: `${item.size}px`,
+              background: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+              border: `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'}`,
+              boxShadow: resolvedTheme === 'dark'
+                ? `0 0 18px rgba(56,189,248,0.18), inset 0 0 12px rgba(255,255,255,0.03)`
+                : `0 4px 20px rgba(0,0,0,0.08), inset 0 0 12px rgba(0,0,0,0.02)`,
+              animation: `floatComplex ${item.duration}s ease-in-out infinite`,
+              animationDelay: `${item.delay}s`,
+              '--fx1': `${item.floatX1}px`,
+              '--fy1': `${item.floatY1}px`,
+              '--fx2': `${item.floatX2}px`,
+              '--fy2': `${item.floatY2}px`,
+              '--rot': `${item.rotate}deg`,
+            } as React.CSSProperties}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`https://www.google.com/s2/favicons?domain=${item.domain}&sz=128`} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            <div
+              style={{
+                width: '52%',
+                height: '52%',
+                opacity: 0.85,
+                filter: `drop-shadow(0 0 6px ${item.color}80)`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`https://www.google.com/s2/favicons?domain=${item.domain}&sz=128`} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
 
-    </div>
+      </div>
     </>
   );
 }

@@ -189,7 +189,7 @@ export default function LandingPage() {
         {/* Trusted by */}
         <motion.div
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }}
-          className="relative z-10 max-w-3xl mx-auto mt-16 text-center"
+          className="relative z-10 max-w-3xl mx-auto mt-28 md:mt-16 text-center"
         >
           <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-5">Aggregating live jobs from</p>
           <div className="flex flex-wrap justify-center gap-3">
@@ -364,7 +364,7 @@ export default function LandingPage() {
                   </Button>
                 </Link>
               </div>
-              <p className="text-white/50 text-xs mt-5">No credit card required · 2 min setup · Cancel anytime</p>
+              <p className="text-white/50 text-xs mt-5">No credit card required · 2 min setup</p>
             </div>
           </motion.div>
         </div>
