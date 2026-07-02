@@ -62,6 +62,7 @@ const DATE_POSTED = [
 
 function PremiumJobsLoader() {
   const [msgIndex, setMsgIndex] = useState(0);
+  const [mounted, setMounted] = useState(false);
   const loadingMessages = [
     "Searching LinkedIn...",
     "Checking Company Careers...",
@@ -75,6 +76,7 @@ function PremiumJobsLoader() {
   ];
 
   useEffect(() => {
+    setMounted(true);
     const timer = setInterval(() => {
       setMsgIndex((prev) => (prev + 1) % loadingMessages.length);
     }, 1500);
@@ -100,7 +102,7 @@ function PremiumJobsLoader() {
 
       {/* Floating Particles / Nodes */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-40">
-        {Array.from({ length: 12 }).map((_, i) => (
+        {mounted && Array.from({ length: 12 }).map((_, i) => (
           <motion.div
             key={i}
             className="absolute rounded-full bg-primary/20"
