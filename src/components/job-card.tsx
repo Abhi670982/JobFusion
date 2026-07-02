@@ -133,11 +133,17 @@ export default function JobCard({
               style={{ backgroundColor: job.companyColor || '#6366f1' }}
             >
               {job.companyLogo && (job.companyLogo.startsWith('http') || job.companyLogo.includes('/')) ? (
-                <img src={job.companyLogo} alt={job.company} className="w-full h-full object-cover" />
+                <img
+                  src={`/api/proxy-image?url=${encodeURIComponent(job.companyLogo)}&company=${encodeURIComponent(job.company)}&color=${encodeURIComponent(job.companyColor || '#6366f1')}`}
+                  alt={job.company}
+                  className="w-full h-full object-cover"
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
               ) : (
                 job.companyLogo || job.company.charAt(0)
               )}
             </div>
+
 
             <div>
               <div className="flex items-center gap-1.5 flex-wrap">

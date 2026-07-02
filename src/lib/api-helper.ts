@@ -69,15 +69,8 @@ export interface DbProfile {
   githubUrl?: string;
   linkedinUrl?: string;
   isOnboarded?: boolean;
-  notifications?: {
-    jobMatches: boolean;
-    applicationUpdates: boolean;
-    recruiterMessages: boolean;
-    aiRecommendations: boolean;
-    weeklyDigest: boolean;
-    marketingEmails: boolean;
-  };
   // Resume Intelligence fields
+
   resumeCategory?: string;
   resumeSummary?: string;
   suggestedRoles?: string[];
@@ -580,16 +573,10 @@ export async function logActivity(activityData: {
 }
 
 export async function fetchDashboardNotifications(): Promise<any[]> {
-  try {
-    const res = await fetch('/api/dashboard/notifications');
-    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-    const data = await res.json();
-    return data.success ? (data.notifications || []) : [];
-  } catch (error) {
-    console.error("[Frontend API] Error fetching dashboard notifications:", error);
-    return [];
-  }
+  // Notifications feature is disabled — return empty list without making a network request
+  return [];
 }
+
 
 export async function fetchDashboardMatches(): Promise<any> {
   try {

@@ -42,7 +42,7 @@ export async function GET() {
         skillsCount: profile?.skills?.length || 0,
         savedCount,
       },
-      unreadNotificationsCount: 0,
+
     });
   } catch (error: any) {
     console.error("Error in GET /api/dashboard:", error);

@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   User, MapPin, Briefcase, GraduationCap, Award, Code2,
   Plus, Edit3, Star, CheckCircle2,
-  Link2, ExternalLink, Globe, Camera, Phone, Mail,
+  Mail, Camera,
   Cloud, Smartphone, Palette, Save, Trash2, Upload, FileText, Loader2, AlertCircle, ArrowLeft, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -75,12 +75,7 @@ export default function ProfilePage() {
   const [editBio, setEditBio] = useState('');
   const [editLocation, setEditLocation] = useState('');
   const [editExperience, setEditExperience] = useState('');
-  const [editNoticePeriod, setEditNoticePeriod] = useState('');
   const [editExpectedSalary, setEditExpectedSalary] = useState('');
-  const [editPhone, setEditPhone] = useState('');
-  const [editGithub, setEditGithub] = useState('');
-  const [editLinkedin, setEditLinkedin] = useState('');
-  const [editPortfolio, setEditPortfolio] = useState('');
   const [saving, setSaving] = useState(false);
 
   // Upload states
@@ -123,12 +118,7 @@ export default function ProfilePage() {
             setEditBio(prof.bio || '');
             setEditLocation(prof.location || '');
             setEditExperience(prof.experience || '');
-            setEditNoticePeriod(prof.noticePeriod || '30 days');
-            setEditExpectedSalary(prof.expectedSalary || '₹28L – ₹45L');
-            setEditPhone(prof.phone || '');
-            setEditGithub(prof.githubUrl || '');
-            setEditLinkedin(prof.linkedinUrl || '');
-            setEditPortfolio(prof.portfolioUrl || '');
+            setEditExpectedSalary(prof.expectedSalary || '');
           }
         }
       } catch (err) {
@@ -149,12 +139,7 @@ export default function ProfilePage() {
         bio: editBio,
         location: editLocation,
         experience: editExperience,
-        noticePeriod: editNoticePeriod,
         expectedSalary: editExpectedSalary,
-        phone: editPhone,
-        githubUrl: editGithub,
-        linkedinUrl: editLinkedin,
-        portfolioUrl: editPortfolio
       });
       if (updated) {
         setProfile(updated);
@@ -365,43 +350,6 @@ export default function ProfilePage() {
                 {profile.location || 'Location Not Specified'}
               </div>
 
-              {/* Social Links */}
-              <div className="flex justify-center gap-2 mb-5">
-                {profile.githubUrl && (
-                  <a
-                    href={profile.githubUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="w-8 h-8 rounded-xl border border-border flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/50 transition-all touch-auto"
-                  >
-                    <Code2 className="w-3.5 h-3.5" />
-                  </a>
-                )}
-                {profile.linkedinUrl && (
-                  <a
-                    href={profile.linkedinUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="w-8 h-8 rounded-xl border border-border flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/50 transition-all touch-auto"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                )}
-                {profile.portfolioUrl && (
-                  <a
-                    href={profile.portfolioUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="w-8 h-8 rounded-xl border border-border flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/50 transition-all touch-auto"
-                  >
-                    <Globe className="w-3.5 h-3.5" />
-                  </a>
-                )}
-                {!profile.githubUrl && !profile.linkedinUrl && !profile.portfolioUrl && (
-                  <p className="text-[10px] text-muted-foreground font-semibold">No social links added</p>
-                )}
-              </div>
-
               <Separator className="mb-4" />
               <div className="text-left space-y-2.5 text-xs font-semibold">
                 <div className="flex justify-between items-center">
@@ -416,22 +364,12 @@ export default function ProfilePage() {
                   </span>
                   <span className="font-bold text-xs truncate max-w-[120px]">{user?.email}</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground flex items-center gap-1.5">
-                    <Phone className="w-3.5 h-3.5" /> Phone
-                  </span>
-                  <span className="font-bold text-xs">{profile.phone || 'Not Specified'}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Expected Salary</span>
-                  <span className="font-bold">{profile.expectedSalary || 'Not Specified'}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Notice Period</span>
-                  <Badge className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/20 rounded-full px-2 border">
-                    {profile.noticePeriod || 'Immediate'}
-                  </Badge>
-                </div>
+                {profile.expectedSalary && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Expected Salary</span>
+                    <span className="font-bold">{profile.expectedSalary}</span>
+                  </div>
+                )}
               </div>
             </motion.div>
 
@@ -619,37 +557,9 @@ export default function ProfilePage() {
                 <Input id="experience" value={editExperience} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditExperience(e.target.value)} placeholder="e.g. 6 years" className="rounded-xl" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="salary" className="text-xs font-semibold text-muted-foreground uppercase">Expected Salary</Label>
-                <Input id="salary" value={editExpectedSalary} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditExpectedSalary(e.target.value)} placeholder="e.g. ₹28L – ₹45L" className="rounded-xl" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="notice" className="text-xs font-semibold text-muted-foreground uppercase">Notice Period</Label>
-                <Input id="notice" value={editNoticePeriod} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditNoticePeriod(e.target.value)} placeholder="e.g. 30 days" className="rounded-xl" />
-              </div>
-            </div>
             <div className="space-y-2">
-              <Label htmlFor="phone" className="text-xs font-semibold text-muted-foreground uppercase">Phone Number</Label>
-              <Input id="phone" value={editPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditPhone(e.target.value)} placeholder="e.g. +91 98765 43210" className="rounded-xl" />
-            </div>
-            
-            <Separator className="my-2" />
-            <h3 className="text-sm font-semibold">Social Profiles</h3>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="github" className="text-xs font-semibold text-muted-foreground uppercase">GitHub Link</Label>
-                <Input id="github" value={editGithub} onChange={(e) => setEditGithub(e.target.value)} placeholder="https://github.com/..." className="rounded-xl h-10" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="linkedin" className="text-xs font-semibold text-muted-foreground uppercase">LinkedIn Link</Label>
-                <Input id="linkedin" value={editLinkedin} onChange={(e) => setEditLinkedin(e.target.value)} placeholder="https://linkedin.com/in/..." className="rounded-xl h-10" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="portfolio" className="text-xs font-semibold text-muted-foreground uppercase">Portfolio Link</Label>
-                <Input id="portfolio" value={editPortfolio} onChange={(e) => setEditPortfolio(e.target.value)} placeholder="https://..." className="rounded-xl h-10" />
-              </div>
+              <Label htmlFor="salary" className="text-xs font-semibold text-muted-foreground uppercase">Expected Salary</Label>
+              <Input id="salary" value={editExpectedSalary} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditExpectedSalary(e.target.value)} placeholder="e.g. ₹28L – ₹45L" className="rounded-xl" />
             </div>
           </div>
           <DialogFooter className="gap-2">
