@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import {
   TrendingUp, Briefcase, Bookmark, Eye, MessageSquare,
-  Sparkles, ArrowRight, CheckCircle2, XCircle,
+  ArrowRight, CheckCircle2, XCircle,
   Calendar, Star, ChevronRight, Zap, Code2, Smile, FileText, User
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -97,7 +97,7 @@ const activityConfig = {
   viewed:          { icon: Eye,          color: '#64748b', label: 'Viewed' },
   offer:           { icon: Star,         color: '#f59e0b', label: 'Offer' },
   rejected:        { icon: XCircle,      color: '#ef4444', label: 'Rejected' },
-  updated_resume:  { icon: Sparkles,     color: '#8b5cf6', label: 'Resume Updated' },
+  updated_resume:  { icon: FileText,     color: '#8b5cf6', label: 'Resume Updated' },
   updated_profile: { icon: CheckCircle2, color: '#10b981', label: 'Profile Updated' },
 };
 
@@ -153,8 +153,103 @@ export default function DashboardPage() {
   const completion = calculateCompletion(profile, user);
   const firstName = user?.fullName.split(' ')[0] || 'User';
 
+  const incompleteTasks = [];
+  if (!profile?.resumeUrl) incompleteTasks.push("Upload Resume");
+  if (!profile?.skills || profile.skills.length === 0) incompleteTasks.push("Add Skills");
+  if (!user?.profileImage) incompleteTasks.push("Upload Profile Photo");
+  if (!profile?.phone) incompleteTasks.push("Add Phone Number");
+  if (!profile?.location) incompleteTasks.push("Add Location");
+  if (!profile?.linkedinUrl) incompleteTasks.push("Add LinkedIn Profile");
+  if (!profile?.portfolioUrl) incompleteTasks.push("Add Portfolio Link");
+
+  if (loading) {
+    return (
+      <div className="flex-1 p-3 sm:p-4 lg:p-6 max-w-[1440px] w-full mx-auto space-y-5 animate-pulse">
+        {/* Welcome Header Skeleton */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-2">
+            <Skeleton className="h-7 w-48 rounded-lg bg-muted/70 skeleton-shimmer" />
+            <Skeleton className="h-4 w-32 rounded bg-muted/70 skeleton-shimmer" />
+          </div>
+          <div className="flex gap-2">
+            <Skeleton className="h-9 w-28 rounded-xl bg-muted/70 skeleton-shimmer" />
+            <Skeleton className="h-9 w-32 rounded-xl bg-muted/70 skeleton-shimmer" />
+          </div>
+        </div>
+
+        {/* Banner Skeleton */}
+        <Skeleton className="h-32 w-full rounded-2xl bg-muted/70 skeleton-shimmer" />
+
+        {/* Stats Grid Skeleton */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+        </div>
+
+        {/* Chart + Intel Skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2 card-premium p-5 h-64 flex flex-col justify-between">
+            <div className="flex justify-between mb-5">
+              <div className="space-y-1.5">
+                <Skeleton className="h-4 w-28 rounded bg-muted/70 skeleton-shimmer" />
+                <Skeleton className="h-3 w-40 rounded bg-muted/70 skeleton-shimmer" />
+              </div>
+              <Skeleton className="h-5 w-20 rounded bg-muted/70 skeleton-shimmer" />
+            </div>
+            <Skeleton className="w-full h-40 rounded-xl bg-muted/70 skeleton-shimmer" />
+          </div>
+          <div className="card-premium p-5 h-64 flex flex-col justify-between">
+            <div className="flex justify-between mb-4">
+              <Skeleton className="h-4 w-32 rounded bg-muted/70 skeleton-shimmer" />
+              <Skeleton className="h-3 w-12 rounded bg-muted/70 skeleton-shimmer" />
+            </div>
+            <div className="space-y-3 flex-1">
+              <Skeleton className="h-10 w-full rounded-xl bg-muted/70 skeleton-shimmer" />
+              <div className="grid grid-cols-2 gap-2">
+                <Skeleton className="h-12 w-full rounded-xl bg-muted/70 skeleton-shimmer" />
+                <Skeleton className="h-12 w-full rounded-xl bg-muted/70 skeleton-shimmer" />
+              </div>
+              <Skeleton className="h-8 w-full rounded-xl bg-muted/70 skeleton-shimmer" />
+            </div>
+          </div>
+        </div>
+
+        {/* Activity + Quick Links Skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="card-premium p-5 space-y-4">
+            <div className="flex justify-between mb-4">
+              <Skeleton className="h-4 w-28 rounded bg-muted/70 skeleton-shimmer" />
+              <Skeleton className="h-3.5 w-16 rounded bg-muted/70 skeleton-shimmer" />
+            </div>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <ActivitySkeleton key={i} />
+            ))}
+          </div>
+          <div className="card-premium p-5 space-y-3">
+            <Skeleton className="h-4 w-24 rounded bg-muted/70 skeleton-shimmer mb-4" />
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 p-2">
+                <Skeleton className="w-9 h-9 rounded-xl bg-muted/70 skeleton-shimmer flex-shrink-0" />
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className="w-1/3 h-4 rounded bg-muted/70 skeleton-shimmer" />
+                  <Skeleton className="w-1/2 h-3 rounded bg-muted/70 skeleton-shimmer" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-[1440px] w-full mx-auto space-y-5">
+    <motion.div
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: "easeOut" }}
+      className="flex-1 p-3 sm:p-4 lg:p-6 max-w-[1440px] w-full mx-auto space-y-5"
+    >
 
       {/* ── Welcome Header ── */}
       <motion.div
@@ -200,46 +295,63 @@ export default function DashboardPage() {
         <div className="absolute right-0 top-0 w-56 h-56 rounded-full opacity-10 blur-2xl" style={{ background: 'white', transform: 'translate(30%, -30%)' }} />
         <div className="absolute bottom-0 left-0 w-32 h-32 rounded-full opacity-10 blur-2xl" style={{ background: 'white', transform: 'translate(-20%, 20%)' }} />
 
-        <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            {/* Circular progress indicator */}
-            <div className="relative w-16 h-16 flex-shrink-0">
-              <svg className="w-16 h-16 -rotate-90" viewBox="0 0 64 64">
-                <circle cx="32" cy="32" r="27" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="5" />
-                <circle
-                  cx="32" cy="32" r="27" fill="none" stroke="white" strokeWidth="5"
-                  strokeDasharray={`${2 * Math.PI * 27}`}
-                  strokeDashoffset={`${2 * Math.PI * 27 * (1 - (loading ? 0 : completion) / 100)}`}
-                  strokeLinecap="round"
-                  style={{ transition: 'stroke-dashoffset 1s ease' }}
-                />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-sm font-extrabold leading-none">{loading ? '...' : completion}%</span>
+        <div className="relative z-10 space-y-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              {/* Circular progress indicator */}
+              <div className="relative w-16 h-16 flex-shrink-0">
+                <svg className="w-16 h-16 -rotate-90" viewBox="0 0 64 64">
+                  <circle cx="32" cy="32" r="27" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="5" />
+                  <circle
+                    cx="32" cy="32" r="27" fill="none" stroke="white" strokeWidth="5"
+                    strokeDasharray={`${2 * Math.PI * 27}`}
+                    strokeDashoffset={`${2 * Math.PI * 27 * (1 - completion / 100)}`}
+                    strokeLinecap="round"
+                    style={{ transition: 'stroke-dashoffset 1s ease' }}
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-sm font-extrabold leading-none">{completion}%</span>
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                  <span className="font-bold text-sm">Profile Completion</span>
+                  {completion === 100 ? (
+                    <Badge className="border-white/30 bg-emerald-500/40 text-white text-[10px] rounded-full px-2">Complete</Badge>
+                  ) : (
+                    <Badge className="border-white/30 bg-white/20 text-white text-[10px] rounded-full px-2">In Progress</Badge>
+                  )}
+                </div>
+                <p className="text-white/70 text-xs max-w-sm leading-relaxed">
+                  {completion === 100
+                    ? 'Your profile is complete. You are positioned for top job matches!'
+                    : 'Complete your profile to get better AI-matched job recommendations.'}
+                </p>
               </div>
             </div>
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <Sparkles className="w-4 h-4 text-white/80" />
-                <span className="font-bold text-sm">Profile Completion</span>
-                {completion === 100 ? (
-                  <Badge className="border-white/30 bg-emerald-500/40 text-white text-[10px] rounded-full px-2">Complete</Badge>
-                ) : (
-                  <Badge className="border-white/30 bg-white/20 text-white text-[10px] rounded-full px-2">In Progress</Badge>
-                )}
-              </div>
-              <p className="text-white/70 text-xs max-w-sm leading-relaxed">
-                {completion === 100
-                  ? 'Your profile is complete. You are positioned for top job matches!'
-                  : 'Complete your profile to get better AI-matched job recommendations.'}
-              </p>
-            </div>
+            <Link href="/resume">
+              <Button size="sm" className="bg-white text-primary hover:bg-white/90 rounded-xl font-bold shadow-lg whitespace-nowrap">
+                Manage Resume <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+              </Button>
+            </Link>
           </div>
-          <Link href="/resume">
-            <Button size="sm" className="bg-white text-primary hover:bg-white/90 rounded-xl font-bold shadow-lg whitespace-nowrap">
-              Manage Resume <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
-            </Button>
-          </Link>
+          
+          {/* Checklist of dynamic remaining tasks */}
+          {completion < 100 && incompleteTasks.length > 0 && (
+            <div className="pt-3 border-t border-white/10">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-white/70 mb-2">Remaining Tasks:</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                {incompleteTasks.map((task) => (
+                  <div key={task} className="flex items-center gap-2 text-xs text-white/90 bg-white/10 px-2.5 py-1.5 rounded-lg border border-white/5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                    <span>{task}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </motion.div>
 
@@ -252,7 +364,7 @@ export default function DashboardPage() {
         >
           <div className="space-y-2 text-center md:text-left">
             <div className="flex items-center gap-2 justify-center md:justify-start">
-              <Sparkles className="w-5 h-5 text-primary" />
+              <div className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" />
               <h3 className="font-bold">Complete your profile for better job recommendations</h3>
             </div>
             <p className="text-sm text-muted-foreground max-w-xl">
@@ -398,7 +510,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               activities.slice(0, 5).map((act) => {
-                const config = activityConfig[act.type as keyof typeof activityConfig] || { icon: Sparkles, color: '#6366f1', label: 'Activity' };
+                const config = activityConfig[act.type as keyof typeof activityConfig] || { icon: Briefcase, color: '#6366f1', label: 'Activity' };
                 const Icon = config.icon;
                 const titleText = act.jobTitle || act.details || config.label;
                 const subText = act.company || '';
@@ -454,6 +566,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-    </main>
+    </motion.div>
   );
 }

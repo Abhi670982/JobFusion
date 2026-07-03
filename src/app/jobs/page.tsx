@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import {
   Search, SlidersHorizontal, X, MapPin,
-  Briefcase, LayoutGrid, List, Sparkles,
+  Briefcase, LayoutGrid, List, Target,
   Building2, Clock, AlertTriangle, Check,
   Activity, ArrowRight, ArrowLeft, RefreshCw
 } from 'lucide-react';
@@ -75,6 +75,18 @@ function PremiumJobsLoader() {
     "Filtering roles based on experience..."
   ];
 
+  // Map messages to current active source indices
+  // Sources: 0: LinkedIn, 1: Indeed, 2: Wellfound, 3: Internshala, 4: Company Careers
+  const getActiveSourceIndex = (msg: string): number => {
+    const s = msg.toLowerCase();
+    if (s.includes('linkedin')) return 0;
+    if (s.includes('indeed')) return 1;
+    if (s.includes('wellfound')) return 2;
+    if (s.includes('internshala')) return 3;
+    if (s.includes('company') || s.includes('careers')) return 4;
+    return -1;
+  };
+
   useEffect(() => {
     setMounted(true);
     const timer = setInterval(() => {
@@ -82,6 +94,17 @@ function PremiumJobsLoader() {
     }, 1500);
     return () => clearInterval(timer);
   }, []);
+
+  const currentMsg = loadingMessages[msgIndex];
+  const activeSourceIdx = getActiveSourceIndex(currentMsg);
+
+  const sources = [
+    { name: 'LinkedIn', color: 'text-blue-500 bg-blue-500/10 border-blue-500/20' },
+    { name: 'Indeed', color: 'text-purple-500 bg-purple-500/10 border-purple-500/20' },
+    { name: 'Wellfound', color: 'text-teal-500 bg-teal-500/10 border-teal-500/20' },
+    { name: 'Internshala', color: 'text-orange-500 bg-orange-500/10 border-orange-500/20' },
+    { name: 'Company Careers', color: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' },
+  ];
 
   return (
     <div className="col-span-full card-premium p-8 sm:p-12 flex flex-col items-center justify-center min-h-[450px] relative overflow-hidden bg-gradient-to-br from-card/30 via-primary/5 to-card/30 border border-border/80 rounded-3xl">
@@ -130,92 +153,120 @@ function PremiumJobsLoader() {
       {/* Core AI Visualization */}
       <div className="relative z-10 flex flex-col items-center max-w-md w-full text-center space-y-8">
         
-        {/* Pulsing Central Node with orbiting source items */}
-        <div className="relative w-40 h-40 flex items-center justify-center">
-          {/* Outer Ripple Rings */}
-          <motion.div
-            className="absolute inset-0 rounded-full border border-primary/20"
-            animate={{ scale: [0.9, 1.4, 0.9], opacity: [0.6, 0.1, 0.6] }}
-            transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-          />
-          <motion.div
-            className="absolute inset-2 rounded-full border border-purple-500/20"
-            animate={{ scale: [0.95, 1.25, 0.95], opacity: [0.8, 0.2, 0.8] }}
-            transition={{ duration: 2.5, repeat: Infinity, ease: "linear", delay: 0.5 }}
-          />
-          
-          {/* AI Center Hub */}
-          <motion.div
-            className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-primary to-purple-600 flex items-center justify-center text-white shadow-[0_0_30px_rgba(99,102,241,0.5)] z-20"
-            animate={{
-              boxShadow: [
-                "0 0 20px rgba(99,102,241,0.4)",
-                "0 0 35px rgba(139,92,246,0.6)",
-                "0 0 20px rgba(99,102,241,0.4)"
-              ],
-              rotate: [0, 360],
-            }}
-            transition={{
-              boxShadow: { duration: 2, repeat: Infinity, ease: "easeInOut" },
-              rotate: { duration: 20, repeat: Infinity, ease: "linear" }
-            }}
-          >
-            <Sparkles className="w-8 h-8" />
-          </motion.div>
-
-          {/* Orbiting Sources */}
-          {[
-            { label: 'LinkedIn', color: 'bg-blue-500', delay: 0, x: -60, y: -40 },
-            { label: 'Indeed', color: 'bg-purple-500', delay: 1.2, x: 60, y: -40 },
-            { label: 'Wellfound', color: 'bg-teal-500', delay: 2.4, x: -50, y: 50 },
-            { label: 'Internshala', color: 'bg-orange-500', delay: 3.6, x: 50, y: 50 },
-          ].map((node, idx) => (
-            <motion.div
-              key={idx}
-              className="absolute w-4 h-4 rounded-full flex items-center justify-center shadow-lg"
+        {/* Animated circular loader */}
+        <div className="relative w-32 h-32 flex items-center justify-center">
+          <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+            {/* Outer track */}
+            <circle
+              cx="50"
+              cy="50"
+              r="42"
+              className="stroke-muted/30"
+              strokeWidth="3.5"
+              fill="none"
+            />
+            {/* Pulsing trace progress */}
+            <motion.circle
+              cx="50"
+              cy="50"
+              r="42"
+              className="stroke-primary"
+              strokeWidth="4"
+              fill="none"
+              strokeDasharray="263.8"
               animate={{
-                x: [node.x, node.x * 1.15, node.x],
-                y: [node.y, node.y * 1.15, node.y],
-                scale: [1, 1.2, 1],
+                strokeDashoffset: [263.8, 0, 263.8],
+                stroke: ["oklch(0.53 0.24 258)", "oklch(0.58 0.24 272)", "oklch(0.53 0.24 258)"]
               }}
               transition={{
                 duration: 3,
                 repeat: Infinity,
                 ease: "easeInOut",
-                delay: node.delay,
+              }}
+            />
+            {/* Inner Ring */}
+            <circle
+              cx="50"
+              cy="50"
+              r="34"
+              className="stroke-purple-500/10 dark:stroke-purple-500/20"
+              strokeWidth="1.5"
+              fill="none"
+            />
+          </svg>
+          
+          {/* Central Pulsing Dot */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <motion.div
+              className="w-14 h-14 rounded-full bg-gradient-to-tr from-primary to-purple-600 flex items-center justify-center shadow-[0_0_25px_rgba(99,102,241,0.4)]"
+              animate={{
+                scale: [0.95, 1.05, 0.95],
+                boxShadow: [
+                  "0 0 15px rgba(99,102,241,0.3)",
+                  "0 0 30px rgba(139,92,246,0.5)",
+                  "0 0 15px rgba(99,102,241,0.3)"
+                ]
+              }}
+              transition={{
+                duration: 2,
+                repeat: Infinity,
+                ease: "easeInOut"
               }}
             >
-              <span className={`w-3.5 h-3.5 rounded-full ${node.color} ring-4 ring-background shadow-md`} />
-              <span className={`absolute w-3.5 h-3.5 rounded-full ${node.color} animate-ping opacity-75`} />
+              <Activity className="w-6 h-6 text-white animate-pulse" />
             </motion.div>
-          ))}
+          </div>
         </div>
 
         {/* Text Area */}
-        <div className="space-y-3">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary font-bold tracking-wide uppercase animate-pulse">
-            <span className="w-2 h-2 rounded-full bg-primary animate-ping" />
-            AI Aggregator Active
-          </div>
-          
+        <div className="space-y-2">
           <h3 className="text-xl font-bold tracking-tight text-foreground" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
             Unified Search in Progress
           </h3>
-          
-          {/* Rotating Message */}
-          <div className="h-6 flex items-center justify-center overflow-hidden">
+          <p className="text-xs text-muted-foreground font-semibold">
+            Searching across multiple job sources...
+          </p>
+        </div>
+
+        {/* Rotating Message & Current Portal Indicator */}
+        <div className="w-full space-y-4">
+          <div className="h-7 flex items-center justify-center overflow-hidden">
             <AnimatePresence mode="wait">
               <motion.p
                 key={msgIndex}
-                initial={{ opacity: 0, y: 15 }}
+                initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -15 }}
+                exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.25, ease: "easeOut" }}
-                className="text-sm text-muted-foreground font-medium"
+                className="text-sm text-primary font-bold tracking-wide"
               >
-                {loadingMessages[msgIndex]}
+                {currentMsg}
               </motion.p>
             </AnimatePresence>
+          </div>
+
+          {/* Sequential Sources Progress Animation */}
+          <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+            {sources.map((src, idx) => {
+              const isActive = activeSourceIdx === idx || (activeSourceIdx === -1 && idx === msgIndex % 5);
+              return (
+                <div
+                  key={src.name}
+                  className={cn(
+                    "text-[10px] uppercase font-bold px-2.5 py-1 rounded-full border transition-all duration-300 flex items-center gap-1.5",
+                    isActive 
+                      ? `${src.color} scale-105 opacity-100 shadow-sm`
+                      : "opacity-40 border-transparent bg-transparent text-muted-foreground"
+                  )}
+                >
+                  <span className={cn(
+                    "w-1.5 h-1.5 rounded-full",
+                    isActive ? "bg-current animate-ping" : "bg-muted-foreground"
+                  )} />
+                  {src.name}
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -872,7 +923,7 @@ export default function JobsPage() {
               disabled={loading || matching || !user}
               className="gradient-brand text-white border-0 rounded-xl h-10 px-5 font-semibold hover:opacity-90 shadow-md glow-sm flex items-center btn-press"
             >
-              <Sparkles className={cn("w-4.5 h-4.5 mr-2", matching && "animate-spin")} />
+              <Target className={cn("w-4.5 h-4.5 mr-2", matching && "animate-spin")} />
               {matching ? 'Matching skills...' : 'Match My Skills'}
             </Button>
             {skillWarning && (
@@ -1302,21 +1353,65 @@ export default function JobsPage() {
               exit={{ scale: 0.95, opacity: 0 }}
               className="max-w-md w-full glass rounded-3xl p-8 border border-border shadow-2xl text-center space-y-6 bg-card/50"
             >
-              <div className="flex justify-center gap-3 items-center mb-2">
+              <div className="relative w-24 h-24 mx-auto mb-4 flex items-center justify-center">
+                {/* Central pulsing core */}
                 <motion.div
+                  className="w-10 h-10 rounded-full bg-gradient-to-tr from-primary to-purple-600 flex items-center justify-center text-white shadow-[0_0_20px_rgba(99,102,241,0.4)] z-10"
                   animate={{
-                    scale: [1, 1.15, 1],
-                    rotate: [0, 360, 360]
+                    scale: [1, 1.1, 1],
                   }}
                   transition={{
-                    duration: 2,
+                    duration: 1.5,
                     repeat: Infinity,
                     ease: "easeInOut"
                   }}
-                  className="w-14 h-14 rounded-2xl gradient-brand flex items-center justify-center text-white shadow-lg"
                 >
-                  <Sparkles className="w-7 h-7" />
+                  <div className="w-3.5 h-3.5 rounded-full bg-white animate-pulse" />
                 </motion.div>
+                
+                {/* Radar sweep */}
+                <motion.div
+                  className="absolute inset-0 rounded-full border border-primary/30"
+                  style={{ borderStyle: 'dashed' }}
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+                />
+                
+                {/* Outer Ring */}
+                <motion.div
+                  className="absolute inset-2 rounded-full border border-purple-500/20"
+                  animate={{ scale: [1, 1.25, 1], opacity: [0.3, 0.6, 0.3] }}
+                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                />
+
+                {/* Orbiting nodes */}
+                {[0, 1, 2].map((idx) => (
+                  <motion.div
+                    key={idx}
+                    className="absolute w-3 h-3 rounded-full bg-primary"
+                    style={{
+                      top: '50%',
+                      left: '50%',
+                      marginTop: '-6px',
+                      marginLeft: '-6px',
+                    }}
+                    animate={{
+                      rotate: 360,
+                    }}
+                    transition={{
+                      duration: 4 + idx * 2,
+                      repeat: Infinity,
+                      ease: "linear"
+                    }}
+                  >
+                    <motion.div
+                      className="w-3 h-3 rounded-full bg-gradient-to-r from-primary to-purple-500 shadow-md"
+                      style={{
+                        transform: `translate(${32 + idx * 10}px, 0)`,
+                      }}
+                    />
+                  </motion.div>
+                ))}
               </div>
               
               <div className="space-y-2">
@@ -1375,7 +1470,7 @@ export default function JobsPage() {
             className="fixed bottom-6 right-6 z-50 max-w-sm w-full p-4 rounded-2xl glass border border-emerald-500/20 shadow-2xl flex items-start gap-3 bg-card/90"
           >
             <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 flex-shrink-0">
-              <Sparkles className="w-4.5 h-4.5 animate-bounce" />
+              <Check className="w-4.5 h-4.5 animate-bounce" />
             </div>
             <div className="flex-1 min-w-0">
               <h4 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Skill Match Complete</h4>

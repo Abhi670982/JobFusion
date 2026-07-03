@@ -289,29 +289,111 @@ export default function ProfilePage() {
         )}
       </div>
 
-      {loading ? (
-        <div className="space-y-4 animate-pulse skeleton-shimmer">
-          <Skeleton className="h-40 w-full rounded-2xl" />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Skeleton className="h-60 w-full rounded-2xl" />
-            <Skeleton className="h-60 md:col-span-2 w-full rounded-2xl" />
+      {/* High-Fidelity Loading Skeleton */}
+      {loading && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+          {/* Left Column Skeletons */}
+          <div className="space-y-4">
+            {/* Profile Card Skeleton */}
+            <div className="card-premium p-6 flex flex-col items-center space-y-4">
+              <Skeleton className="w-24 h-24 rounded-full bg-muted/70 skeleton-shimmer" />
+              <Skeleton className="h-5 w-32 rounded-lg bg-muted/70 skeleton-shimmer" />
+              <Skeleton className="h-3.5 w-48 rounded bg-muted/70 skeleton-shimmer" />
+              <Skeleton className="h-3.5 w-24 rounded bg-muted/70 skeleton-shimmer" />
+              <Separator />
+              <div className="w-full space-y-2.5">
+                <div className="flex justify-between">
+                  <Skeleton className="h-3.5 w-20 rounded bg-muted/70 skeleton-shimmer" />
+                  <Skeleton className="h-3.5 w-16 rounded bg-muted/70 skeleton-shimmer" />
+                </div>
+                <div className="flex justify-between">
+                  <Skeleton className="h-3.5 w-12 rounded bg-muted/70 skeleton-shimmer" />
+                  <Skeleton className="h-3.5 w-24 rounded bg-muted/70 skeleton-shimmer" />
+                </div>
+              </div>
+            </div>
+
+            {/* Profile Strength Skeleton */}
+            <div className="card-premium p-5 space-y-4">
+              <div className="flex justify-between">
+                <Skeleton className="h-4 w-28 rounded bg-muted/70 skeleton-shimmer" />
+                <Skeleton className="h-4 w-8 rounded bg-muted/70 skeleton-shimmer" />
+              </div>
+              <Skeleton className="h-1.5 w-full rounded bg-muted/70 skeleton-shimmer" />
+              <div className="space-y-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Skeleton className="w-3.5 h-3.5 rounded-full bg-muted/70 skeleton-shimmer" />
+                    <Skeleton className="h-3 w-32 rounded bg-muted/70 skeleton-shimmer" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column Skeletons */}
+          <div className="lg:col-span-2 space-y-4">
+            {/* Resume Section Skeleton */}
+            <div className="card-premium p-6 space-y-4">
+              <div className="flex justify-between">
+                <Skeleton className="h-4 w-16 rounded bg-muted/70 skeleton-shimmer" />
+                <Skeleton className="h-8 w-20 rounded-lg bg-muted/70 skeleton-shimmer" />
+              </div>
+              <div className="flex items-center gap-3 p-3.5 rounded-xl border border-border/50">
+                <Skeleton className="w-10 h-10 rounded-xl bg-muted/70 skeleton-shimmer" />
+                <div className="space-y-1.5 flex-1">
+                  <Skeleton className="h-4 w-32 rounded bg-muted/70 skeleton-shimmer" />
+                  <Skeleton className="h-3 w-20 rounded bg-muted/70 skeleton-shimmer" />
+                </div>
+              </div>
+            </div>
+
+            {/* About Me Skeleton */}
+            <div className="card-premium p-6 space-y-4">
+              <Skeleton className="h-4 w-24 rounded bg-muted/70 skeleton-shimmer" />
+              <div className="space-y-2">
+                <Skeleton className="h-3.5 w-full rounded bg-muted/70 skeleton-shimmer" />
+                <Skeleton className="h-3.5 w-5/6 rounded bg-muted/70 skeleton-shimmer" />
+                <Skeleton className="h-3.5 w-4/6 rounded bg-muted/70 skeleton-shimmer" />
+              </div>
+            </div>
+
+            {/* Skills Skeleton */}
+            <div className="card-premium p-6 space-y-4">
+              <div className="flex justify-between">
+                <Skeleton className="h-4 w-12 rounded bg-muted/70 skeleton-shimmer" />
+                <Skeleton className="h-8 w-24 rounded-lg bg-muted/70 skeleton-shimmer" />
+              </div>
+              <div className="flex flex-wrap gap-2.5">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-8 w-20 rounded-xl bg-muted/70 skeleton-shimmer" />
+                ))}
+              </div>
+            </div>
           </div>
         </div>
-      ) : !profile ? (
+      )}
+
+      {/* No Profile Found State */}
+      {!loading && !profile && (
         <div className="card-premium p-10 text-center space-y-4">
           <h2 className="text-xl font-bold">No profile found</h2>
           <p className="text-muted-foreground">Please sign out and sign in again to sync your profile.</p>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+      )}
+
+      {/* Profile Details Content */}
+      {!loading && profile && (
+        <motion.div 
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start"
+        >
           {/* Left Column */}
           <div className="space-y-4">
             {/* Profile Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="card-premium p-6 text-center relative"
-            >
+            <div className="card-premium p-6 text-center relative">
               <div className="relative inline-block mb-4">
                 <Avatar className="w-24 h-24 ring-4 ring-primary/20">
                   <AvatarImage src={user?.profileImage} alt={user?.fullName} />
@@ -371,15 +453,10 @@ export default function ProfilePage() {
                   </div>
                 )}
               </div>
-            </motion.div>
+            </div>
 
             {/* Profile Strength */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="card-premium p-5"
-            >
+            <div className="card-premium p-5">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">Profile Strength</h3>
                 <span className="text-sm font-bold text-primary">{completion}%</span>
@@ -404,17 +481,13 @@ export default function ProfilePage() {
                   </div>
                 ))}
               </div>
-            </motion.div>
+            </div>
           </div>
 
           {/* Right Column */}
           <div className="lg:col-span-2 space-y-4">
             {/* Resume section */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.12 }}
-            >
+            <div>
               <SectionCard
                 title="Resume"
                 icon={FileText}
@@ -478,14 +551,10 @@ export default function ProfilePage() {
                   </div>
                 )}
               </SectionCard>
-            </motion.div>
+            </div>
 
             {/* Bio / About */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 }}
-            >
+            <div>
               <SectionCard title="About Me" icon={User}>
                 {profile.bio ? (
                   <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed whitespace-pre-line font-medium">{profile.bio}</p>
@@ -493,14 +562,10 @@ export default function ProfilePage() {
                   <p className="text-xs text-muted-foreground italic">Add details about yourself by clicking Edit Profile.</p>
                 )}
               </SectionCard>
-            </motion.div>
+            </div>
 
             {/* Skills */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.18 }}
-            >
+            <div>
               <SectionCard
                 title="Skills"
                 icon={Code2}
@@ -526,10 +591,10 @@ export default function ProfilePage() {
                   )}
                 </div>
               </SectionCard>
-            </motion.div>
+            </div>
 
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Edit Profile Modal */}

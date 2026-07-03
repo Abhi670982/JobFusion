@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import {
-  Briefcase, MapPin, GraduationCap, Sparkles, Upload, Plus, X,
+  Briefcase, MapPin, GraduationCap, Upload, Plus, X,
   ChevronRight, ChevronLeft, Loader2, CheckCircle2, AlertCircle, FileText, Smile, Rocket
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -597,7 +597,7 @@ export default function OnboardingPage() {
                   ) : (
                     <>
                       Finish Onboarding
-                      <Sparkles className="w-4 h-4 ml-1.5 animate-pulse" />
+                      <Rocket className="w-4 h-4 ml-1.5 animate-bounce" />
                     </>
                   )}
                 </Button>

@@ -101,7 +101,7 @@ export const PREDEFINED_SKILLS: SkillDefinition[] = [
   // ══════════════════════════════════════
   { name: "Figma", aliases: ["figma"], domain: "design" },
   { name: "Adobe Photoshop", aliases: ["photoshop", "adobe photoshop", "ps"], domain: "design" },
-  { name: "Adobe Illustrator", aliases: ["illustrator", "adobe illustrator", "ai"], domain: "design" },
+  { name: "Adobe Illustrator", aliases: ["illustrator", "adobe illustrator"], domain: "design" },
   { name: "Adobe XD", aliases: ["adobe xd", "xd"], domain: "design" },
   { name: "Canva", aliases: ["canva"], domain: "design" },
   { name: "InDesign", aliases: ["indesign", "adobe indesign"], domain: "design" },
@@ -238,6 +238,33 @@ function escapeRegExp(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function isFalsePositive(skillName: string, alias: string, matchIndex: number, fullText: string): boolean {
+  const lowerText = fullText.toLowerCase();
+  
+  if (skillName.toLowerCase() === "canva") {
+    // Look at a window of characters around the match to detect template credits
+    const start = Math.max(0, matchIndex - 40);
+    const end = Math.min(lowerText.length, matchIndex + alias.length + 40);
+    const context = lowerText.substring(start, end);
+    
+    const templatePatterns = [
+      /template\s+by/i,
+      /designed\s+(?:in|with|on|by)/i,
+      /made\s+(?:in|with|on)/i,
+      /created\s+(?:in|with|on)/i,
+      /powered\s+by/i,
+      /built\s+(?:in|with|on)/i,
+      /format\s+by/i
+    ];
+    
+    if (templatePatterns.some(p => p.test(context))) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
 /**
  * Universal resume skill extractor (regex-based fallback).
  * Matches skills from ALL domains — Tech, Design, Marketing, Finance, HR,
@@ -253,19 +280,30 @@ export function extractSkills(text: string): { name: string; level: number }[] {
     for (const alias of skill.aliases) {
       const hasSpecialChar = /[^a-z0-9\s]/i.test(alias);
       let isMatch = false;
+      let matchIdx = -1;
 
       if (hasSpecialChar) {
         const escaped = escapeRegExp(alias);
         const regex = new RegExp(`(?:^|[^a-zA-Z0-9])${escaped}(?:$|[^a-zA-Z0-9])`, "i");
-        isMatch = regex.test(normalizedText);
+        const match = normalizedText.match(regex);
+        if (match) {
+          isMatch = true;
+          matchIdx = normalizedText.indexOf(match[0]);
+        }
       } else {
         const regex = new RegExp(`\\b${escapeRegExp(alias)}\\b`, "i");
-        isMatch = regex.test(normalizedText);
+        const match = normalizedText.match(regex);
+        if (match) {
+          isMatch = true;
+          matchIdx = normalizedText.indexOf(match[0]);
+        }
       }
 
       if (isMatch) {
-        matchedSkills.add(skill.name);
-        break;
+        if (!isFalsePositive(skill.name, alias, matchIdx, normalizedText)) {
+          matchedSkills.add(skill.name);
+          break;
+        }
       }
     }
   }
@@ -483,10 +521,17 @@ export async function extractSkillsWithAI(
     const lowerVerify = verifyAgainst.toLowerCase();
 
     const verified = allSkills.filter(
-      (skill) =>
-        typeof skill === "string" &&
-        skill.trim().length > 0 &&
-        lowerVerify.includes(skill.toLowerCase()),
+      (skill) => {
+        if (typeof skill !== "string" || skill.trim().length === 0) return false;
+        const lowerSkill = skill.toLowerCase();
+        const idx = lowerVerify.indexOf(lowerSkill);
+        if (idx === -1) return false;
+        
+        if (isFalsePositive(skill, lowerSkill, idx, lowerVerify)) {
+          return false;
+        }
+        return true;
+      }
     );
 
     console.log(

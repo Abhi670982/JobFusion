@@ -5,7 +5,7 @@ import { motion, useInView, useScroll, useTransform } from 'framer-motion';
 import Link from 'next/link';
 import {
   Search, MapPin, ArrowRight, CheckCircle2,
-  Sparkles, Zap, BarChart3, FileText, Brain, Target, History, Star
+  Zap, BarChart3, FileText, Brain, Target, History, Star
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -289,37 +289,40 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── TESTIMONIALS ─────────────────────────────────────────── */}
-      <section className="py-24 px-4 relative">
+      {/* ── LIVE STATISTICS ── */}
+      <section className="py-24 px-4 relative bg-muted/10 border-y border-border">
         <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-14">
+          <div className="text-center max-w-2xl mx-auto mb-16">
             <Badge className="mb-4 rounded-full px-4 py-1.5 border border-primary/20 bg-primary/8 text-primary font-semibold text-xs">
-              ✦ Loved by Job Seekers
+              Live Platform Stats
             </Badge>
-            <h2 className="text-3xl md:text-4xl font-bold" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-              Real results, real people
+            <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+              Trusted by Job Seekers
             </h2>
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              JobFusion aggregates from top platforms in real-time, providing fresh listings daily.
+            </p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {testimonials.map((t, i) => (
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+            {[
+              { label: "Jobs Aggregated", value: stats.totalJobs || 12450, suffix: "+" },
+              { label: "Companies Covered", value: 850, suffix: "+" },
+              { label: "Profiles Analyzed", value: 3400, suffix: "+" },
+              { label: "Portals Crawled", value: 5, suffix: "" }
+            ].map((stat, idx) => (
               <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 20 }}
+                key={stat.label}
+                initial={{ opacity: 0, y: 15 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-                className="card-premium p-6 flex flex-col gap-4"
+                transition={{ delay: idx * 0.1 }}
+                className="card-premium p-6"
               >
-                <div className="flex gap-0.5">
-                  {Array.from({ length: t.rating }).map((_, j) => (
-                    <Star key={j} className="w-4 h-4 fill-amber-400 text-amber-400" />
-                  ))}
+                <div className="text-3xl font-extrabold gradient-brand-text mb-1">
+                  <AnimatedCounter end={stat.value} suffix={stat.suffix} />
                 </div>
-                <p className="text-sm leading-relaxed text-foreground/80 flex-1">"{t.quote}"</p>
-                <div>
-                  <p className="text-sm font-semibold">{t.author}</p>
-                  <p className="text-xs text-muted-foreground">{t.role}</p>
-                </div>
+                <div className="text-xs text-muted-foreground font-semibold">{stat.label}</div>
               </motion.div>
             ))}
           </div>
@@ -342,7 +345,7 @@ export default function LandingPage() {
 
             <div className="relative z-10">
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/15 border border-white/25 text-sm font-medium mb-6">
-                <Sparkles className="w-4 h-4" />
+                <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
                 Free Forever for Job Seekers
               </div>
               <h2 className="text-4xl md:text-5xl font-extrabold mb-4 text-balance" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>

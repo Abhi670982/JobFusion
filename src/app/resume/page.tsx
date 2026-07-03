@@ -40,6 +40,12 @@ export default function ResumePage() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Post-upload workflow states
+  const [showWorkflowModal, setShowWorkflowModal] = useState(false);
+  const [newlyExtractedSkills, setNewlyExtractedSkills] = useState<{ name: string; level: number }[]>([]);
+  const [selectedWorkflow, setSelectedWorkflow] = useState<'merge' | 'replace'>('merge');
+  const [tempProfileData, setTempProfileData] = useState<any>(null);
+
   useEffect(() => {
     async function loadData() {
       try {
@@ -68,8 +74,10 @@ export default function ResumePage() {
     try {
       const result = await uploadResume(user._id, file);
       if (result.success) {
-        setSuccessMessage(`Resume uploaded! ${result.data.skillsExtracted} skills extracted. Category: ${result.data.resumeCategory}`);
-        setProfile(await fetchProfile(user._id, true));
+        setNewlyExtractedSkills(result.data.extractedSkills || []);
+        setTempProfileData(result.data);
+        setSelectedWorkflow('merge'); // default suggestion
+        setShowWorkflowModal(true);
       } else {
         setError(result.error || 'Failed to upload resume.');
       }
@@ -77,6 +85,41 @@ export default function ResumePage() {
       setError(err.message || 'An error occurred during upload.');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleSelectWorkflow = async () => {
+    if (!user || !tempProfileData) return;
+    setShowWorkflowModal(false);
+    setLoading(true);
+    try {
+      const preUploadSkills = profile?.skills || [];
+      let finalSkills = [];
+      if (selectedWorkflow === 'replace') {
+        finalSkills = newlyExtractedSkills;
+      } else {
+        finalSkills = [...preUploadSkills];
+        for (const s of newlyExtractedSkills) {
+          if (!finalSkills.some(e => e.name.toLowerCase() === s.name.toLowerCase())) {
+            finalSkills.push(s);
+          }
+        }
+      }
+
+      const updated = await updateProfile(user._id, { skills: finalSkills });
+      if (updated) {
+        // Now update profile to register resumeUrl, name, etc. from temp data
+        const nextProfile = await fetchProfile(user._id, true);
+        setProfile(nextProfile);
+        setSuccessMessage(`Resume uploaded! We extracted and updated your skills list (${newlyExtractedSkills.length} skills detected).`);
+      } else {
+        setError('Failed to update profile skills.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'An error occurred while finalizing resume.');
+    } finally {
+      setLoading(false);
+      setTempProfileData(null);
     }
   };
 
@@ -158,24 +201,6 @@ export default function ResumePage() {
           <p className="text-muted-foreground text-sm">Upload your resume to extract skills, detect your domain, and get career insights</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          {/* Skill Mode Selector */}
-          <div className="flex items-center gap-1.5 bg-card border border-border px-3 py-1.5 rounded-xl shadow-sm">
-            <span className="text-xs font-semibold text-muted-foreground">On Upload:</span>
-            <select
-              value={profile?.resumeSkillMode || 'merge'}
-              onChange={async (e) => {
-                const mode = e.target.value as 'merge' | 'replace';
-                if (user) {
-                  const updated = await updateProfile(user._id, { resumeSkillMode: mode });
-                  if (updated) { setProfile(updated); setSuccessMessage(`Skill mode set to "${mode}".`); }
-                }
-              }}
-              className="text-xs bg-transparent border-0 font-semibold focus:ring-0 cursor-pointer focus-visible:outline-none touch-auto"
-            >
-              <option value="merge">Merge Skills</option>
-              <option value="replace">Replace Skills</option>
-            </select>
-          </div>
           {profile?.resumeUrl && (
             <Button size="sm" variant="outline" onClick={handleManualParse} disabled={parsing}
               className="rounded-xl gap-1.5 text-xs border-border bg-card shadow-sm h-9 btn-press">
@@ -458,6 +483,75 @@ export default function ResumePage() {
             </Button>
             <Button onClick={async () => { setDeleteModalOpen(false); await handleDeleteResume(); }} className="rounded-xl bg-destructive hover:bg-destructive/90 text-white border-0 flex-1 max-w-[120px] btn-press">
               Yes, Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Newly Uploaded Skills Workflow Dialog */}
+      <Dialog open={showWorkflowModal} onOpenChange={setShowWorkflowModal}>
+        <DialogContent className="max-w-md rounded-2xl p-6 bg-card border border-border">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold text-center" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+              We found {newlyExtractedSkills.length} new skill{newlyExtractedSkills.length === 1 ? '' : 's'}
+            </DialogTitle>
+            <p className="text-xs text-muted-foreground text-center mt-1">
+              JobFusion parsed your resume. What would you like to do?
+            </p>
+          </DialogHeader>
+          
+          <div className="space-y-3 py-4">
+            <div 
+              onClick={() => setSelectedWorkflow('replace')}
+              className={cn(
+                "p-4 rounded-xl border-2 cursor-pointer transition-all flex items-start gap-3",
+                selectedWorkflow === 'replace'
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:border-primary/20 hover:bg-accent/40"
+              )}
+            >
+              <div className="w-4 h-4 rounded-full border border-primary flex items-center justify-center flex-shrink-0 mt-0.5">
+                {selectedWorkflow === 'replace' && (
+                  <div className="w-2.5 h-2.5 rounded-full bg-primary" />
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-bold text-foreground">Replace my existing skills</p>
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  Remove old skills and use only resume skills.
+                </p>
+              </div>
+            </div>
+
+            <div 
+              onClick={() => setSelectedWorkflow('merge')}
+              className={cn(
+                "p-4 rounded-xl border-2 cursor-pointer transition-all flex items-start gap-3",
+                selectedWorkflow === 'merge'
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:border-primary/20 hover:bg-accent/40"
+              )}
+            >
+              <div className="w-4 h-4 rounded-full border border-primary flex items-center justify-center flex-shrink-0 mt-0.5">
+                {selectedWorkflow === 'merge' && (
+                  <div className="w-2.5 h-2.5 rounded-full bg-primary" />
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-bold text-foreground">Add only new skills</p>
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  Keep current skills and add only newly detected ones.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button 
+              onClick={handleSelectWorkflow}
+              className="w-full rounded-xl gradient-brand text-white border-0 font-bold shadow-md glow-sm btn-press h-10"
+            >
+              Continue
             </Button>
           </DialogFooter>
         </DialogContent>

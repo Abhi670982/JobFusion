@@ -226,6 +226,7 @@ export async function POST(req: NextRequest) {
         resumeName:      fileName,
         resumeUpdatedAt: profile.resumeUpdatedAt,
         skillsExtracted: newSkills.length,
+        extractedSkills: newSkills,
         skills:          profile.skills,
         resumeCategory:  profile.resumeCategory,
         resumeSummary:   profile.resumeSummary,

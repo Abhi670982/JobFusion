@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   MapPin, Clock, Users, Bookmark, BookmarkCheck, Share2,
   CheckCircle2, XCircle, ArrowLeft, ExternalLink, Briefcase,
-  DollarSign, Wifi, Star, Zap, Building2, X, Sparkles
+  DollarSign, Wifi, Star, Zap, Building2, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -747,7 +747,7 @@ export default function JobDetailPage() {
             className="fixed bottom-6 right-6 z-50 max-w-sm w-full p-4 rounded-2xl glass border border-emerald-500/20 shadow-2xl flex items-start gap-3 bg-card/90"
           >
             <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 flex-shrink-0">
-              <Sparkles className="w-4.5 h-4.5 animate-bounce" />
+              <CheckCircle2 className="w-4.5 h-4.5 animate-bounce" />
             </div>
             <div className="flex-1 min-w-0">
               <h4 className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Application Status</h4>
