@@ -73,7 +73,7 @@ export async function startScheduler() {
     // ─── BullMQ Scheduler Mode ───────────────────────────────────────────────
     console.log("[Scheduler] Initializing BullMQ queues and workers...");
 
-    const sources: JobSource[] = ["linkedin", "indeed", "wellfound", "internshala", "careers", "aggregator"];
+    const sources: JobSource[] = ["wellfound", "careers", "aggregator"];
     
     // Define Queue and Workers
     for (const source of sources) {
@@ -99,15 +99,11 @@ export async function startScheduler() {
       });
 
       // Repeatable job configuration
-      // LinkedIn: every 2h ('0 */2 * * *')
-      // Indeed: every 2h offset by 30m ('30 */2 * * *')
       // Wellfound: every 4h ('0 */4 * * *')
-      // Internshala: every 6h ('0 */6 * * *')
+      // Careers: every 6h ('0 */6 * * *')
+      // Aggregator: every 4h ('0 */4 * * *')
       let cronExpression = "0 */6 * * *"; // default
-      if (source === "linkedin") cronExpression = "0 */2 * * *";
-      else if (source === "indeed") cronExpression = "30 */2 * * *";
-      else if (source === "wellfound") cronExpression = "0 */4 * * *";
-      else if (source === "internshala") cronExpression = "0 */6 * * *";
+      if (source === "wellfound") cronExpression = "0 */4 * * *";
       else if (source === "careers") cronExpression = "0 */6 * * *";
       else if (source === "aggregator") cronExpression = "0 */4 * * *";
 
@@ -141,10 +137,7 @@ export async function startScheduler() {
 
     // Define intervals (cadence) in milliseconds
     const intervals = {
-      linkedin: 2 * 60 * 60 * 1000,     // 2 hours
-      indeed: 2 * 60 * 60 * 1000,       // 2 hours
       wellfound: 4 * 60 * 60 * 1000,    // 4 hours
-      internshala: 6 * 60 * 60 * 1000,  // 6 hours
       aggregator: 4 * 60 * 60 * 1000,   // 4 hours
       cleanup: 24 * 60 * 60 * 1000      // 24 hours
     };
@@ -162,14 +155,7 @@ export async function startScheduler() {
       activeIntervals.push(intervalId);
     };
 
-    setupInterval("linkedin", () => runSourceSync("linkedin", FETCH_KEYWORDS), intervals.linkedin);
-    // Offset indeed by 30 mins on first run, then repeat
-    setTimeout(() => {
-      setupInterval("indeed", () => runSourceSync("indeed", FETCH_KEYWORDS), intervals.indeed);
-    }, 30 * 60 * 1000);
-
     setupInterval("wellfound", () => runSourceSync("wellfound", FETCH_KEYWORDS), intervals.wellfound);
-    setupInterval("internshala", () => runSourceSync("internshala", FETCH_KEYWORDS), intervals.internshala);
     // Careers scraper — offset by 15 mins, then every 6h
     setTimeout(() => {
       setupInterval("careers", () => runSourceSync("careers", FETCH_KEYWORDS), 6 * 60 * 60 * 1000);

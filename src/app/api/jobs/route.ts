@@ -280,20 +280,16 @@ export async function GET(req: NextRequest) {
       return Job.countDocuments(baseConditions.length > 1 ? { $and: baseConditions } : baseConditions[0]);
     };
 
-    const [linkedinCount, indeedCount, wellfoundCount, internshalaCount, careersCount] = await Promise.all([
-      getSourceCount("linkedin"),
-      getSourceCount("indeed"),
+        const [wellfoundCount, careersCount, aggregatorCount] = await Promise.all([
       getSourceCount("wellfound"),
-      getSourceCount("internshala"),
-      getSourceCount("careers")
+      getSourceCount("careers"),
+      getSourceCount("aggregator")
     ]);
 
     const sourceCounts = {
-      linkedin: linkedinCount,
-      indeed: indeedCount,
       wellfound: wellfoundCount,
-      internshala: internshalaCount,
-      careers: careersCount
+      careers: careersCount,
+      aggregator: aggregatorCount
     };
 
     return NextResponse.json({

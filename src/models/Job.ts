@@ -169,6 +169,10 @@ const JobSchema = new Schema(
 
 // Create indexes
 JobSchema.index({ source: 1 });
+JobSchema.index({ title: 1 });
+JobSchema.index({ company: 1 });
+JobSchema.index({ location: 1 });
+JobSchema.index({ category: 1 });
 JobSchema.index({ title: 1, company: 1 });
 JobSchema.index({ createdAt: -1 });
 JobSchema.index({ postedAtDate: -1 });

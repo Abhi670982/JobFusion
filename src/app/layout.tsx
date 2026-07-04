@@ -40,7 +40,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
       <body className={`${inter.variable} ${plusJakarta.variable} font-sans antialiased overflow-x-hidden`}>
         {/* Global Dark Mode Background */}
         <div className="fixed inset-0 z-[-50] pointer-events-none hidden dark:block" style={{

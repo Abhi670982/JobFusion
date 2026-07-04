@@ -38,6 +38,13 @@ export const companies: CompanyCareerSite[] = [
   { name: "Scale AI", atsType: "greenhouse", slug: "scaleai", category: "AI/Data" },
   { name: "Tailscale", atsType: "greenhouse", slug: "tailscale", category: "Security" },
   { name: "CircleCI", atsType: "greenhouse", slug: "circleci", category: "Dev Tools" },
+  { name: "Meesho", atsType: "greenhouse", slug: "meesho", category: "E-commerce/India" },
+  { name: "Swiggy", atsType: "greenhouse", slug: "swiggy", category: "FoodTech/India" },
+  { name: "Delhivery", atsType: "greenhouse", slug: "delhivery", category: "Logistics/India" },
+  { name: "ShareChat", atsType: "greenhouse", slug: "sharechat", category: "Social Media/India" },
+  { name: "Slice", atsType: "greenhouse", slug: "slice", category: "Fintech/India" },
+  { name: "CRED", atsType: "greenhouse", slug: "cred", category: "Fintech/India" },
+  { name: "Blinkit", atsType: "greenhouse", slug: "grofers", category: "Quick Commerce/India" },
 
   // ── LEVER API COMPANIES (VERIFIED WORKING) ───────────────────────────────
   { name: "Netflix", atsType: "lever", slug: "netflix", category: "Streaming/Entertainment" },
@@ -48,6 +55,8 @@ export const companies: CompanyCareerSite[] = [
   { name: "Medium", atsType: "lever", slug: "medium", category: "Publishing" },
   { name: "15Five", atsType: "lever", slug: "15five", category: "HR Tech" },
   { name: "Palantir", atsType: "lever", slug: "palantir", category: "Data Analytics" },
+  { name: "Lenskart", atsType: "lever", slug: "lenskart", category: "E-commerce/Retail/India" },
+  { name: "Urban Company", atsType: "lever", slug: "urbancompany", category: "Gig Economy/India" },
 
   // ── ASHBY API COMPANIES (VERIFIED WORKING) ───────────────────────────────
   { name: "OpenAI", atsType: "ashby", slug: "openai", category: "AI" },
@@ -69,6 +78,7 @@ export const companies: CompanyCareerSite[] = [
   { name: "Clerk", atsType: "ashby", slug: "clerk", category: "Auth/Identity" },
   { name: "Resend", atsType: "ashby", slug: "resend", category: "Email API" },
   { name: "Neon", atsType: "ashby", slug: "neon", category: "Serverless Postgres" },
+  { name: "Khatabook", atsType: "ashby", slug: "khatabook", category: "Fintech/India" },
 
   // ── SMARTRECRUITERS COMPANIES (VERIFIED WORKING) ─────────────────────────
   { name: "Visa", atsType: "smartrecruiters", slug: "visa", category: "Fintech/Payments" },
