@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSignIn, useUser } from '@clerk/nextjs';
+import { useSignIn, useUser, SignInButton } from '@clerk/nextjs';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -77,28 +77,6 @@ export default function CustomSignInPage() {
     } catch (err: any) {
       console.error('Email sign-in error:', err);
       setError(err.message || 'An unexpected error occurred.');
-      setLoading(false);
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    if (!signIn) return;
-    setLoading(true);
-    setError('');
-
-    try {
-      const { error: ssoErr } = await signIn.sso({
-        strategy: 'oauth_google',
-        redirectUrl: redirectUrl,
-        redirectCallbackUrl: '/sso-callback',
-      });
-      if (ssoErr) {
-        setError(ssoErr.message || 'OAuth error occurred.');
-        setLoading(false);
-      }
-    } catch (err: any) {
-      console.error('Google sign-in error:', err);
-      setError(err.message || 'OAuth error occurred.');
       setLoading(false);
     }
   };
@@ -186,17 +164,17 @@ export default function CustomSignInPage() {
             </div>
           )}
 
-          {/* Social login */}
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full h-11 rounded-xl mb-4 font-medium transition-all duration-200 border-border hover:bg-accent"
-            onClick={handleGoogleSignIn}
-            disabled={loading || fetchStatus === 'fetching' || !signIn}
-          >
-            <GoogleIcon />
-            Continue with Google
-          </Button>
+          {/* Social login wrapped in Clerk's robust SignInButton */}
+          <SignInButton forceRedirectUrl={redirectUrl} signUpForceRedirectUrl="/dashboard">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full h-11 rounded-xl mb-4 font-medium transition-all duration-200 border-border hover:bg-accent cursor-pointer"
+            >
+              <GoogleIcon />
+              Continue with Google
+            </Button>
+          </SignInButton>
 
           <div className="flex items-center gap-3 my-6">
             <div className="h-px flex-1 bg-border/60" />

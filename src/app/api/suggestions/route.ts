@@ -4,6 +4,7 @@ import Job from "@/models/Job";
 
 export const dynamic = "force-dynamic";
 
+// Local predefined list maps for fallback or supplementation
 const SUGGESTIONS_MAP: Record<string, string[]> = {
   skills: [
     "react", "javascript", "typescript", "node.js", "python", 
@@ -11,13 +12,15 @@ const SUGGESTIONS_MAP: Record<string, string[]> = {
     "css3", "next.js", "tailwind css", "mongodb", "postgresql", 
     "express.js", "django", "graphql", "figma", "machine learning",
     "data analysis", "rest apis", "ci/cd", "kubernetes", "redux",
-    "nextauth", "prisma", "go", "rust", "swift", "kotlin", "flutter"
+    "nextauth", "prisma", "go", "rust", "swift", "kotlin", "flutter",
+    "vue.js", "angular", "ruby on rails", "php", "c#", "scala"
   ],
   locations: [
     "remote", "bengaluru, karnataka", "delhi ncr", "mumbai, maharashtra", 
     "hyderabad, telangana", "pune, maharashtra", "chennai, tamil nadu", 
     "san francisco, ca", "new york, ny", "london, uk", "berlin, germany",
-    "singapore", "toronto, canada", "sydney, australia"
+    "singapore", "toronto, canada", "sydney, australia", "noida, uttar pradesh",
+    "gurugram, haryana"
   ],
   roles: [
     "software engineer", "frontend developer", "backend developer", 
@@ -29,6 +32,9 @@ const SUGGESTIONS_MAP: Record<string, string[]> = {
     "google", "microsoft", "razorpay", "stripe", "amazon", 
     "meta", "netflix", "cred", "flipkart", "zomato", "tcs",
     "infosys", "wipro", "cognizant", "accenture", "uber"
+  ],
+  categories: [
+    "engineering", "design", "product", "marketing", "sales", "finance", "hr", "operations"
   ],
   salaries: [
     "₹6l – ₹12l", "₹12l – ₹20l", "₹20l – ₹35l", "₹35l – ₹50l", "₹50l+"
@@ -49,114 +55,184 @@ const SUGGESTIONS_MAP: Record<string, string[]> = {
 // In-memory cache for fast lookups
 const cache = new Map<string, string[]>();
 
+// Regex escaping helper to avoid regex injection
+function escapeRegExp(string: string): string {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Levenshtein edit distance for fuzzy matching
+function getEditDistance(a: string, b: string): number {
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // substitution
+          matrix[i][j - 1] + 1,     // insertion
+          matrix[i - 1][j] + 1      // deletion
+        );
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
+// 5-Tier Sorting & Ranking Algorithm
+function rankSuggestions(suggestions: string[], query: string): string[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return suggestions.sort((a, b) => a.localeCompare(b));
+
+  const exactMatches: string[] = [];
+  const startsWithQuery: string[] = [];
+  const startsWithWord: string[] = [];
+  const containsQuery: string[] = [];
+  const fuzzyMatches: { item: string; distance: number }[] = [];
+
+  for (const s of suggestions) {
+    const sLower = s.toLowerCase();
+
+    if (sLower === q) {
+      exactMatches.push(s);
+    } else if (sLower.startsWith(q)) {
+      startsWithQuery.push(s);
+    } else if (sLower.split(/[\s,./\-\(\)]+/).some(word => word.startsWith(q))) {
+      startsWithWord.push(s);
+    } else if (sLower.includes(q)) {
+      containsQuery.push(s);
+    } else {
+      const distance = getEditDistance(sLower, q);
+      // Allow fuzzy match for similar words (max distance depends on length)
+      const maxDistance = q.length <= 4 ? 1 : 2;
+      if (distance <= maxDistance) {
+        fuzzyMatches.push({ item: s, distance });
+      }
+    }
+  }
+
+  // Sort each category alphabetically
+  const sortFn = (a: string, b: string) => a.localeCompare(b);
+  exactMatches.sort(sortFn);
+  startsWithQuery.sort(sortFn);
+  startsWithWord.sort(sortFn);
+  containsQuery.sort(sortFn);
+  fuzzyMatches.sort((a, b) => a.distance - b.distance || a.item.localeCompare(b.item));
+
+  return [
+    ...exactMatches,
+    ...startsWithQuery,
+    ...startsWithWord,
+    ...containsQuery,
+    ...fuzzyMatches.map(f => f.item)
+  ];
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const category = searchParams.get("category") || "";
-    const q = (searchParams.get("q") || "").trim().toLowerCase();
+    const q = (searchParams.get("q") || "").trim();
+    const limit = Math.min(30, Math.max(1, parseInt(searchParams.get("limit") || "15", 10)));
 
     if (!category || !SUGGESTIONS_MAP[category]) {
       return NextResponse.json({ success: true, suggestions: [] });
     }
 
-    const cacheKey = `${category}:${q}`;
+    const cacheKey = `${category}:${q.toLowerCase()}:${limit}`;
     if (cache.has(cacheKey)) {
       return NextResponse.json({ success: true, suggestions: cache.get(cacheKey) });
     }
 
     const localList = SUGGESTIONS_MAP[category];
 
-    // For empty or extremely short inputs, return top local entries
-    if (q.length < 2) {
-      const defaultSuggestions = localList.slice(0, 5);
+    // For empty inputs, return top local entries
+    if (q.length === 0) {
+      const defaultSuggestions = localList.slice(0, limit);
       cache.set(cacheKey, defaultSuggestions);
       return NextResponse.json({ success: true, suggestions: defaultSuggestions });
     }
 
     let dbSuggestions: string[] = [];
+    const escapedQuery = escapeRegExp(q);
+    const regex = new RegExp(escapedQuery, "i");
 
-    // Real-time Database queries for roles and locations
     try {
       await connectDB();
-      const regex = new RegExp(q, "i");
 
       if (category === "roles") {
-        // Query matching job titles or company names
-        const matchedJobs = await Job.find(
-          { $or: [{ title: regex }, { company: regex }] },
-          { title: 1, company: 1 }
-        ).limit(30).lean();
-
-        const uniqueMatches = new Set<string>();
-        matchedJobs.forEach((job: any) => {
-          if (job.title && job.title.toLowerCase().includes(q)) {
-            uniqueMatches.add(job.title.toLowerCase());
-          }
-          if (job.company && job.company.toLowerCase().includes(q)) {
-            uniqueMatches.add(job.company.toLowerCase());
-          }
-        });
-        dbSuggestions = Array.from(uniqueMatches);
-
+        // Query unique job titles or company names
+        const matchedTitles = await Job.distinct("title", { title: { $regex: regex } });
+        const matchedCompanies = await Job.distinct("company", { company: { $regex: regex } });
+        dbSuggestions = Array.from(new Set([...matchedTitles, ...matchedCompanies]));
       } else if (category === "locations") {
-        // Query matching locations, city, or country names
-        const matchedJobs = await Job.find(
-          { $or: [{ location: regex }, { city: regex }, { country: regex }] },
-          { location: 1, city: 1, country: 1 }
-        ).limit(40).lean();
-
-        const uniqueMatches = new Set<string>();
-        matchedJobs.forEach((job: any) => {
-          if (job.location && job.location.toLowerCase().includes(q)) {
-            uniqueMatches.add(job.location.toLowerCase());
-          }
-          if (job.city && job.city.toLowerCase().includes(q)) {
-            uniqueMatches.add(job.city.toLowerCase());
-          }
-          if (job.country && job.country.toLowerCase().includes(q)) {
-            uniqueMatches.add(job.country.toLowerCase());
-          }
-        });
-        
-        if ("remote".includes(q)) {
-          uniqueMatches.add("remote");
+        const matchedLocs = await Job.distinct("location", { location: { $regex: regex } });
+        const matchedCities = await Job.distinct("city", { city: { $regex: regex } });
+        const matchedCountries = await Job.distinct("country", { country: { $regex: regex } });
+        dbSuggestions = Array.from(new Set([...matchedLocs, ...matchedCities, ...matchedCountries]));
+        if ("remote".includes(q.toLowerCase())) {
+          dbSuggestions.push("remote");
         }
-        dbSuggestions = Array.from(uniqueMatches);
+      } else if (category === "skills") {
+        const matchedSkills = await Job.aggregate([
+          { $unwind: "$skills" },
+          { $match: { skills: { $regex: regex } } },
+          { $group: { _id: "$skills" } },
+          { $limit: 100 }
+        ]);
+        dbSuggestions = matchedSkills.map(r => r._id);
+      } else if (category === "companies") {
+        dbSuggestions = await Job.distinct("company", { company: { $regex: regex } });
+      } else if (category === "categories") {
+        dbSuggestions = await Job.distinct("category", { category: { $regex: regex } });
       }
     } catch (dbErr: any) {
-      console.warn("[Suggestions API] Database query failed — falling back to local/AI:", dbErr.message);
+      console.warn("[Suggestions API] Database query failed — falling back to local:", dbErr.message);
     }
 
-    // Merge DB results with local predefined list to ensure we always get good results
-    const combinedSet = new Set<string>(dbSuggestions);
+    // Merge database results with local predefined templates
+    const combinedSet = new Set<string>();
     
-    // Supplement from local dictionary if we have less than 5 suggestions
-    if (combinedSet.size < 5) {
-      const localMatches = localList.filter(item => item.toLowerCase().includes(q) && item.toLowerCase() !== q);
-      for (const match of localMatches) {
-        combinedSet.add(match.toLowerCase());
-        if (combinedSet.size >= 5) break;
-      }
-    }
+    // Add DB results normalized to match original casing if possible
+    dbSuggestions.forEach(item => {
+      if (item && item.trim()) combinedSet.add(item.trim());
+    });
 
-    const suggestions = Array.from(combinedSet)
-      .filter(s => s.length > 0 && s !== q)
-      .slice(0, 5);
+    // Supplement with local suggestions matching the query
+    const localMatches = localList.filter(item => {
+      const itemLower = item.toLowerCase();
+      const qLower = q.toLowerCase();
+      return itemLower.includes(qLower) || getEditDistance(itemLower, qLower) <= (qLower.length <= 4 ? 1 : 2);
+    });
+
+    localMatches.forEach(item => combinedSet.add(item));
+
+    // Convert Set back to Array, filter out matching query itself if not exact, and rank
+    const rawList = Array.from(combinedSet);
+    const ranked = rankSuggestions(rawList, q);
+    
+    // Slice to the requested limit
+    const suggestions = ranked.slice(0, limit);
 
     cache.set(cacheKey, suggestions);
     return NextResponse.json({ success: true, suggestions });
   } catch (err: any) {
     console.error("[Suggestions API] Failed to fetch suggestions:", err.message);
-
-    // Fallback: local dictionary matching
+    
+    // Fallback dictionary match
     const { searchParams } = new URL(req.url);
     const category = searchParams.get("category") || "";
     const q = (searchParams.get("q") || "").trim().toLowerCase();
+    const limit = Math.min(30, Math.max(1, parseInt(searchParams.get("limit") || "15", 10)));
+    
     const localList = SUGGESTIONS_MAP[category] || [];
-    const localMatches = localList
-      .filter(item => item.toLowerCase().includes(q))
-      .slice(0, 5);
+    const localMatches = localList.filter(item => item.toLowerCase().includes(q));
+    const ranked = rankSuggestions(localMatches, q);
 
-    return NextResponse.json({ success: true, suggestions: localMatches });
+    return NextResponse.json({ success: true, suggestions: ranked.slice(0, limit) });
   }
 }

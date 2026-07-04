@@ -192,11 +192,6 @@ export default function JobCard({
           {job.experience && (
             <Badge variant="secondary" className="rounded-full text-xs">{job.experience}</Badge>
           )}
-          {source && (
-            <Badge variant="outline" className={cn('rounded-full text-xs border font-medium', source.cls)}>
-              {source.label}
-            </Badge>
-          )}
         </div>
 
         {/* Location & Salary */}

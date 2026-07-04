@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AutocompleteInput } from '@/components/ui/autocomplete';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -64,26 +65,22 @@ function PremiumJobsLoader() {
   const [msgIndex, setMsgIndex] = useState(0);
   const [mounted, setMounted] = useState(false);
   const loadingMessages = [
-    "Searching LinkedIn...",
     "Checking Company Careers...",
     "Matching your skills...",
     "Ranking opportunities...",
     "Building personalized recommendations...",
-    "Aggregating Indeed listings...",
     "Scanning Wellfound startup boards...",
-    "Connecting to Internshala...",
+    "Aggregating job listings...",
     "Filtering roles based on experience..."
   ];
 
   // Map messages to current active source indices
-  // Sources: 0: LinkedIn, 1: Indeed, 2: Wellfound, 3: Internshala, 4: Company Careers
+  // Sources: 0: Wellfound, 1: Company Careers, 2: Aggregator
   const getActiveSourceIndex = (msg: string): number => {
     const s = msg.toLowerCase();
-    if (s.includes('linkedin')) return 0;
-    if (s.includes('indeed')) return 1;
-    if (s.includes('wellfound')) return 2;
-    if (s.includes('internshala')) return 3;
-    if (s.includes('company') || s.includes('careers')) return 4;
+    if (s.includes('wellfound')) return 0;
+    if (s.includes('company') || s.includes('careers')) return 1;
+    if (s.includes('aggregat')) return 2;
     return -1;
   };
 
@@ -99,11 +96,9 @@ function PremiumJobsLoader() {
   const activeSourceIdx = getActiveSourceIndex(currentMsg);
 
   const sources = [
-    { name: 'LinkedIn', color: 'text-blue-500 bg-blue-500/10 border-blue-500/20' },
-    { name: 'Indeed', color: 'text-purple-500 bg-purple-500/10 border-purple-500/20' },
     { name: 'Wellfound', color: 'text-teal-500 bg-teal-500/10 border-teal-500/20' },
-    { name: 'Internshala', color: 'text-orange-500 bg-orange-500/10 border-orange-500/20' },
     { name: 'Company Careers', color: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' },
+    { name: 'Aggregator', color: 'text-pink-500 bg-pink-500/10 border-pink-500/20' },
   ];
 
   return (
@@ -299,10 +294,8 @@ function PremiumJobsLoader() {
 function PortalStatusText() {
   const [index, setIndex] = useState(0);
   const statuses = [
-    "Connecting to LinkedIn API...",
-    "Searching Indeed listings...",
+    "Checking Company Careers...",
     "Syncing Wellfound startup database...",
-    "Scraping Internshala internships...",
     "Scanning Google, Stripe, Vercel careers...",
     "Crawling company career pages...",
     "Filtering openings against your skills...",
@@ -347,7 +340,6 @@ export default function JobsPage() {
   const [queryInput, setQueryInput] = useState('');
   const [locationInput, setLocationInput] = useState('');
   const [skillSearch, setSkillSearch] = useState('');
-  const [showSkillDropdown, setShowSkillDropdown] = useState(false);
 
   // Layout states
   const [mobileFilters, setMobileFilters] = useState(false);
@@ -364,10 +356,8 @@ export default function JobsPage() {
   const [remoteOnly, setRemoteOnly] = useState(false);
   const [salaryRange, setSalaryRange] = useState<number>(0); // Min salary in lakhs
 
-  // Health and Sync Stats
+  // Health and Sync Stats (used by admin dashboard, not shown to users)
   const [health, setHealth] = useState<any>({});
-  const [outdatedSources, setOutdatedSources] = useState<string[]>([]);
-  const [dismissedBanners, setDismissedBanners] = useState<string[]>([]);
 
   // AI Matching States
   const [matching, setMatching] = useState(false);
@@ -376,11 +366,9 @@ export default function JobsPage() {
   const [filtersCollapsed, setFiltersCollapsed] = useState(false);
   const [skillWarning, setSkillWarning] = useState(false);
   const [sourceCounts, setSourceCounts] = useState<{ [key: string]: number }>({
-    linkedin: 0,
-    indeed: 0,
     wellfound: 0,
-    internshala: 0,
-    careers: 0
+    careers: 0,
+    aggregator: 0
   });
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -462,34 +450,11 @@ export default function JobsPage() {
           setProfile(prof);
         }
 
-        // Fetch health status
+        // Fetch health status (used by admin dashboard, not shown to users)
         const healthRes = await fetch('/api/jobs/sources/health');
         const healthData = await healthRes.json();
         if (healthData.success && healthData.data) {
           setHealth(healthData.data);
-          
-          // Check for outdated sources (status failed OR too long since last sync)
-          // careers source crawls real company pages so allow 48h; others allow 24h
-          const OUTDATED_THRESHOLD: Record<string, number> = {
-            linkedin: 24,
-            indeed: 24,
-            wellfound: 24,
-            internshala: 24,
-            careers: 48,
-          };
-          const outdated: string[] = [];
-          Object.entries(healthData.data).forEach(([source, info]: [string, any]) => {
-            if (info.status === "failed") {
-              outdated.push(source);
-            } else if (info.lastSync) {
-              const hoursSinceSync = (Date.now() - new Date(info.lastSync).getTime()) / (1000 * 60 * 60);
-              const threshold = OUTDATED_THRESHOLD[source] ?? 24;
-              if (hoursSinceSync > threshold) {
-                outdated.push(source);
-              }
-            }
-          });
-          setOutdatedSources(outdated);
         }
 
         // Parse search params from URL on load (fallback to sessionStorage if URL is empty)
@@ -751,7 +716,6 @@ export default function JobsPage() {
     }
     
     setSkillWarning(false);
-    setOutdatedSources([]); // User triggered a fresh fetch — dismiss stale sync banners
     setMatching(true);
     
     try {
@@ -803,7 +767,6 @@ export default function JobsPage() {
       setSelectedSkills(prev => [...prev, s]);
     }
     setSkillSearch('');
-    setShowSkillDropdown(false);
   };
 
   const removeSkill = (skill: string) => {
@@ -874,40 +837,6 @@ export default function JobsPage() {
           </Button>
         </div>
 
-        {/* Outdated Sync Alert Banner */}
-        <AnimatePresence>
-          {outdatedSources
-            .filter(src => !dismissedBanners.includes(src))
-            .map(src => {
-              const info = health[src] || {};
-              const timeStr = info.lastSync 
-                ? `${Math.round((Date.now() - new Date(info.lastSync).getTime()) / (1000 * 60 * 60))}h ago`
-                : 'unknown';
-              return (
-                <motion.div
-                  key={src}
-                  initial={{ opacity: 0, y: -20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="p-3.5 rounded-2xl border border-amber-500/20 bg-amber-500/5 text-amber-600 dark:text-amber-400 flex items-start justify-between gap-3 text-xs shadow-sm"
-                >
-                  <div className="flex gap-2">
-                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-semibold capitalize">{getSourceDisplayName(src)} data sync may be outdated.</span> Last synced: {timeStr}. Details will update automatically.
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => setDismissedBanners(prev => [...prev, src])}
-                    className="text-amber-500/60 hover:text-amber-600 dark:hover:text-amber-300 flex-shrink-0 touch-auto"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </motion.div>
-              );
-            })}
-        </AnimatePresence>
-
         {/* Search Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -977,35 +906,7 @@ export default function JobsPage() {
               </Button>
             </div>
 
-            {/* Source Checklist */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Job Portal Source</h4>
-              <div className="space-y-2.5">
-                {['linkedin', 'indeed', 'wellfound', 'internshala', 'careers'].map(src => {
-                  const count = sourceCounts[src] ?? 0;
-                  return (
-                    <div key={src} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <Checkbox
-                          id={`src-${src}`}
-                          checked={selectedSources.includes(src)}
-                          onCheckedChange={() => toggleSource(src)}
-                          className="rounded-lg border-border"
-                        />
-                        <Label htmlFor={`src-${src}`} className="text-xs font-semibold cursor-pointer capitalize">
-                          {getSourceDisplayName(src)}
-                        </Label>
-                      </div>
-                      <span className="text-[10px] text-muted-foreground font-bold bg-muted px-2 py-0.5 rounded-full">
-                        {count}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
 
-            <Separator />
 
             {/* Job Type Checklist */}
             <div className="space-y-3">
@@ -1140,38 +1041,14 @@ export default function JobsPage() {
                   </Badge>
                 ))}
               </div>
-              <Input
+              <AutocompleteInput
                 value={skillSearch}
-                onChange={(e) => {
-                  setSkillSearch(e.target.value);
-                  setShowSkillDropdown(true);
-                }}
-                onFocus={() => setShowSkillDropdown(true)}
+                onChange={(e) => setSkillSearch(e.target.value)}
+                dataSource="skills"
+                onSelect={(skill) => addSkill(skill)}
                 placeholder="Type skill (e.g. React)..."
                 className="rounded-xl bg-muted/40 text-xs border-border/80"
               />
-              
-              {showSkillDropdown && skillSearch && (
-                <div className="absolute top-full left-0 right-0 z-20 mt-1 glass rounded-xl border border-border shadow-2xl p-1.5 max-h-48 overflow-y-auto">
-                  {filteredSkillDefinitions.length === 0 ? (
-                    <p className="text-xs text-muted-foreground p-2">No matching skills found</p>
-                  ) : (
-                    filteredSkillDefinitions.map(def => (
-                      <button
-                        key={def.name}
-                        onClick={() => addSkill(def.name)}
-                        className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs hover:bg-accent hover:text-foreground flex justify-between items-center touch-auto"
-                      >
-                        {def.name}
-                        <ArrowRight className="w-3.5 h-3.5 opacity-50" />
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
-              {showSkillDropdown && skillSearch && (
-                <div className="fixed inset-0 z-10" onClick={() => setShowSkillDropdown(false)} />
-              )}
             </div>
 
             {/* Reset All */}
@@ -1440,19 +1317,13 @@ export default function JobsPage() {
 
               <div className="flex justify-center gap-6 pt-2 flex-wrap">
                 <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping" /> LinkedIn
-                </span>
-                <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-ping" /> Indeed
-                </span>
-                <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-ping" /> Wellfound
                 </span>
                 <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-ping" /> Internshala
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" /> Company Careers
                 </span>
                 <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" /> Company Careers
+                  <span className="w-1.5 h-1.5 rounded-full bg-pink-500 animate-ping" /> Aggregator
                 </span>
               </div>
             </motion.div>

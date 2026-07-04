@@ -4,10 +4,7 @@ import Job from "../models/Job";
 import FetchLog from "../models/FetchLog";
 import FailedJob from "../models/FailedJob";
 import { JobSource, UnifiedJob } from "./adapters/types";
-import { LinkedInAdapter } from "./adapters/linkedin";
-import { IndeedAdapter } from "./adapters/indeed";
 import { WellfoundAdapter } from "./adapters/wellfound";
-import { InternshalaAdapter } from "./adapters/internshala";
 import { CareersAdapter } from "./adapters/careers";
 import { AggregatorAdapter } from "./adapters/aggregator";
 
@@ -23,14 +20,8 @@ export function stripHtml(html: string | null | undefined): string {
 // Helper to determine company color
 export function getCompanyColor(source: JobSource): string {
   switch (source) {
-    case "linkedin":
-      return "#0077b5";
-    case "indeed":
-      return "#6366f1";
     case "wellfound":
       return "#0a85ea";
-    case "internshala":
-      return "#f97316";
     case "careers":
       return "#14b8a6";
     case "aggregator":
@@ -65,17 +56,8 @@ export async function runSourceSync(source: JobSource, keywords: string[]): Prom
 
     let adapter;
     switch (source) {
-      case "linkedin":
-        adapter = new LinkedInAdapter();
-        break;
-      case "indeed":
-        adapter = new IndeedAdapter();
-        break;
       case "wellfound":
         adapter = new WellfoundAdapter();
-        break;
-      case "internshala":
-        adapter = new InternshalaAdapter();
         break;
       case "careers":
         adapter = new CareersAdapter();
