@@ -109,7 +109,7 @@ export default function LandingPage() {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed"
           >
-            The most intelligent career platform. AI parses your resume, matches your skills across 5 live job portals, and surfaces the roles you were meant to apply for.
+            The most intelligent career platform. AI parses your resume, matches your skills and surfaces the roles you were meant to apply for.
           </motion.p>
 
           {/* Search Bar */}
@@ -186,20 +186,7 @@ export default function LandingPage() {
           ) : <div className="h-12" />}
         </motion.div>
 
-        {/* Trusted by */}
-        <motion.div
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }}
-          className="relative z-10 max-w-3xl mx-auto mt-28 md:mt-16 text-center"
-        >
-          <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-5">Aggregating live jobs from</p>
-          <div className="flex flex-wrap justify-center gap-3">
-            {trustedBy.map((company) => (
-              <div key={company} className="px-5 py-2 rounded-full glass border border-border/60 text-sm font-semibold text-muted-foreground hover:text-foreground hover:border-primary/30 transition-all">
-                {company}
-              </div>
-            ))}
-          </div>
-        </motion.div>
+
       </section>
 
       {/* ── FEATURES ──────────────────────────────────────────────── */}
