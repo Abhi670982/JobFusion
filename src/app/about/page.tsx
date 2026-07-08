@@ -1,6 +1,5 @@
 import { Metadata } from 'next';
-import Link from 'next/link';
-import { Search, Clock, Database, MonitorSmartphone, GraduationCap, ArrowRight } from 'lucide-react';
+import { Search, Clock, Database, MonitorSmartphone, GraduationCap } from 'lucide-react';
 
 export const metadata: Metadata = {
   title: 'About Us | JobFusion',
@@ -94,23 +93,7 @@ export default function AboutUsPage() {
           </div>
         </div>
 
-        {/* CTA Section */}
-        <div className="text-center bg-card/30 backdrop-blur-sm border border-border/50 rounded-3xl p-12 relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary/50 via-secondary/50 to-primary/50"></div>
-          <h2 className="text-3xl md:text-4xl font-bold mb-6" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-            Ready to find your next role?
-          </h2>
-          <p className="text-xl text-muted-foreground mb-10 font-medium">
-            JobFusion — One Search. Every Opportunity.
-          </p>
-          <Link 
-            href="/jobs" 
-            className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-primary text-primary-foreground font-semibold rounded-full hover:bg-primary/90 hover:scale-105 transition-all duration-300 shadow-lg shadow-primary/25"
-          >
-            Start Searching Jobs
-            <ArrowRight className="w-5 h-5" />
-          </Link>
-        </div>
+
 
       </div>
     </div>
