@@ -111,7 +111,7 @@ export default function Navbar() {
             {navLinks.map((link) => (
               <Link
                 key={link.href}
-                href={link.href}
+                href={link.href === '/jobs' ? (isSignedIn ? '/jobs' : '/sign-in') : link.href}
                 className={cn(
                   'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
                   pathname === link.href
@@ -272,7 +272,7 @@ export default function Navbar() {
                 {navLinks.map((link) => (
                   <Link
                     key={link.href}
-                    href={link.href}
+                    href={link.href === '/jobs' ? (isSignedIn ? '/jobs' : '/sign-in') : link.href}
                     onClick={() => setMobileMenuOpen(false)}
                     className={cn(
                       'px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',

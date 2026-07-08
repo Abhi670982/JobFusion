@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, useInView, useScroll, useTransform } from 'framer-motion';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@clerk/nextjs';
 import {
   Search, MapPin, ArrowRight, CheckCircle2,
   Zap, BarChart3, FileText, Brain, Target, History, Star
@@ -10,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { AutocompleteInput } from '@/components/ui/autocomplete';
 import Navbar from '@/components/navbar';
 import Footer from '@/components/footer';
 import HeroBackground from '@/components/hero-background';
@@ -54,6 +57,8 @@ const testimonials = [
 ];
 
 export default function LandingPage() {
+  const { isSignedIn } = useAuth();
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [location, setLocation] = useState('');
   const [stats, setStats] = useState({ totalJobs: 0, activeSources: 4, addedLast24h: 0, isLoaded: false });
@@ -122,29 +127,43 @@ export default function LandingPage() {
               <div className="flex flex-col sm:flex-row gap-1.5">
                 <div className="flex items-center gap-2 flex-1 px-3 py-1">
                   <Search className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                  <Input
+                  <AutocompleteInput
+                    dataSource="roles"
                     placeholder="Role, company, or keyword..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="border-0 bg-transparent shadow-none focus-visible:ring-0 text-sm h-9 px-0"
+                    onSelect={(val) => setSearchQuery(val)}
+                    className="border-0 bg-transparent shadow-none focus-visible:ring-0 text-sm h-9 px-0 w-full min-w-0"
+                    wrapperClassName="w-full flex-1"
                   />
                 </div>
                 <div className="hidden sm:block w-px bg-border/60 my-2" />
                 <div className="flex items-center gap-2 flex-1 px-3 py-1">
                   <MapPin className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                  <Input
+                  <AutocompleteInput
+                    dataSource="locations"
                     placeholder="Location or Remote..."
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
-                    className="border-0 bg-transparent shadow-none focus-visible:ring-0 text-sm h-9 px-0"
+                    onSelect={(val) => setLocation(val)}
+                    className="border-0 bg-transparent shadow-none focus-visible:ring-0 text-sm h-9 px-0 w-full min-w-0"
+                    wrapperClassName="w-full flex-1"
                   />
                 </div>
-                <Link href={`/jobs${searchQuery ? `?q=${encodeURIComponent(searchQuery)}` : ''}`}>
-                  <Button className="gradient-brand text-white border-0 rounded-xl h-10 px-6 font-semibold hover:opacity-90 shadow-md glow-sm whitespace-nowrap w-full sm:w-auto">
-                    <Search className="w-4 h-4 mr-1.5" />
-                    Find Jobs
-                  </Button>
-                </Link>
+                <Button
+                  onClick={() => {
+                    if (isSignedIn) {
+                      router.push(`/jobs${searchQuery ? `?q=${encodeURIComponent(searchQuery)}` : ''}${location ? `${searchQuery ? '&' : '?'}location=${encodeURIComponent(location)}` : ''}`);
+                    } else {
+                      sessionStorage.setItem('guestSearch', JSON.stringify({ role: searchQuery, location }));
+                      router.push('/sign-in');
+                    }
+                  }}
+                  className="gradient-brand text-white border-0 rounded-xl h-10 px-6 font-semibold hover:opacity-90 shadow-md glow-sm whitespace-nowrap w-full sm:w-auto"
+                >
+                  <Search className="w-4 h-4 mr-1.5" />
+                  Find Jobs
+                </Button>
               </div>
             </div>
           </motion.div>
@@ -156,7 +175,7 @@ export default function LandingPage() {
           >
             <span className="text-xs text-muted-foreground">Popular:</span>
             {['Remote Engineer', 'Product Designer', 'Data Scientist', 'Full Stack Dev', 'AI/ML Engineer'].map((term) => (
-              <Link key={term} href="/jobs">
+              <Link key={term} href={isSignedIn ? "/jobs" : "/sign-in"}>
                 <button className="text-xs px-3 py-1.5 rounded-full border border-border hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all duration-200 touch-auto font-medium">
                   {term}
                 </button>
@@ -274,10 +293,7 @@ export default function LandingPage() {
             <div className="absolute bottom-0 left-0 w-48 h-48 rounded-full opacity-10 blur-3xl" style={{ background: 'white' }} />
 
             <div className="relative z-10">
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/15 border border-white/25 text-sm font-medium mb-6">
-                <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                Free Forever for Job Seekers
-              </div>
+
               <h2 className="text-4xl md:text-5xl font-extrabold mb-4 text-balance" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
                 Ready to find your dream job?
               </h2>
@@ -285,19 +301,28 @@ export default function LandingPage() {
                 Join thousands of professionals using JobFusion to discover their perfect roles in real-time.
               </p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                <Link href="/sign-up">
-                  <Button size="lg" className="bg-white text-primary hover:bg-white/90 rounded-xl font-bold px-8 shadow-xl h-12">
-                    Get Started Free
-                    <ArrowRight className="w-4 h-4 ml-2" />
-                  </Button>
-                </Link>
-                <Link href="/jobs">
+                {isSignedIn ? (
+                  <Link href="/dashboard">
+                    <Button size="lg" className="bg-white text-primary hover:bg-white/90 rounded-xl font-bold px-8 shadow-xl h-12">
+                      Go to Dashboard
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  </Link>
+                ) : (
+                  <Link href="/sign-up">
+                    <Button size="lg" className="bg-white text-primary hover:bg-white/90 rounded-xl font-bold px-8 shadow-xl h-12">
+                      Get Started Free
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  </Link>
+                )}
+                <Link href={isSignedIn ? "/jobs" : "/sign-in"}>
                   <Button size="lg" variant="outline" className="bg-transparent border-white/30 text-white hover:bg-white/10 hover:text-white rounded-xl font-semibold px-8 h-12">
                     Browse Jobs
                   </Button>
                 </Link>
               </div>
-              <p className="text-white/50 text-xs mt-5">No credit card required · 2 min setup</p>
+
             </div>
           </motion.div>
         </div>

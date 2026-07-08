@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSignUp, useUser } from '@clerk/nextjs';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
@@ -32,6 +32,20 @@ export default function CustomSignUpPage() {
   const { signUp, errors, fetchStatus } = useSignUp();
   const { isLoaded: isUserLoaded, isSignedIn } = useUser();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectUrl = searchParams.get('redirect_url') || '/dashboard';
+  
+  const [dynamicRedirect, setDynamicRedirect] = useState(redirectUrl);
+
+  useEffect(() => {
+    const guestSearchStr = sessionStorage.getItem('guestSearch');
+    if (guestSearchStr) {
+      try {
+        const { role, location } = JSON.parse(guestSearchStr);
+        setDynamicRedirect(`/jobs?q=${encodeURIComponent(role || '')}&location=${encodeURIComponent(location || '')}`);
+      } catch(e) {}
+    }
+  }, []);
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -54,9 +68,9 @@ export default function CustomSignUpPage() {
   // Redirect if already signed in
   useEffect(() => {
     if (isUserLoaded && isSignedIn) {
-      router.push('/dashboard');
+      router.push(dynamicRedirect);
     }
-  }, [isUserLoaded, isSignedIn, router]);
+  }, [isUserLoaded, isSignedIn, router, dynamicRedirect]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,7 +100,7 @@ export default function CustomSignUpPage() {
       if (signUp.status === 'complete') {
         await signUp.finalize({
           navigate: ({ session, decorateUrl }) => {
-            const url = decorateUrl('/dashboard');
+            const url = decorateUrl(dynamicRedirect);
             if (url.startsWith('http')) {
               window.location.href = url;
             } else {
@@ -136,7 +150,7 @@ export default function CustomSignUpPage() {
       if (signUp.status === 'complete') {
         await signUp.finalize({
           navigate: ({ session, decorateUrl }) => {
-            const url = decorateUrl('/dashboard');
+            const url = decorateUrl(dynamicRedirect);
             if (url.startsWith('http')) {
               window.location.href = url;
             } else {
@@ -181,7 +195,7 @@ export default function CustomSignUpPage() {
     try {
       const { error: ssoErr } = await signUp.sso({
         strategy: 'oauth_google',
-        redirectUrl: '/dashboard',
+        redirectUrl: dynamicRedirect,
         redirectCallbackUrl: '/sso-callback',
       });
       if (ssoErr) {
