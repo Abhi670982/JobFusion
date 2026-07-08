@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { MessageCircle, Link2, Code2, Play, Globe, Heart } from 'lucide-react';
+import { useAuth } from '@clerk/nextjs';
 
 const footerLinks = {
   Product: [
@@ -12,7 +13,7 @@ const footerLinks = {
     { label: 'AI Matching', href: '/' },
   ],
   Company: [
-    { label: 'About Us', href: '/about-us' },
+    { label: 'About Us', href: '/about' },
   ],
   Legal: [
     { label: 'Privacy Policy', href: '/privacy-policy' },
@@ -22,6 +23,7 @@ const footerLinks = {
 };
 
 export default function Footer() {
+  const { isSignedIn } = useAuth();
   return (
     <footer className="relative z-10 bg-card/30 mt-24">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16">
@@ -66,7 +68,7 @@ export default function Footer() {
                 {links.map((link) => (
                   <li key={link.label}>
                     <Link
-                      href={link.href}
+                      href={link.href === '/jobs' ? (isSignedIn ? '/jobs' : '/sign-in') : link.href}
                       className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                     >
                       {link.label}
