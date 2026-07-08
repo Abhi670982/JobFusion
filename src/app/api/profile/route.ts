@@ -155,20 +155,23 @@ export async function PUT(req: NextRequest) {
     if (body.skills && Array.isArray(body.skills)) {
       const newSkillNames = body.skills.map((s: any) => (typeof s === "string" ? s : s.name || "").toLowerCase()).filter(Boolean);
       if (newSkillNames.length > 0) {
-        console.log(`[Profile API] Triggering background scraper sync for manually updated skills:`, newSkillNames);
+        console.log(`[Profile API] Triggering backend skills sync for manually updated skills:`, newSkillNames);
         Promise.resolve().then(async () => {
-          const { runSourceSync } = require("@/lib/pipeline");
-          const sources = ["linkedin", "indeed", "wellfound", "internshala", "careers"];
-          
-          for (const source of sources) {
-            try {
-              console.log(`[Profile API Background] Syncing ${source} for skills:`, newSkillNames);
-              await runSourceSync(source, newSkillNames);
-            } catch (err: any) {
-              console.error(`[Profile API Background] Sync failed for ${source}:`, err.message);
-            }
+          try {
+            const backendUrl = process.env.JOB_AGGREGATOR_URL || "http://localhost:5000";
+            const response = await fetch(`${backendUrl}/api/jobs/sync`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                skills: newSkillNames,
+                location: body.location || undefined
+              }),
+            });
+            const data = await response.json();
+            console.log(`[Profile API Background] Sync trigger result:`, data);
+          } catch (err: any) {
+            console.error(`[Profile API Background] Sync trigger failed:`, err.message);
           }
-          console.log("[Profile API Background] Sync complete.");
         });
       }
     }
