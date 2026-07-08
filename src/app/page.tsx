@@ -152,9 +152,9 @@ export default function LandingPage() {
           {/* Popular searches */}
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}
-            className="flex flex-wrap justify-center gap-2 mb-14"
+            className="flex flex-wrap justify-center items-center gap-2 mb-14"
           >
-            <span className="text-xs text-muted-foreground self-center">Popular:</span>
+            <span className="text-xs text-muted-foreground">Popular:</span>
             {['Remote Engineer', 'Product Designer', 'Data Scientist', 'Full Stack Dev', 'AI/ML Engineer'].map((term) => (
               <Link key={term} href="/jobs">
                 <button className="text-xs px-3 py-1.5 rounded-full border border-border hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all duration-200 touch-auto font-medium">
