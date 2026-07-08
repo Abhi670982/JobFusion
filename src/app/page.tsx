@@ -164,26 +164,7 @@ export default function LandingPage() {
             ))}
           </motion.div>
 
-          {/* Live Stats */}
-          {stats.isLoaded && stats.totalJobs > 0 ? (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}
-              className="flex flex-wrap justify-center gap-10"
-            >
-              {[
-                { label: 'Jobs Indexed', value: stats.totalJobs },
-                { label: 'Live Sources', value: stats.activeSources },
-                { label: 'Added (24h)', value: stats.addedLast24h },
-              ].map(({ label, value }) => (
-                <div key={label} className="text-center">
-                  <div className="text-3xl font-extrabold gradient-brand-text tabular-nums mb-0.5">
-                    <AnimatedCounter end={value} />
-                  </div>
-                  <div className="text-xs text-muted-foreground font-medium">{label}</div>
-                </div>
-              ))}
-            </motion.div>
-          ) : <div className="h-12" />}
+
         </motion.div>
 
 
@@ -276,45 +257,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── LIVE STATISTICS ── */}
-      <section className="py-24 px-4 relative bg-muted/10 border-y border-border">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center max-w-2xl mx-auto mb-16">
-            <Badge className="mb-4 rounded-full px-4 py-1.5 border border-primary/20 bg-primary/8 text-primary font-semibold text-xs">
-              Live Platform Stats
-            </Badge>
-            <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-              Trusted by Job Seekers
-            </h2>
-            <p className="text-muted-foreground text-sm leading-relaxed">
-              JobFusion aggregates from top platforms in real-time, providing fresh listings daily.
-            </p>
-          </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-            {[
-              { label: "Jobs Aggregated", value: stats.totalJobs || 12450, suffix: "+" },
-              { label: "Companies Covered", value: 850, suffix: "+" },
-              { label: "Profiles Analyzed", value: 3400, suffix: "+" },
-              { label: "Portals Crawled", value: 5, suffix: "" }
-            ].map((stat, idx) => (
-              <motion.div
-                key={stat.label}
-                initial={{ opacity: 0, y: 15 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: idx * 0.1 }}
-                className="card-premium p-6"
-              >
-                <div className="text-3xl font-extrabold gradient-brand-text mb-1">
-                  <AnimatedCounter end={stat.value} suffix={stat.suffix} />
-                </div>
-                <div className="text-xs text-muted-foreground font-semibold">{stat.label}</div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
 
       {/* ── CTA ───────────────────────────────────────────────────── */}
       <section className="py-24 px-4">

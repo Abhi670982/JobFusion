@@ -285,75 +285,7 @@ export default function DashboardPage() {
         </div>
       </motion.div>
 
-      {/* ── Profile Completion Banner ── */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.07 }}
-        className="relative rounded-2xl overflow-hidden gradient-brand p-5 text-white"
-      >
-        <div className="absolute right-0 top-0 w-56 h-56 rounded-full opacity-10 blur-2xl" style={{ background: 'white', transform: 'translate(30%, -30%)' }} />
-        <div className="absolute bottom-0 left-0 w-32 h-32 rounded-full opacity-10 blur-2xl" style={{ background: 'white', transform: 'translate(-20%, 20%)' }} />
 
-        <div className="relative z-10 space-y-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              {/* Circular progress indicator */}
-              <div className="relative w-16 h-16 flex-shrink-0">
-                <svg className="w-16 h-16 -rotate-90" viewBox="0 0 64 64">
-                  <circle cx="32" cy="32" r="27" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="5" />
-                  <circle
-                    cx="32" cy="32" r="27" fill="none" stroke="white" strokeWidth="5"
-                    strokeDasharray={`${2 * Math.PI * 27}`}
-                    strokeDashoffset={`${2 * Math.PI * 27 * (1 - completion / 100)}`}
-                    strokeLinecap="round"
-                    style={{ transition: 'stroke-dashoffset 1s ease' }}
-                  />
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-sm font-extrabold leading-none">{completion}%</span>
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                  <span className="font-bold text-sm">Profile Completion</span>
-                  {completion === 100 ? (
-                    <Badge className="border-white/30 bg-emerald-500/40 text-white text-[10px] rounded-full px-2">Complete</Badge>
-                  ) : (
-                    <Badge className="border-white/30 bg-white/20 text-white text-[10px] rounded-full px-2">In Progress</Badge>
-                  )}
-                </div>
-                <p className="text-white/70 text-xs max-w-sm leading-relaxed">
-                  {completion === 100
-                    ? 'Your profile is complete. You are positioned for top job matches!'
-                    : 'Complete your profile to get better AI-matched job recommendations.'}
-                </p>
-              </div>
-            </div>
-            <Link href="/resume">
-              <Button size="sm" className="bg-white text-primary hover:bg-white/90 rounded-xl font-bold shadow-lg whitespace-nowrap">
-                Manage Resume <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
-              </Button>
-            </Link>
-          </div>
-          
-          {/* Checklist of dynamic remaining tasks */}
-          {completion < 100 && incompleteTasks.length > 0 && (
-            <div className="pt-3 border-t border-white/10">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-white/70 mb-2">Remaining Tasks:</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                {incompleteTasks.map((task) => (
-                  <div key={task} className="flex items-center gap-2 text-xs text-white/90 bg-white/10 px-2.5 py-1.5 rounded-lg border border-white/5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                    <span>{task}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </motion.div>
 
       {/* ── Empty State ── */}
       {!loading && !profile?.resumeUrl && (!profile?.skills || profile.skills.length === 0) && (
