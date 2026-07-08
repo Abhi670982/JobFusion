@@ -1,3 +1,5 @@
+const path = require("path");
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
@@ -24,6 +26,10 @@ const nextConfig = {
 
   // DO NOT set output: 'standalone' — Vercel manages its own output format.
   // Using 'standalone' on Vercel causes deployment failures.
+
+  turbopack: {
+    root: path.resolve(__dirname),
+  },
 };
 
 module.exports = nextConfig;
