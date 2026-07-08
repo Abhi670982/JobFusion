@@ -376,14 +376,18 @@ export default function CustomSignUpPage() {
                 </div>
 
                 <div className="flex items-start gap-2.5">
-                  <Checkbox
-                    id="terms"
-                    className="mt-0.5 border-border focus-visible:ring-primary data-[state=checked]:bg-primary"
-                    checked={termsAccepted}
-                    onCheckedChange={(checked) => setTermsAccepted(!!checked)}
-                    required
-                    disabled={loading}
-                  />
+                  <div className="relative w-4 h-4 md:w-[18px] md:h-[18px] flex-shrink-0 mt-0.5">
+                    <label className="absolute -inset-3.5 flex items-center justify-center cursor-pointer">
+                      <Checkbox
+                        id="terms"
+                        className="w-full h-full border-border focus-visible:ring-primary data-[state=checked]:bg-primary transition-all duration-200"
+                        checked={termsAccepted}
+                        onCheckedChange={(checked) => setTermsAccepted(!!checked)}
+                        required
+                        disabled={loading}
+                      />
+                    </label>
+                  </div>
                   <Label htmlFor="terms" className="text-sm text-muted-foreground leading-relaxed cursor-pointer select-none">
                     I agree to the <Link href="/" className="text-primary font-semibold hover:underline">Terms of Service</Link> and <Link href="/" className="text-primary font-semibold hover:underline">Privacy Policy</Link>
                   </Label>

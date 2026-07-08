@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sun, Moon, ArrowLeft, User, Mail, Briefcase, MapPin,
-  Edit3, Save, Loader2, CheckCircle2, AlertCircle, X
+  Edit3, Save, Loader2, CheckCircle2, AlertCircle, X, LogOut
 } from 'lucide-react';
+import { useClerk } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -33,6 +34,21 @@ export default function SettingsPage() {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+
+  // Clerk authentication
+  const { signOut } = useClerk();
+  const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const handleSignOut = async () => {
+    setLoggingOut(true);
+    try {
+      await signOut({ redirectUrl: '/' });
+    } catch (err) {
+      console.error("Sign out error:", err);
+      setLoggingOut(false);
+    }
+  };
 
   // Profile states
   const [user, setUser] = useState<DbUser | null>(null);
@@ -330,6 +346,28 @@ export default function SettingsPage() {
         </div>
       </motion.div>
 
+      {/* Danger Zone / Sign Out Section */}
+      <motion.div 
+        initial={{ opacity: 0, y: 10 }} 
+        animate={{ opacity: 1, y: 0 }} 
+        className="card-premium p-6 sm:p-8 space-y-4 border-rose-500/20 bg-rose-500/[0.02]"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-bold text-rose-500 dark:text-rose-400" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Session</h2>
+            <p className="text-xs text-muted-foreground mt-0.5 font-medium">Sign out of your active session on this device.</p>
+          </div>
+          <Button
+            onClick={() => setConfirmLogoutOpen(true)}
+            variant="outline"
+            className="border-rose-500/30 text-rose-500 hover:bg-rose-500/10 hover:text-rose-600 rounded-xl font-bold shadow-sm w-full sm:w-auto sm:max-w-xs gap-2 transition-all duration-200"
+          >
+            <LogOut className="w-4 h-4" />
+            Sign Out
+          </Button>
+        </div>
+      </motion.div>
+
       {/* Edit Profile Modal */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-xl rounded-2xl max-h-[85vh] overflow-y-auto">
@@ -365,6 +403,37 @@ export default function SettingsPage() {
             <Button onClick={handleEditSave} disabled={saving} className="rounded-xl gradient-brand text-white border-0 gap-1.5 shadow-md glow-sm btn-press touch-auto">
               <Save className="w-4 h-4" />
               {saving ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Sign Out Confirmation Dialog */}
+      <Dialog open={confirmLogoutOpen} onOpenChange={setConfirmLogoutOpen}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">Sign Out?</DialogTitle>
+          </DialogHeader>
+          <div className="py-3">
+            <p className="text-sm text-muted-foreground font-medium">
+              Are you sure you want to sign out of your JobFusion account?
+            </p>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setConfirmLogoutOpen(false)} disabled={loggingOut} className="rounded-xl">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSignOut}
+              disabled={loggingOut}
+              className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 gap-1.5 shadow-md btn-press touch-auto"
+            >
+              {loggingOut ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <LogOut className="w-4 h-4" />
+              )}
+              {loggingOut ? 'Signing Out...' : 'Sign Out'}
             </Button>
           </DialogFooter>
         </DialogContent>
