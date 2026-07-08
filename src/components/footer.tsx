@@ -82,7 +82,7 @@ export default function Footer() {
 
         <div className="mt-12 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-muted-foreground">
-            © 2025 JobFusion, Inc. All rights reserved.
+            © 2026 JobFusion, All rights reserved.
           </p>
           <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
             <span className="flex items-center gap-1.5">
