@@ -113,6 +113,7 @@ export const AutocompleteInput = React.forwardRef<HTMLInputElement, Autocomplete
       }
 
       setLoading(true);
+      const abortController = new AbortController();
 
       const fetchTimeout = setTimeout(async () => {
         const cacheKey = `${typeof dataSource === "string" ? dataSource : "custom"}:${trimmedQuery.toLowerCase()}:${maxResults}`;
@@ -140,7 +141,8 @@ export const AutocompleteInput = React.forwardRef<HTMLInputElement, Autocomplete
           } else if (typeof dataSource === "string") {
             // Fetch from global backend suggestions API endpoint
             const res = await fetch(
-              `/api/suggestions?category=${dataSource}&q=${encodeURIComponent(trimmedQuery)}&limit=${maxResults}`
+              `/api/suggestions?category=${dataSource}&q=${encodeURIComponent(trimmedQuery)}&limit=${maxResults}`,
+              { signal: abortController.signal }
             );
             if (res.ok) {
               const data = await res.json();
@@ -153,14 +155,23 @@ export const AutocompleteInput = React.forwardRef<HTMLInputElement, Autocomplete
           // Cache and set state
           autocompleteCache.set(cacheKey, results);
           setSuggestions(results);
-        } catch (error) {
+        } catch (error: any) {
+          if (error.name === 'AbortError' || error.message?.includes('Failed to fetch')) {
+            // Ignore fetch abortion or unmount errors
+            return;
+          }
           console.error("Autocomplete fetch error:", error);
         } finally {
-          setLoading(false);
+          if (!abortController.signal.aborted) {
+            setLoading(false);
+          }
         }
       }, debounceDelay);
 
-      return () => clearTimeout(fetchTimeout);
+      return () => {
+        clearTimeout(fetchTimeout);
+        abortController.abort();
+      };
     }, [inputValue, dataSource, debounceDelay, maxResults]);
 
     const selectSuggestion = (val: string) => {

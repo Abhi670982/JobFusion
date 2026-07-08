@@ -431,6 +431,9 @@ export default function JobsPage() {
 
   // 1. Initial Load: Fetch auth, saved jobs, applied jobs, health stats, and initial query string
   useEffect(() => {
+    // Clear guest search if it was used to route here
+    sessionStorage.removeItem('guestSearch');
+    
     async function loadData() {
       // Trigger background sync cycle
       fetch('/api/cron/crawl', { method: 'POST' }).catch(err => console.error("Error starting auto-crawl:", err));

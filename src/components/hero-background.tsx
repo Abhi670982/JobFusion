@@ -141,15 +141,40 @@ export default function HeroBackground() {
       {/* ── Hero-specific animated layer (absolute, scoped to hero section) ── */}
       {/* ── Hero-specific background pattern (absolute, scoped to hero section) ── */}
       {resolvedTheme === 'dark' && (
-        <div className="absolute inset-0 pointer-events-none z-0" style={{
-          backgroundImage: `
-            url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.08'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")
-          `,
-          backgroundSize: '60px 60px',
-          maskImage: 'linear-gradient(to bottom, black 50%, transparent 100%)',
-          WebkitMaskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)'
-        }}>
-        </div>
+        <>
+          {/* Deep Black & Dark Navy Base with Blue Ambient Glow */}
+          <div className="absolute inset-0 pointer-events-none z-[-1] overflow-hidden">
+            {/* Deep Black Base */}
+            <div className="absolute inset-0 bg-[#020617]" />
+
+            {/* Extremely subtle center glow */}
+            <div className="absolute inset-0 opacity-40 mix-blend-screen blur-3xl" style={{
+              background: 'radial-gradient(circle at 50% 40%, rgba(29, 78, 216, 0.15) 0%, transparent 60%)'
+            }} />
+          </div>
+
+          {/* Plus Grid Pattern */}
+          <div className="absolute inset-0 pointer-events-none z-0" style={{
+            backgroundImage: `
+              url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")
+            `,
+            backgroundSize: '60px 60px',
+            maskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)',
+            WebkitMaskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)'
+          }}>
+          </div>
+
+          {/* Particles / Stars */}
+          <div className="absolute inset-0 pointer-events-none z-0" style={{
+            backgroundImage: `
+              url("data:image/svg+xml,%3Csvg width='120' height='120' viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='20' cy='20' r='1' fill='%23ffffff' fill-opacity='0.1' /%3E%3Ccircle cx='80' cy='40' r='1.5' fill='%23ffffff' fill-opacity='0.2' /%3E%3Ccircle cx='40' cy='90' r='0.5' fill='%23ffffff' fill-opacity='0.15' /%3E%3Ccircle cx='100' cy='100' r='1' fill='%23ffffff' fill-opacity='0.08' /%3E%3C/svg%3E")
+            `,
+            backgroundSize: '120px 120px',
+            maskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)',
+            WebkitMaskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)'
+          }}>
+          </div>
+        </>
       )}
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-10">
         <style dangerouslySetInnerHTML={{
@@ -204,6 +229,9 @@ export default function HeroBackground() {
         ))}
 
       </div>
+
+      {/* Bottom Fade to Page Background */}
+      <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-background to-transparent pointer-events-none z-20" />
     </>
   );
 }
