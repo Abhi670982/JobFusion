@@ -896,8 +896,7 @@ export default function JobsPage() {
           {/* 1. Left Filtering Sidebar */}
           <aside className={cn(
             "lg:col-span-1 space-y-6 card-premium p-5",
-            filtersCollapsed ? "lg:hidden" : "lg:block",
-            mobileFilters ? "fixed inset-0 z-40 bg-background/95 backdrop-blur-md p-6 overflow-y-auto block space-y-6" : "hidden lg:block"
+            mobileFilters ? "fixed inset-0 z-40 bg-background/95 backdrop-blur-md p-6 overflow-y-auto block space-y-6" : (filtersCollapsed ? "hidden" : "hidden lg:block")
           )}>
             <div className="flex items-center justify-between lg:hidden mb-2">
               <h3 className="font-bold">Filters</h3>
