@@ -131,10 +131,13 @@ export default function Navbar() {
               <Button
                 variant="ghost"
                 size="icon"
+                aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                 className="rounded-xl text-muted-foreground hover:text-foreground w-9 h-9"
               >
                 {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                <span className="sr-only">Toggle theme</span>
               </Button>
             )}
 
@@ -248,10 +251,14 @@ export default function Navbar() {
                 <Button
                   variant="ghost"
                   size="icon"
+                  aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+                  title={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+                  aria-expanded={mobileMenuOpen}
                   onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                   className="md:hidden rounded-xl text-muted-foreground hover:text-foreground w-9 h-9 flex items-center justify-center"
                 >
                   {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+                  <span className="sr-only">Toggle menu</span>
                 </Button>
               </div>
             )}

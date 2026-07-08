@@ -23,9 +23,9 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
     return (
       <div className="flex flex-col min-h-screen bg-background">
         <Navbar />
-        <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6">
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6">
           {children}
-        </div>
+        </main>
       </div>
     );
   }
@@ -35,7 +35,9 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0 lg:h-screen lg:overflow-y-auto mobile-header-offset page-content scrollbar-thin">
         <Navbar />
-        {children}
+        <main className="flex-1 flex flex-col">
+          {children}
+        </main>
       </div>
     </div>
   );

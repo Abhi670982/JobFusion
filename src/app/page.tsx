@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, useInView, useScroll, useTransform } from 'framer-motion';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
 import {
@@ -14,9 +15,12 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { AutocompleteInput } from '@/components/ui/autocomplete';
 import Navbar from '@/components/navbar';
-import Footer from '@/components/footer';
-import HeroBackground from '@/components/hero-background';
 import { features } from '@/lib/data';
+
+// Dynamic imports — these components are below the fold or decorative,
+// so they don't need to be in the initial JS bundle.
+const Footer = dynamic(() => import('@/components/footer'), { ssr: true });
+const HeroBackground = dynamic(() => import('@/components/hero-background'), { ssr: false });
 
 const iconMap: Record<string, React.ComponentType<any>> = {
   brain: Brain, zap: Zap, target: Target,
@@ -62,10 +66,9 @@ export default function LandingPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [location, setLocation] = useState('');
   const [stats, setStats] = useState({ totalJobs: 0, activeSources: 4, addedLast24h: 0, isLoaded: false });
-  const heroRef = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
-  const heroOpacity = useTransform(scrollYProgress, [0, 0.6], [1, 0]);
-  const heroY = useTransform(scrollYProgress, [0, 0.6], [0, 80]);
+  const { scrollY } = useScroll();
+  const heroOpacity = useTransform(scrollY, [0, 400], [1, 0]);
+  const heroY = useTransform(scrollY, [0, 400], [0, 80]);
 
   useEffect(() => {
     fetch('/api/jobs/stats').then(r => r.json()).then(j => {
@@ -80,8 +83,9 @@ export default function LandingPage() {
     <div className="min-h-screen bg-background dark:bg-transparent overflow-x-hidden">
       <Navbar />
 
+      <main>
       {/* ── HERO ──────────────────────────────────────────────────── */}
-      <section ref={heroRef} className="relative pt-24 pb-36 px-4 overflow-hidden isolate bg-transparent">
+      <section className="relative pt-24 pb-36 px-4 overflow-hidden isolate bg-transparent">
 
         {/* Premium Animated Hero Background */}
         <HeroBackground />
@@ -90,11 +94,10 @@ export default function LandingPage() {
 
 
 
-          {/* Headline */}
-          <motion.h1
-            initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="hero-title text-5xl md:text-7xl font-extrabold leading-[1.05] tracking-tight mb-6"
+          {/* Headline — uses CSS animation instead of Framer Motion so it
+              renders immediately without waiting for JS (critical for LCP) */}
+          <h1
+            className="hero-title text-5xl md:text-7xl font-extrabold leading-[1.05] tracking-tight mb-6 animate-hero-fade-in"
             style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
           >
             One Search.{' '}
@@ -107,15 +110,15 @@ export default function LandingPage() {
                 style={{ background: 'linear-gradient(90deg, oklch(0.53 0.24 258), oklch(0.5 0.25 272))' }}
               />
             </span>
-          </motion.h1>
+          </h1>
 
-          <motion.p
-            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed"
+          {/* Description — CSS animated, not Framer Motion, so LCP isn't blocked */}
+          <p
+            className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed animate-hero-fade-in"
+            style={{ animationDelay: '0.1s' }}
           >
             The most intelligent career platform. AI parses your resume, matches your skills and surfaces the roles you were meant to apply for.
-          </motion.p>
+          </p>
 
           {/* Search Bar */}
           <motion.div
@@ -171,14 +174,16 @@ export default function LandingPage() {
           {/* Popular searches */}
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}
-            className="flex flex-wrap justify-center items-center gap-2 mb-14"
+            className="flex flex-wrap justify-center items-center gap-3 md:gap-2 mb-14"
           >
-            <span className="text-xs text-muted-foreground">Popular:</span>
+            <span className="text-sm md:text-xs text-muted-foreground mr-1">Popular:</span>
             {['Remote Engineer', 'Product Designer', 'Data Scientist', 'Full Stack Dev', 'AI/ML Engineer'].map((term) => (
-              <Link key={term} href={isSignedIn ? "/jobs" : "/sign-in"}>
-                <button className="text-xs px-3 py-1.5 rounded-full border border-border hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all duration-200 touch-auto font-medium">
-                  {term}
-                </button>
+              <Link 
+                key={term} 
+                href={isSignedIn ? "/jobs" : "/sign-in"}
+                className="text-sm md:text-xs px-5 py-3 md:px-3 md:py-1.5 min-h-[48px] md:min-h-[32px] inline-flex items-center justify-center rounded-full border border-border hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all duration-200 font-medium m-1"
+              >
+                {term}
               </Link>
             ))}
           </motion.div>
@@ -327,6 +332,7 @@ export default function LandingPage() {
           </motion.div>
         </div>
       </section>
+      </main>
 
       <Footer />
     </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
+import Image from 'next/image';
 
 const companies = [
   { name: 'Accenture', domain: 'accenture.com', color: '#A100FF' },
@@ -213,6 +214,7 @@ export default function HeroBackground() {
           >
             <div
               style={{
+                position: 'relative',
                 width: '52%',
                 height: '52%',
                 opacity: 0.85,
@@ -222,8 +224,15 @@ export default function HeroBackground() {
                 justifyContent: 'center',
               }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={`https://www.google.com/s2/favicons?domain=${item.domain}&sz=128`} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+              <img 
+                src={`https://www.google.com/s2/favicons?domain=${item.domain}&sz=128`} 
+                alt={item.name} 
+                style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
+                onError={(e) => { 
+                  e.currentTarget.onerror = null; 
+                  e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(item.name)}&background=${item.color.replace('#', '')}&color=fff&size=128`;
+                }} 
+              />
             </div>
           </div>
         ))}
