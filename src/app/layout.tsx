@@ -11,14 +11,14 @@ const inter = Inter({
   subsets: ['latin'],
   variable: '--font-inter',
   display: 'swap',
-  weight: ['300', '400', '500', '600', '700', '800', '900'],
+  weight: ['400', '500', '600', '700'],
 });
 
 const plusJakarta = Plus_Jakarta_Sans({
   subsets: ['latin'],
   variable: '--font-jakarta',
   display: 'swap',
-  weight: ['400', '500', '600', '700', '800'],
+  weight: ['500', '600', '700', '800'],
 });
 
 export const metadata: Metadata = {
@@ -34,13 +34,20 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  maximumScale: 5,
+  userScalable: true,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
+      <head>
+        {/* Preconnect to Clerk CDN (profile images on every page).
+            Google favicon API is lazy-loaded so only dns-prefetch needed. */}
+        <link rel="preconnect" href="https://img.clerk.com" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://img.clerk.com" />
+        <link rel="dns-prefetch" href="https://www.google.com" />
+      </head>
       <body className={`${inter.variable} ${plusJakarta.variable} font-sans antialiased overflow-x-hidden`}>
         {/* Global Dark Mode Background */}
         <div className="fixed inset-0 z-[-50] pointer-events-none hidden dark:block" style={{
