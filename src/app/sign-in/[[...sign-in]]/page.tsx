@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
-import { Eye, EyeOff, ArrowRight, Lock, Mail, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, ArrowRight, Lock, Mail, CheckCircle2, AlertCircle, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -45,12 +45,77 @@ export default function CustomSignInPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Verification step state (for needs_client_trust / needs_second_factor)
+  const [verificationStep, setVerificationStep] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [verificationMethod, setVerificationMethod] = useState<'email' | 'phone' | 'totp'>('email');
+
   // Redirect if already signed in
   useEffect(() => {
     if (isUserLoaded && isSignedIn) {
       router.push(dynamicRedirect);
     }
   }, [isUserLoaded, isSignedIn, router, dynamicRedirect]);
+
+  // Helper to finalize sign-in and navigate
+  const finalizeAndNavigate = async () => {
+    if (!signIn) return;
+    await signIn.finalize({
+      navigate: ({ session, decorateUrl }) => {
+        if (session?.currentTask) {
+          const url = decorateUrl(`/sign-in/tasks/${session.currentTask.key}`);
+          if (url.startsWith('http')) {
+            window.location.href = url;
+          } else {
+            router.push(url);
+          }
+          return;
+        }
+        const url = decorateUrl(dynamicRedirect);
+        if (url.startsWith('http')) {
+          window.location.href = url;
+        } else {
+          router.push(url);
+        }
+      },
+    });
+  };
+
+  // Handle post-authentication status
+  const handlePostAuthStatus = async () => {
+    if (!signIn) return;
+
+    if (signIn.status === 'complete') {
+      await finalizeAndNavigate();
+      return;
+    }
+
+    // New device trust or MFA required — need a verification code
+    if (signIn.status === 'needs_client_trust' || signIn.status === 'needs_second_factor') {
+      // Try to send an email verification code first
+      try {
+        await signIn.mfa.sendEmailCode();
+        setVerificationMethod('email');
+      } catch {
+        // If email code isn't available, try phone
+        try {
+          await signIn.mfa.sendPhoneCode();
+          setVerificationMethod('phone');
+        } catch {
+          // Fallback to TOTP (authenticator app) — no code to send, user enters from their app
+          setVerificationMethod('totp');
+        }
+      }
+      setVerificationStep(true);
+      setLoading(false);
+      return;
+    }
+
+    // Unexpected status
+    setError(`Sign in requires additional steps (status: ${signIn.status}). Please try again.`);
+    setLoading(false);
+  };
+
   const handleGoogleSignIn = async () => {
     if (!signIn) return;
     setLoading(true);
@@ -92,25 +157,62 @@ export default function CustomSignInPage() {
         return;
       }
 
-      if (signIn.status === 'complete') {
-        await signIn.finalize({
-          navigate: ({ session, decorateUrl }) => {
-            const url = decorateUrl(dynamicRedirect);
-            if (url.startsWith('http')) {
-              window.location.href = url;
-            } else {
-              router.push(url);
-            }
-          },
-        });
-      } else {
-        setError(`Sign in failed with status: ${signIn.status}`);
-        setLoading(false);
-      }
+      await handlePostAuthStatus();
     } catch (err: any) {
       console.error('Email sign-in error:', err);
       setError(err.message || 'An unexpected error occurred.');
       setLoading(false);
+    }
+  };
+
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!signIn) return;
+
+    setLoading(true);
+    setError('');
+
+    try {
+      let verifyResult;
+      if (verificationMethod === 'totp') {
+        verifyResult = await signIn.mfa.verifyTOTP({ code: verificationCode });
+      } else if (verificationMethod === 'phone') {
+        verifyResult = await signIn.mfa.verifyPhoneCode({ code: verificationCode });
+      } else {
+        verifyResult = await signIn.mfa.verifyEmailCode({ code: verificationCode });
+      }
+
+      if (verifyResult?.error) {
+        setError(verifyResult.error.message || 'Invalid verification code.');
+        setLoading(false);
+        return;
+      }
+
+      if (signIn.status === 'complete') {
+        await finalizeAndNavigate();
+      } else {
+        setError('Verification succeeded but sign-in is not yet complete. Please try again.');
+        setLoading(false);
+      }
+    } catch (err: any) {
+      console.error('Verification error:', err);
+      setError(err.message || 'Verification failed.');
+      setLoading(false);
+    }
+  };
+
+  // Resend verification code
+  const handleResendCode = async () => {
+    if (!signIn) return;
+    setError('');
+    try {
+      if (verificationMethod === 'phone') {
+        await signIn.mfa.sendPhoneCode();
+      } else if (verificationMethod === 'email') {
+        await signIn.mfa.sendEmailCode();
+      }
+    } catch (err: any) {
+      setError('Failed to resend code. Please try again.');
     }
   };
 
@@ -185,107 +287,199 @@ export default function CustomSignInPage() {
             <span className="font-bold text-xl gradient-brand-text font-sans">JobFusion</span>
           </div>
 
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold mb-2 font-sans">Welcome back</h1>
-            <p className="text-muted-foreground">Sign in to your account to continue</p>
-          </div>
-
-          {error && (
-            <div className="p-3 mb-6 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-start gap-2 animate-shake">
-              <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {/* Social login */}
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full h-11 rounded-xl mb-4 font-medium transition-all duration-200 border-border hover:bg-accent cursor-pointer"
-            onClick={handleGoogleSignIn}
-            disabled={loading || fetchStatus === 'fetching' || !signIn}
-          >
-            <GoogleIcon />
-            Continue with Google
-          </Button>
-
-          <div className="flex items-center gap-3 my-6">
-            <div className="h-px flex-1 bg-border/60" />
-            <span className="text-xs text-muted-foreground uppercase font-semibold">Or email</span>
-            <div className="h-px flex-1 bg-border/60" />
-          </div>
-
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email address</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10 rounded-xl h-11 border-border focus-visible:ring-primary focus-visible:border-primary"
-                  required
-                  disabled={loading}
-                />
+          {/* ── VERIFICATION CODE STEP ── */}
+          {verificationStep ? (
+            <>
+              <div className="mb-8">
+                <div className="flex items-center gap-2 mb-2">
+                  <ShieldCheck className="w-6 h-6 text-primary" />
+                  <h1 className="text-3xl font-bold font-sans">Verify your identity</h1>
+                </div>
+                <p className="text-muted-foreground">
+                  {verificationMethod === 'totp'
+                    ? 'Enter the 6-digit code from your authenticator app.'
+                    : `We sent a verification code to your ${verificationMethod === 'email' ? 'email address' : 'phone number'}. Enter it below to complete sign-in.`
+                  }
+                </p>
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">Password</Label>
-                <Link href="/auth/forgot-password" className="text-xs text-primary hover:underline font-medium">
-                  Forgot password?
-                </Link>
-              </div>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  id="password"
-                  type={show ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 pr-10 rounded-xl h-11 border-border focus-visible:ring-primary focus-visible:border-primary"
-                  required
-                  disabled={loading}
-                />
+              {error && (
+                <div className="p-3 mb-6 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-start gap-2 animate-shake">
+                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleVerifyCode} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="verification-code">Verification Code</Label>
+                  <Input
+                    id="verification-code"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    placeholder="Enter 6-digit code"
+                    value={verificationCode}
+                    onChange={(e) => setVerificationCode(e.target.value)}
+                    className="rounded-xl h-12 text-center text-lg tracking-[0.3em] font-mono border-border focus-visible:ring-primary focus-visible:border-primary"
+                    required
+                    maxLength={6}
+                    disabled={loading}
+                    autoFocus
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full h-11 rounded-xl gradient-brand text-white border-0 font-semibold hover:opacity-90 shadow-md hover:shadow-lg transition-all"
+                  disabled={loading || !verificationCode || verificationCode.length < 6}
+                >
+                  {loading ? (
+                    <div className="w-5 h-5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                  ) : (
+                    <>
+                      Verify & Sign In
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </>
+                  )}
+                </Button>
+              </form>
+
+              {verificationMethod !== 'totp' && (
+                <p className="text-center text-sm text-muted-foreground mt-4">
+                  Didn&apos;t receive a code?{' '}
+                  <button
+                    type="button"
+                    onClick={handleResendCode}
+                    className="text-primary font-semibold hover:underline"
+                  >
+                    Resend code
+                  </button>
+                </p>
+              )}
+
+              <p className="text-center text-sm text-muted-foreground mt-3">
                 <button
                   type="button"
-                  onClick={() => setShow(!show)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                  disabled={loading}
+                  onClick={() => {
+                    setVerificationStep(false);
+                    setVerificationCode('');
+                    setError('');
+                    signIn?.reset();
+                  }}
+                  className="text-primary font-semibold hover:underline"
                 >
-                  {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  ← Back to sign in
                 </button>
+              </p>
+            </>
+          ) : (
+            /* ── MAIN SIGN-IN FORM ── */
+            <>
+              <div className="mb-8">
+                <h1 className="text-3xl font-bold mb-2 font-sans">Welcome back</h1>
+                <p className="text-muted-foreground">Sign in to your account to continue</p>
               </div>
-            </div>
 
-            <Button
-              type="submit"
-              className="w-full h-11 rounded-xl gradient-brand text-white border-0 font-semibold hover:opacity-90 shadow-md hover:shadow-lg transition-all"
-              disabled={loading || fetchStatus === 'fetching' || !signIn}
-            >
-              {loading ? (
-                <div className="w-5 h-5 rounded-full border-2 border-white border-t-transparent animate-spin" />
-              ) : (
-                <>
-                  Sign In
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </>
+              {error && (
+                <div className="p-3 mb-6 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-start gap-2 animate-shake">
+                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span>{error}</span>
+                </div>
               )}
-            </Button>
-          </form>
 
-          <p className="text-center text-sm text-muted-foreground mt-6">
-            Don&apos;t have an account?{' '}
-            <Link href="/sign-up" className="text-primary font-semibold hover:underline">Create one free</Link>
-          </p>
+              {/* Social login */}
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full h-11 rounded-xl mb-4 font-medium transition-all duration-200 border-border hover:bg-accent cursor-pointer"
+                onClick={handleGoogleSignIn}
+                disabled={loading || fetchStatus === 'fetching' || !signIn}
+              >
+                <GoogleIcon />
+                Continue with Google
+              </Button>
+
+              <div className="flex items-center gap-3 my-6">
+                <div className="h-px flex-1 bg-border/60" />
+                <span className="text-xs text-muted-foreground uppercase font-semibold">Or email</span>
+                <div className="h-px flex-1 bg-border/60" />
+              </div>
+
+              {/* Form */}
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email address</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="pl-10 rounded-xl h-11 border-border focus-visible:ring-primary focus-visible:border-primary"
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password">Password</Label>
+                    <Link href="/auth/forgot-password" className="text-xs text-primary hover:underline font-medium">
+                      Forgot password?
+                    </Link>
+                  </div>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="password"
+                      type={show ? 'text' : 'password'}
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="pl-10 pr-10 rounded-xl h-11 border-border focus-visible:ring-primary focus-visible:border-primary"
+                      required
+                      disabled={loading}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShow(!show)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      disabled={loading}
+                    >
+                      {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full h-11 rounded-xl gradient-brand text-white border-0 font-semibold hover:opacity-90 shadow-md hover:shadow-lg transition-all"
+                  disabled={loading || fetchStatus === 'fetching' || !signIn}
+                >
+                  {loading ? (
+                    <div className="w-5 h-5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                  ) : (
+                    <>
+                      Sign In
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </>
+                  )}
+                </Button>
+              </form>
+
+              <p className="text-center text-sm text-muted-foreground mt-6">
+                Don&apos;t have an account?{' '}
+                <Link href="/sign-up" className="text-primary font-semibold hover:underline">Create one free</Link>
+              </p>
+            </>
+          )}
         </motion.div>
       </div>
     </div>
   );
 }
+
