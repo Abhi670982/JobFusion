@@ -200,7 +200,7 @@ export default function AdminLayoutClient({ children, adminUser }: AdminLayoutCl
   };
 
   return (
-    <div className="dark bg-[#09090b] text-[#f4f4f5] min-h-screen flex flex-col lg:flex-row antialiased w-full font-sans">
+    <div className="dark bg-[#09090b] text-[#f4f4f5] h-screen overflow-hidden flex flex-col lg:flex-row antialiased w-full font-sans">
       {/* Sidebar Mobile Toggle Header */}
       <div className="lg:hidden flex items-center justify-between px-6 py-4 bg-[#09090b]/80 backdrop-blur-md border-b border-[#27272a] sticky top-0 z-50">
         <div className="flex items-center gap-2">
@@ -289,7 +289,7 @@ export default function AdminLayoutClient({ children, adminUser }: AdminLayoutCl
       </AnimatePresence>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         {/* Top Navbar */}
         <header className="h-16 px-6 border-b border-[#27272a] bg-[#09090b]/75 backdrop-blur-md flex items-center justify-between sticky top-0 z-30">
           {/* Left: Breadcrumbs & Date */}
