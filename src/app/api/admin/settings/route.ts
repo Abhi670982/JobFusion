@@ -66,10 +66,14 @@ export async function POST(req: NextRequest) {
 
     await settings.save();
 
-    // Log admin action
-    await Activity.create({
-      userId: admin._id,
-      type: "admin_action",
+    // Log admin action using structured audit logger
+    const { logAdminAction } = await import("@/lib/audit-logger");
+    await logAdminAction({
+      req,
+      admin,
+      action: "Updated Settings",
+      resource: "Settings",
+      resourceId: "global",
       details: "Updated global platform settings and feature flags",
     });
 

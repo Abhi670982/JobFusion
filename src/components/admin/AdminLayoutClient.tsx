@@ -71,6 +71,7 @@ export default function AdminLayoutClient({ children, adminUser }: AdminLayoutCl
   const links = [
     { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
     { name: "Users", href: "/admin/users", icon: Users },
+    { name: "Admins", href: "/admin/admins", icon: Shield },
     { name: "Jobs", href: "/admin/jobs", icon: Briefcase },
     { name: "Companies", href: "/admin/companies", icon: Building2 },
     { name: "Resume & AI", href: "/admin/resume-ai", icon: FileText },
@@ -220,7 +221,7 @@ export default function AdminLayoutClient({ children, adminUser }: AdminLayoutCl
       <AnimatePresence>
         {(sidebarOpen || !sidebarOpen) && (
           <aside
-            className={`fixed inset-y-0 left-0 z-40 w-64 bg-[#09090b] border-r border-[#27272a] flex flex-col transform lg:translate-x-0 transition-transform duration-300 ease-in-out lg:sticky lg:top-0 lg:h-screen ${
+            className={`fixed inset-y-0 left-0 z-40 w-64 bg-[#09090b] border-r border-[#27272a] flex flex-col h-screen overflow-hidden transform lg:translate-x-0 transition-transform duration-300 ease-in-out lg:sticky lg:top-0 lg:h-screen ${
               sidebarOpen ? "translate-x-0" : "-translate-x-full"
             }`}
           >

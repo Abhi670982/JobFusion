@@ -90,10 +90,14 @@ export async function PATCH(
 
     await user.save();
 
-    // Log admin action in Activity collection
-    await Activity.create({
-      userId: admin._id,
-      type: "admin_action",
+    // Log admin action in Activity collection using structured audit logger
+    const { logAdminAction } = await import("@/lib/audit-logger");
+    await logAdminAction({
+      req,
+      admin,
+      action: status === "suspended" ? "Suspended User" : "Activated User",
+      resource: "User",
+      resourceId: user._id.toString(),
       details: `${status === "suspended" ? "Suspended" : "Activated"} user: ${user.fullName} (${user.email})`,
     });
 
@@ -144,10 +148,14 @@ export async function DELETE(
       Activity.deleteMany({ userId: userId }),
     ]);
 
-    // Log admin action
-    await Activity.create({
-      userId: admin._id,
-      type: "admin_action",
+    // Log admin action using structured audit logger
+    const { logAdminAction } = await import("@/lib/audit-logger");
+    await logAdminAction({
+      req,
+      admin,
+      action: "Deleted User",
+      resource: "User",
+      resourceId: userId,
       details: `Permanently deleted user: ${user.fullName} (${user.email})`,
     });
 

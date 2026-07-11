@@ -32,6 +32,10 @@ const SettingsSchema = new Schema(
       type: Schema.Types.Mixed,
       default: {},
     },
+    allowedAdminEmails: {
+      type: [String],
+      default: [],
+    },
   },
   {
     timestamps: true,

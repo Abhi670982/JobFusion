@@ -24,6 +24,24 @@ const ActivitySchema = new Schema(
     details: {
       type: String,
     },
+    adminName: {
+      type: String,
+    },
+    adminEmail: {
+      type: String,
+    },
+    action: {
+      type: String,
+    },
+    resource: {
+      type: String,
+    },
+    resourceId: {
+      type: String,
+    },
+    ipAddress: {
+      type: String,
+    },
   },
   {
     timestamps: true,

@@ -12,6 +12,7 @@ import {
   Globe,
   MapPin,
   ExternalLink,
+  Plus,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -136,11 +137,20 @@ export default function AdminJobs() {
   return (
     <div className="space-y-8 animate-fade-in">
       {/* Title */}
-      <div>
-        <h2 className="text-xl font-bold tracking-tight text-[#f4f4f5]" style={{ fontFamily: "var(--font-jakarta)" }}>
-          Job Postings Management
-        </h2>
-        <p className="text-xs text-[#a1a1aa] mt-1">Review active unified vacancies, run scraper pipelines, or clean listings.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold tracking-tight text-[#f4f4f5]" style={{ fontFamily: "var(--font-jakarta)" }}>
+            Job Postings Management
+          </h2>
+          <p className="text-xs text-[#a1a1aa] mt-1">Review active unified vacancies, run scraper pipelines, or clean listings.</p>
+        </div>
+        <button
+          onClick={() => window.location.href = "/admin/jobs/add"}
+          className="flex items-center gap-1.5 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-xs font-bold rounded-xl shadow-md shadow-indigo-500/10 transition-all touch-auto"
+        >
+          <Plus className="w-4 h-4" />
+          Add Job
+        </button>
       </div>
 
       {/* Sync Control & Filters */}

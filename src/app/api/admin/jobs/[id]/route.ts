@@ -27,10 +27,14 @@ export async function DELETE(
 
     await Job.findByIdAndDelete(jobId);
 
-    // Log admin action
-    await Activity.create({
-      userId: admin._id,
-      type: "admin_action",
+    // Log admin action using structured audit logger
+    const { logAdminAction } = await import("@/lib/audit-logger");
+    await logAdminAction({
+      req,
+      admin,
+      action: "Deleted Manual Job", // or "Deleted Job" if imported
+      resource: "Job",
+      resourceId: jobId,
       details: `Deleted job posting: '${job.title}' by ${job.company}`,
     });
 
