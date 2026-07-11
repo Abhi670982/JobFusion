@@ -10,7 +10,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   const { isSignedIn, isLoaded } = useUser();
 
   // Check if current route is a landing/auth page (no sidebar/navbar wrapper)
-  const isPortalRoute = !['/sign-in', '/sign-up', '/onboarding', '/auth', '/test-upload', '/'].some(
+  const isPortalRoute = !['/sign-in', '/sign-up', '/onboarding', '/auth', '/test-upload', '/', '/admin'].some(
     (path) => pathname === path || (path !== '/' && pathname.startsWith(path + '/'))
   );
 

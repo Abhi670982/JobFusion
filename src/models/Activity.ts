@@ -5,11 +5,10 @@ const ActivitySchema = new Schema(
     userId: {
       type: Schema.Types.ObjectId,
       ref: "User",
-      required: [true, "User ID is required"],
     },
     type: {
       type: String,
-      enum: ["applied", "saved", "viewed", "updated_profile", "updated_resume", "interview", "offer", "rejected"],
+      enum: ["applied", "saved", "viewed", "updated_profile", "updated_resume", "interview", "offer", "rejected", "admin_action", "failed_login", "system_event", "registered"],
       required: true,
     },
     jobId: {

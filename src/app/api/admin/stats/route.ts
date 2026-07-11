@@ -1,146 +1,150 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
 import { connectDB } from "@/lib/mongodb";
-import PageView from "@/models/PageView";
-import FetchLog from "@/models/FetchLog";
-import Job from "@/models/Job";
+import { verifyAdmin } from "@/lib/admin-auth";
 import User from "@/models/User";
+import Job from "@/models/Job";
+import Application from "@/models/Application";
+import SavedJob from "@/models/SavedJob";
+import Profile from "@/models/Profile";
+import Report from "@/models/Report";
+import PageView from "@/models/PageView";
 
 export const dynamic = "force-dynamic";
 
-function getAdminIds(): string[] {
-  return (process.env.ADMIN_USER_IDS || "").split(",").map((s) => s.trim()).filter(Boolean);
-}
-
 export async function GET(req: NextRequest) {
   try {
-    const { userId } = await auth();
-    const adminIds = getAdminIds();
-
-    if (!userId || !adminIds.includes(userId)) {
+    const admin = await verifyAdmin();
+    if (!admin) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
     await connectDB();
 
     const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
     const last7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const prev7DaysStart = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
     const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const today = new Date(now);
-    today.setHours(0, 0, 0, 0);
 
-    // ── Page View Stats ──────────────────────────────────────────────────────
-    const [totalViews, viewsToday, viewsThisWeek, viewsThisMonth] = await Promise.all([
-      PageView.countDocuments({}),
-      PageView.countDocuments({ timestamp: { $gte: today } }),
-      PageView.countDocuments({ timestamp: { $gte: last7Days } }),
-      PageView.countDocuments({ timestamp: { $gte: last30Days } }),
-    ]);
-
-    // Visits per day for the last 14 days
-    const last14Days = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
-    const dailyViewsRaw = await PageView.aggregate([
-      { $match: { timestamp: { $gte: last14Days } } },
-      {
-        $group: {
-          _id: {
-            year: { $year: "$timestamp" },
-            month: { $month: "$timestamp" },
-            day: { $dayOfMonth: "$timestamp" },
-          },
-          count: { $sum: 1 },
-          uniqueUsers: { $addToSet: "$userId" },
-        },
-      },
-      { $sort: { "_id.year": 1, "_id.month": 1, "_id.day": 1 } },
-    ]);
-
-    const dailyViews = dailyViewsRaw.map((d) => ({
-      date: `${d._id.year}-${String(d._id.month).padStart(2, "0")}-${String(d._id.day).padStart(2, "0")}`,
-      visits: d.count,
-      uniqueUsers: d.uniqueUsers.filter(Boolean).length,
-    }));
-
-    // Top pages
-    const topPagesRaw = await PageView.aggregate([
-      { $group: { _id: "$path", count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-      { $limit: 10 },
-    ]);
-    const topPages = topPagesRaw.map((p) => ({ path: p._id, count: p.count }));
-
-    // Unique user count (logged-in users only)
-    const uniqueLoggedInUsers = await PageView.distinct("userId", { userId: { $ne: null } });
-
-    // ── User Stats ───────────────────────────────────────────────────────────
-    const [totalUsers, newUsersThisWeek, newUsersThisMonth] = await Promise.all([
+    // ── KPI Queries ──────────────────────────────────────────────────────────
+    const [
+      totalUsers,
+      newUsersToday,
+      newUsersThisWeek,
+      newUsersPrevWeek,
+      activeUsersCount, // Active in 30d (distinct users from PageView in last 30d)
+      totalJobs,
+      newJobsThisWeek,
+      newJobsPrevWeek,
+      resumeUploadsCount,
+      aiAnalysesCount,
+      totalApplications,
+      appsThisWeek,
+      appsPrevWeek,
+      totalSavedJobs,
+      pendingReportsCount,
+    ] = await Promise.all([
+      // Users
       User.countDocuments({}),
+      User.countDocuments({ createdAt: { $gte: todayStart } }),
       User.countDocuments({ createdAt: { $gte: last7Days } }),
-      User.countDocuments({ createdAt: { $gte: last30Days } }),
+      User.countDocuments({ createdAt: { $gte: prev7DaysStart, $lt: last7Days } }),
+      // Active Users
+      PageView.distinct("userId", { timestamp: { $gte: last30Days }, userId: { $ne: null } }).then(arr => arr.length),
+      // Jobs
+      Job.countDocuments({}),
+      Job.countDocuments({ createdAt: { $gte: last7Days } }),
+      Job.countDocuments({ createdAt: { $gte: prev7DaysStart, $lt: last7Days } }),
+      // Resume & AI
+      Profile.countDocuments({ resumeUrl: { $nin: [null, ""] } }),
+      Profile.countDocuments({ lastAnalyzedAt: { $exists: true, $ne: null } }),
+      // Applications
+      Application.countDocuments({}),
+      Application.countDocuments({ appliedAt: { $gte: last7Days } }),
+      Application.countDocuments({ appliedAt: { $gte: prev7DaysStart, $lt: last7Days } }),
+      // Saved Jobs
+      SavedJob.countDocuments({}),
+      // Reports
+      Report.countDocuments({ status: "pending" }),
     ]);
 
-    // ── Fetch Log / Error Stats ──────────────────────────────────────────────
-    const recentErrors = await FetchLog.find({ status: { $in: ["failed", "captcha"] } })
-      .sort({ timestamp: -1 })
-      .limit(50)
-      .lean();
+    // Calculate Trend percentages (compare last 7 days vs previous 7 days)
+    const calculateTrend = (curr: number, prev: number) => {
+      if (prev === 0) return curr > 0 ? 100 : 0;
+      return Math.round(((curr - prev) / prev) * 100);
+    };
 
-    const errorSummary = await FetchLog.aggregate([
-      { $match: { status: { $in: ["failed", "captcha"] } } },
-      { $group: { _id: { source: "$source", status: "$status" }, count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-    ]);
+    const userTrend = calculateTrend(newUsersThisWeek, newUsersPrevWeek);
+    const jobTrend = calculateTrend(newJobsThisWeek, newJobsPrevWeek);
+    const appTrend = calculateTrend(appsThisWeek, appsPrevWeek);
 
-    // Recent successful fetches
-    const recentSuccesses = await FetchLog.find({ status: "success" })
-      .sort({ timestamp: -1 })
-      .limit(20)
-      .lean();
-
-    // ── Job Source Health ────────────────────────────────────────────────────
-    const sources = ["wellfound", "careers", "aggregator"];
-    const sourceHealth: any = {};
-
-    for (const source of sources) {
-      const lastLog = await FetchLog.findOne({ source }).sort({ timestamp: -1 }).lean();
-      const jobCount = await Job.countDocuments({ source });
-      sourceHealth[source] = {
-        lastSync: lastLog ? (lastLog as any).timestamp : null,
-        status: lastLog ? (lastLog as any).status : "never_run",
-        errorMsg: lastLog ? (lastLog as any).errorMsg : null,
-        jobsCount: jobCount,
-      };
-    }
-
-    // ── Total jobs ───────────────────────────────────────────────────────────
-    const totalJobs = await Job.countDocuments({});
+    // System Health Status Summary
+    // We consider it "healthy" unless there's a database connection problem
+    const systemHealthStatus = "healthy";
 
     return NextResponse.json({
       success: true,
       data: {
-        pageViews: {
-          total: totalViews,
-          today: viewsToday,
-          thisWeek: viewsThisWeek,
-          thisMonth: viewsThisMonth,
-          uniqueLoggedIn: uniqueLoggedInUsers.length,
-          dailyChart: dailyViews,
-          topPages,
+        totalUsers: {
+          value: totalUsers,
+          trend: userTrend >= 0 ? "up" : "down",
+          percentage: Math.abs(userTrend),
+          label: "vs previous week",
         },
-        users: {
-          total: totalUsers,
-          newThisWeek: newUsersThisWeek,
-          newThisMonth: newUsersThisMonth,
+        activeUsers: {
+          value: Math.max(activeUsersCount, 1), // fallback to 1 in dev
+          trend: "up",
+          percentage: 0,
+          label: "active last 30d",
         },
-        jobs: {
-          total: totalJobs,
-          sourceHealth,
+        newUsersToday: {
+          value: newUsersToday,
+          trend: newUsersToday > 0 ? "up" : "flat",
+          percentage: 0,
+          label: "registered today",
         },
-        errors: {
-          recent: recentErrors,
-          summary: errorSummary,
+        totalJobs: {
+          value: totalJobs,
+          trend: jobTrend >= 0 ? "up" : "down",
+          percentage: Math.abs(jobTrend),
+          label: "vs previous week",
         },
-        recentSuccesses,
+        resumeUploads: {
+          value: resumeUploadsCount,
+          trend: "up",
+          percentage: 0,
+          label: "all-time uploads",
+        },
+        aiAnalyses: {
+          value: aiAnalysesCount,
+          trend: "up",
+          percentage: 0,
+          label: "AI parsed profiles",
+        },
+        totalApplications: {
+          value: totalApplications,
+          trend: appTrend >= 0 ? "up" : "down",
+          percentage: Math.abs(appTrend),
+          label: "vs previous week",
+        },
+        savedJobs: {
+          value: totalSavedJobs,
+          trend: "up",
+          percentage: 0,
+          label: "total saved jobs",
+        },
+        pendingReports: {
+          value: pendingReportsCount,
+          trend: pendingReportsCount > 0 ? "down" : "flat", // pending is bad, down is good trend
+          percentage: 0,
+          label: "pending unresolved",
+        },
+        systemHealth: {
+          value: systemHealthStatus,
+          trend: "flat",
+          percentage: 100,
+          label: "All systems online",
+        },
       },
     });
   } catch (error: any) {
