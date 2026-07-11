@@ -35,6 +35,7 @@ async function run() {
 
   // Inline User schema definition
   const UserSchema = new mongoose.Schema({
+    clerkId: String,
     email: String,
     role: String,
     fullName: String,
