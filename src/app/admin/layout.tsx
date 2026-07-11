@@ -1,8 +1,7 @@
-import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
-import { connectDB } from "@/lib/mongodb";
-import User from "@/models/User";
+import { currentUser } from "@clerk/nextjs/server";
+import { verifyAdmin } from "@/lib/admin-auth";
 import AdminLayoutClient from "@/components/admin/AdminLayoutClient";
 
 export const metadata: Metadata = {
@@ -12,25 +11,16 @@ export const metadata: Metadata = {
 };
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { userId } = await auth();
+  const mongoUser = await verifyAdmin();
 
-  // Redirect if not logged in
-  if (!userId) {
-    redirect("/");
-  }
-
-  // Connect to DB and verify role
-  await connectDB();
-  const mongoUser = await User.findOne({ clerkId: userId });
-
-  // If user does not exist in DB or is not an admin, deny access
-  if (!mongoUser || mongoUser.role !== "admin") {
+  // If user is not verified as admin, deny access
+  if (!mongoUser) {
     redirect("/");
   }
 
   const clerkUser = await currentUser();
   const adminUser = {
-    fullName: mongoUser.fullName || clerkUser?.firstName ? `${clerkUser?.firstName} ${clerkUser?.lastName || ""}`.trim() : "Admin",
+    fullName: mongoUser.fullName || (clerkUser?.firstName ? `${clerkUser.firstName} ${clerkUser.lastName || ""}`.trim() : "Admin"),
     email: mongoUser.email || clerkUser?.emailAddresses[0]?.emailAddress || "",
     profileImage: mongoUser.profileImage || clerkUser?.imageUrl || "",
   };

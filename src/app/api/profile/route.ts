@@ -124,7 +124,6 @@ export async function PUT(req: NextRequest) {
     if (body.fullName !== undefined) userUpdateFields.fullName = body.fullName;
     if (body.email !== undefined) userUpdateFields.email = body.email;
     if (body.profileImage !== undefined) userUpdateFields.profileImage = body.profileImage;
-    if (body.role !== undefined) userUpdateFields.role = body.role;
 
     if (Object.keys(userUpdateFields).length > 0) {
       await User.findByIdAndUpdate(mongoUser._id, userUpdateFields, {

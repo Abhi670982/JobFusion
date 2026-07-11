@@ -47,12 +47,11 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
     
     // Only allow updating allowed user fields
-    const { fullName, email, profileImage, role } = body;
+    const { fullName, email, profileImage } = body;
     const updateData: any = {};
     if (fullName !== undefined) updateData.fullName = fullName;
     if (email !== undefined) updateData.email = email;
     if (profileImage !== undefined) updateData.profileImage = profileImage;
-    if (role !== undefined) updateData.role = role;
 
     const updatedUser = await User.findByIdAndUpdate(user._id, updateData, {
       new: true,
