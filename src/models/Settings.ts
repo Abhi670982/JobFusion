@@ -36,6 +36,10 @@ const SettingsSchema = new Schema(
       type: [String],
       default: [],
     },
+    contactEmail: {
+      type: String,
+      default: "akchauhan1172@gmail.com",
+    },
   },
   {
     timestamps: true,

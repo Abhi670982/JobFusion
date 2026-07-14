@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
 
     await connectDB();
     const body = await req.json();
-    const { maintenanceMode, homepageAnnouncement, geminiKeyPlaceholder, featureFlags, futureIntegrations } = body;
+    const { maintenanceMode, homepageAnnouncement, geminiKeyPlaceholder, contactEmail, featureFlags, futureIntegrations } = body;
 
     let settings = await Settings.findOne({ settingsId: "global" });
     if (!settings) {
@@ -63,6 +63,16 @@ export async function POST(req: NextRequest) {
     if (geminiKeyPlaceholder !== undefined) settings.geminiKeyPlaceholder = geminiKeyPlaceholder;
     if (featureFlags !== undefined) settings.featureFlags = featureFlags;
     if (futureIntegrations !== undefined) settings.futureIntegrations = futureIntegrations;
+    
+    if (contactEmail !== undefined) {
+      if (contactEmail.trim()) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(contactEmail.trim())) {
+          return NextResponse.json({ success: false, error: "Invalid contact email format" }, { status: 400 });
+        }
+      }
+      settings.contactEmail = contactEmail.trim();
+    }
 
     await settings.save();
 

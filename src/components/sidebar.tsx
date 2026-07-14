@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Briefcase, User, FileText, Settings,
-  ChevronLeft, ChevronRight, Bookmark, Activity
+  ChevronLeft, ChevronRight, Bookmark, Activity, HelpCircle
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -32,6 +32,7 @@ const navItems: NavItem[] = [
 
 const bottomItems: NavItem[] = [
   { href: '/settings', label: 'Settings', icon: Settings },
+  { href: '/contact', label: 'Help & Support', icon: HelpCircle },
 ];
 
 function NavLink({ item, collapsed, pathname, onClick }: {

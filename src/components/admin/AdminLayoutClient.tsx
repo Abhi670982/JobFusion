@@ -25,6 +25,7 @@ import {
   Check,
   Loader2,
   Shield,
+  Mail,
 } from "lucide-react";
 
 interface AdminLayoutClientProps {
@@ -78,6 +79,7 @@ export default function AdminLayoutClient({ children, adminUser }: AdminLayoutCl
     { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
     { name: "Reports", href: "/admin/reports", icon: AlertTriangle },
     { name: "Activity Logs", href: "/admin/activity-logs", icon: Activity },
+    { name: "Contact Messages", href: "/admin/contact-messages", icon: Mail },
     { name: "Settings", href: "/admin/settings", icon: SettingsIcon },
   ];
 

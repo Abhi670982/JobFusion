@@ -12,6 +12,7 @@ import {
   ToggleLeft,
   ToggleRight,
   Save,
+  Mail,
 } from "lucide-react";
 
 interface FeatureFlags {
@@ -24,6 +25,7 @@ interface SettingsPayload {
   maintenanceMode: boolean;
   homepageAnnouncement: string;
   geminiKeyPlaceholder: string;
+  contactEmail: string;
   featureFlags: FeatureFlags;
   futureIntegrations: Record<string, any>;
 }
@@ -191,6 +193,26 @@ export default function AdminSettings() {
               />
               <p className="text-[9px] text-[#71717a]">
                 Custom credentials stored securely. Leave blank to inherit system-default environment key.
+              </p>
+            </div>
+          </div>
+
+          {/* Contact Support Email */}
+          <div className="rounded-2xl border border-[#27272a] bg-[#18181b]/20 p-6 space-y-4">
+            <h3 className="text-xs font-bold text-[#71717a] uppercase tracking-wider flex items-center gap-2">
+              <Mail className="w-4 h-4 text-indigo-400" /> Contact Email Settings
+            </h3>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-[#e4e4e7] block">Contact Support Email</label>
+              <input
+                type="email"
+                value={settings.contactEmail || ""}
+                onChange={(e) => setSettings({ ...settings, contactEmail: e.target.value })}
+                placeholder="support@jobfusion.ai"
+                className="w-full bg-[#09090b]/60 border border-[#27272a] hover:border-[#3f3f46] text-xs text-[#f4f4f5] px-3.5 py-2.5 rounded-xl outline-none transition-all placeholder-[#71717a]"
+              />
+              <p className="text-[9px] text-[#71717a]">
+                All public contact form submissions will be forwarded to this support email address.
               </p>
             </div>
           </div>
