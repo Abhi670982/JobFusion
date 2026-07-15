@@ -37,17 +37,10 @@ export class InternshalaAdapter implements SourceAdapter {
   }
 
   private async scrapeWithPuppeteer(url: string): Promise<any[]> {
-    const puppeteerModule = await import("puppeteer");
-    const puppeteer = puppeteerModule.default || puppeteerModule;
+    const { withPage } = await import("@/lib/browser-pool");
     console.log(`[Internshala Adapter] Launching Puppeteer...`);
 
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
-
-    try {
-      const page = await browser.newPage();
+    return withPage(async (page) => {
       await page.setUserAgent(
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
       );
@@ -105,9 +98,7 @@ export class InternshalaAdapter implements SourceAdapter {
       });
 
       return jobs;
-    } finally {
-      await browser.close();
-    }
+    });
   }
 
   private async scrapeWithCheerio(url: string): Promise<any[]> {

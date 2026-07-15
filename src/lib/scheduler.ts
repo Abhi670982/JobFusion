@@ -133,7 +133,19 @@ export async function startScheduler() {
     await cleanupQueue.add("cleanup-repeat", {}, { repeat: { pattern: "0 0 * * *" } }); // daily at midnight
   } else {
     // ─── In-Memory Fallback Mode ─────────────────────────────────────────────
-    console.log("[Scheduler] Starting in-memory fallback interval scheduler.");
+    // Only run in development. In production, GitHub Actions is the cron source.
+    // Running setInterval in production alongside GitHub Actions would cause
+    // double crawls, double MongoDB writes, and doubled Puppeteer instances.
+    if (process.env.NODE_ENV === "production") {
+      console.log(
+        "[Scheduler] Production environment detected without Redis. " +
+        "Skipping in-memory fallback scheduler. " +
+        "GitHub Actions (.github/workflows/crawl-jobs.yml) is the cron source."
+      );
+      return;
+    }
+
+    console.log("[Scheduler] Starting in-memory fallback interval scheduler (dev only).");
 
     // Define intervals (cadence) in milliseconds
     const intervals = {
