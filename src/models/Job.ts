@@ -157,9 +157,13 @@ const JobSchema = new Schema(
       sparse: true,
       trim: true,
     },
-    isActive: {
+     isActive: {
       type: Boolean,
       default: true,
+    },
+    matchedSkill: {
+      type: String,
+      trim: true,
     }
   },
   {
@@ -178,6 +182,21 @@ JobSchema.index({ createdAt: -1 });
 JobSchema.index({ postedAtDate: -1 });
 JobSchema.index({ skills: 1 });
 JobSchema.index({ city: 1, country: 1 });
+
+// Recency & TTL indexes
+JobSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+JobSchema.index({ postedAtDate: -1, isActive: 1, source: 1 });
+JobSchema.index({ matchedSkill: 1, postedAtDate: -1 });
+
+// Weighted compound text index for fast, safe full-text search.
+// Replaces raw $regex queries on q param — prevents ReDoS + enables index use.
+JobSchema.index(
+  { title: "text", company: "text", skills: "text", description: "text" },
+  {
+    weights: { title: 10, skills: 8, company: 5, description: 1 },
+    name: "jobs_text_search",
+  }
+);
 
 if (models.Job) {
   delete (models as any).Job;

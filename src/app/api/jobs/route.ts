@@ -2,18 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { connectDB } from "@/lib/mongodb";
 import Job from "@/models/Job";
+import { validateJobsQuery, escapeRegExp } from "@/lib/api-validators";
 
 export const dynamic = "force-dynamic";
-
 
 const isValidObjectId = (id: string | null | undefined): boolean => {
   if (!id) return false;
   return mongoose.Types.ObjectId.isValid(id);
 };
-
-function escapeRegExp(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
 
 // 1. POST - Create a Job
 export async function POST(req: NextRequest) {
@@ -80,34 +76,54 @@ export async function GET(req: NextRequest) {
     }
 
     // Get filtered jobs
-    const q = searchParams.get("q") || "";
-    const source = searchParams.get("source") || "";
-    const location = searchParams.get("location") || "";
-    const jobType = searchParams.get("jobType") || "";
+    const andConditions: any[] = [];
+    let projection: any = {};
+    let textSort = false;
+
+    // Load current user's skills for Rule 2 enforcement
+    let userSkills: string[] = [];
+    try {
+      const { getOrCreateMongoUser } = await import("@/lib/auth-sync");
+      const mongoUser = await getOrCreateMongoUser();
+      if (mongoUser) {
+        const Profile = (await import("@/models/Profile")).default;
+        const profile = await Profile.findOne({ userId: mongoUser._id });
+        if (profile && profile.skills && profile.skills.length > 0) {
+          userSkills = profile.skills.map((s: any) => s.name.toLowerCase());
+        }
+      }
+    } catch (err: any) {
+      console.warn("[API Jobs] Failed to resolve user skills for search filtering:", err.message);
+    }
+
+    // Use shared validator for page, limit, q, location, skills, sortBy, order
+    const validated = validateJobsQuery(searchParams);
+    const q        = validated.q        || searchParams.get("q")        || "";
+    const source   = searchParams.get("source")   || "";
+    const location = validated.location || searchParams.get("location") || "";
+    const jobType  = searchParams.get("jobType")  || "";
     const experienceLevel = searchParams.get("experienceLevel") || "";
-    const remote = searchParams.get("remote") || "";
+    const remote   = searchParams.get("remote")   || "";
     const salaryMin = searchParams.get("salaryMin") || "";
     const salaryMax = searchParams.get("salaryMax") || "";
-    const skills = searchParams.get("skills") || "";
+    const skills   = validated.skills   || searchParams.get("skills")   || "";
     const postedAfter = searchParams.get("postedAfter") || "";
     const category = searchParams.get("category") || "";
     
-    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "20", 10)));
-    const sortBy = searchParams.get("sortBy") || "postedAt";
-    const order = searchParams.get("order") || "desc";
+    const page    = validated.page;
+    const limit   = validated.limit;
+    const sortBy  = validated.sortBy;
+    const order   = validated.order;
 
-    const andConditions: any[] = [];
-
-    // 1. Full-text search (Title, Company, Description)
+    // 1. Full-text search (Title, Company, Description, Skills)
+    // Uses MongoDB $text index — fast, indexed, and ReDoS-safe.
+    // Escaping is still applied as a precaution for any remaining regex paths.
     if (q) {
-      andConditions.push({
-        $or: [
-          { title: { $regex: q, $options: "i" } },
-          { company: { $regex: q, $options: "i" } },
-          { description: { $regex: q, $options: "i" } },
-        ]
-      });
+      const safe = escapeRegExp(q);
+      andConditions.push({ $text: { $search: safe } });
+      // Include text score in projection so we can optionally sort by relevance
+      projection = { score: { $meta: "textScore" } };
+      textSort = true;
     }
 
     // 2. Multi-source filter
@@ -118,13 +134,14 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 3. Location filter
+    // 3. Location filter (escaped to prevent ReDoS)
     if (location) {
+      const safeLocation = escapeRegExp(location);
       andConditions.push({
         $or: [
-          { location: { $regex: location, $options: "i" } },
-          { city: { $regex: location, $options: "i" } },
-          { country: { $regex: location, $options: "i" } },
+          { location: { $regex: safeLocation, $options: "i" } },
+          { city: { $regex: safeLocation, $options: "i" } },
+          { country: { $regex: safeLocation, $options: "i" } },
         ]
       });
     }
@@ -185,13 +202,21 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 8. Skills filter (case-insensitive regex match for each skill)
+    // 8. Skills filter (safe escaped regex — prevents ReDoS)
     if (skills) {
-      const skillList = skills.split(",").map((s) => s.trim());
+      const skillList = skills.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
       andConditions.push({
-        skills: { 
-          $in: skillList.map(s => new RegExp(`^${escapeRegExp(s)}$`, "i")) 
+        skills: {
+          $in: skillList.map((s) => new RegExp(`^${escapeRegExp(s)}$`, "i"))
         }
+      });
+    } else if (userSkills.length > 0) {
+      // RULE 2: If user has profile skills, filter by matchedSkill or by job skills intersection
+      andConditions.push({
+        $or: [
+          { matchedSkill: { $in: userSkills } },
+          { skills: { $in: userSkills.map((s) => new RegExp(`^${escapeRegExp(s)}$`, "i")) } }
+        ]
       });
     }
 
@@ -213,16 +238,34 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+    const cutoff24h = new Date(Date.now() - TWENTY_FOUR_HOURS_MS);
+
     if (dateLimit) {
+      // RULE 1: careers source ALWAYS filtered to 24h — non-negotiable. Other sources use dateLimit.
       andConditions.push({
         $or: [
-          { postedAtDate: { $gte: dateLimit } },
-          {
-            $and: [
-              { postedAtDate: { $exists: false } },
-              { createdAt: { $gte: dateLimit } }
+          { source: "careers", postedAtDate: { $gte: cutoff24h } },
+          { 
+            source: { $ne: "careers" },
+            $or: [
+              { postedAtDate: { $gte: dateLimit } },
+              {
+                $and: [
+                  { postedAtDate: { $exists: false } },
+                  { createdAt: { $gte: dateLimit } }
+                ]
+              }
             ]
           }
+        ]
+      });
+    } else {
+      // If no explicit dateLimit, careers is still restricted to 24h
+      andConditions.push({
+        $or: [
+          { source: "careers", postedAtDate: { $gte: cutoff24h } },
+          { source: { $ne: "careers" } }
         ]
       });
     }
@@ -257,18 +300,23 @@ export async function GET(req: NextRequest) {
     const queryConditions = andConditions.length > 0 ? { $and: andConditions } : {};
 
     // Construct sorting
-    const sortField = sortBy === "salaryMin" ? "salaryMin" : "postedAtDate";
-    const sortDirection = order === "asc" ? 1 : -1;
-    const sortOptions: any = {};
-    sortOptions[sortField] = sortDirection;
-    sortOptions.createdAt = -1;
+    // If text search is active and no explicit sort override, sort by text relevance score
+    let sortOptions: any = {};
+    if (textSort && sortBy === "postedAt") {
+      sortOptions = { score: { $meta: "textScore" }, createdAt: -1 };
+    } else {
+      const sortField = sortBy === "salaryMin" ? "salaryMin" : "postedAtDate";
+      const sortDirection = order === "asc" ? 1 : -1;
+      sortOptions[sortField] = sortDirection;
+      sortOptions.createdAt = -1;
+    }
 
     // Execute query with pagination
     const total = await Job.countDocuments(queryConditions);
     const totalPages = Math.ceil(total / limit);
     const offset = (page - 1) * limit;
 
-    const jobs = await Job.find(queryConditions)
+    const jobs = await Job.find(queryConditions, projection)
       .sort(sortOptions)
       .skip(offset)
       .limit(limit);
@@ -298,7 +346,13 @@ export async function GET(req: NextRequest) {
       total,
       page,
       totalPages,
-      sourceCounts
+      sourceCounts,
+      meta: {
+        filteredTo24h: true,
+        oldestJobAt: jobs[jobs.length - 1]?.postedAtDate ?? null,
+        newestJobAt: jobs[0]?.postedAtDate ?? null,
+        skillsUsed: userSkills,
+      }
     });
   } catch (error: any) {
     return NextResponse.json(

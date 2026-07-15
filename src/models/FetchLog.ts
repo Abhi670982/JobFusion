@@ -9,11 +9,44 @@ const FetchLogSchema = new Schema(
     status: {
       type: String,
       required: true,
-      enum: ["success", "failed", "captcha"],
+      enum: ["success", "failed", "captcha", "partial"],
     },
     jobsFetched: {
       type: Number,
       default: 0,
+    },
+    jobsAdded: {
+      type: Number,
+      default: 0,
+    },
+    jobsUpdated: {
+      type: Number,
+      default: 0,
+    },
+    jobsExpired: {
+      type: Number,
+      default: 0,
+    },
+    skillsUsed: {
+      type: [String],
+      default: [],
+    },
+    jobsRejected: {
+      noDate: { type: Number, default: 0 },
+      tooOld: { type: Number, default: 0 },
+      noSkillMatch: { type: Number, default: 0 }
+    },
+    oldestJobStored: {
+      type: Date,
+      default: null,
+    },
+    newestJobStored: {
+      type: Date,
+      default: null,
+    },
+    crawledAt: {
+      type: Date,
+      default: Date.now,
     },
     errorMsg: {
       type: String,

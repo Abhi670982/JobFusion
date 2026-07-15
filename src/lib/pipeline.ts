@@ -7,6 +7,8 @@ import { JobSource, UnifiedJob } from "./adapters/types";
 import { WellfoundAdapter } from "./adapters/wellfound";
 import { CareersAdapter } from "./adapters/careers";
 import { AggregatorAdapter } from "./adapters/aggregator";
+import { extractSkillsFromDB } from "./skills";
+import { parsePostedDate } from "./parse-posted-date";
 
 // Helper to clean HTML from descriptions
 export function stripHtml(html: string | null | undefined): string {
@@ -78,13 +80,21 @@ export async function runSourceSync(source: JobSource, keywords: string[]): Prom
       "user interface", "user experience", "product design"
     ]);
 
-    const filteredKeywords = keywords
+    // RULE 2: Skills from DB are the ONLY source of keywords (unless empty, fallback to input keywords)
+    const dbSkills = await extractSkillsFromDB().catch(err => {
+      console.warn(`[Pipeline] extractSkillsFromDB failed:`, err.message);
+      return [];
+    });
+
+    const activeKeywords = dbSkills.length > 0 ? dbSkills : keywords;
+
+    const filteredKeywords = activeKeywords
       .map(k => k.trim())
       .filter(k => k.length > 0 && !genericSkills.has(k.toLowerCase()));
 
     const keywordsToSearch = filteredKeywords.length > 0 
-      ? filteredKeywords.slice(0, 5)
-      : keywords.slice(0, 5);
+      ? filteredKeywords.slice(0, 10) // 10 skills max
+      : activeKeywords.slice(0, 5);
 
     console.log(`[Pipeline] Keywords selected for ${source} sync:`, keywordsToSearch);
 
@@ -94,22 +104,59 @@ export async function runSourceSync(source: JobSource, keywords: string[]): Prom
         console.log(`[Pipeline] Fetching jobs from ${source} for keyword: "${keyword}"`);
         const rawJobs = await adapter.fetchJobs({ keywords: [keyword], location: "India", page: 1 });
         console.log(`[Pipeline] Got ${rawJobs.length} raw jobs for "${keyword}" from ${source}`);
-        allRawJobs.push(...rawJobs);
+        
+        // Tag jobs with the matched skill keyword
+        const taggedJobs = rawJobs.map((rj: any) => ({ ...rj, _matchedSkill: keyword }));
+        allRawJobs.push(...taggedJobs);
       } catch (err: any) {
         console.error(`[Pipeline] Fetch failed for ${source} keyword "${keyword}":`, err.message);
       }
-      // Brief delay to prevent rate limiting / scraping blocks
-      await new Promise((resolve) => setTimeout(resolve, 800));
+      // Delay between skills — be polite to target servers (2.5s)
+      await new Promise((resolve) => setTimeout(resolve, 2500));
     }
 
     console.log(`[Pipeline] Total aggregated raw jobs from ${source} for all keywords: ${allRawJobs.length}`);
 
     let successCount = 0;
+    let jobsAdded = 0;
+    let jobsUpdated = 0;
+    let rejectedNoDate = 0;
+    let rejectedTooOld = 0;
+    let rejectedNoSkill = 0;
+    let oldestDate: Date | null = null;
+    let newestDate: Date | null = null;
+
+    const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
     for (const raw of allRawJobs) {
       try {
         // Map and normalize
         const unified = adapter.mapToUnified(raw);
+        const matchedSkill = raw._matchedSkill || null;
+
+        // RULE 1: Discard jobs missing posted date
+        if (!unified.postedAt) {
+          rejectedNoDate++;
+          continue;
+        }
+
+        // RULE 1: Only jobs posted within 24 hours are stored
+        const jobDate = new Date(unified.postedAt);
+        const ageMs = Date.now() - jobDate.getTime();
+        if (ageMs > TWENTY_FOUR_HOURS_MS) {
+          rejectedTooOld++;
+          continue;
+        }
+
+        // RULE 2: Matched skill verification
+        if (!matchedSkill) {
+          rejectedNoSkill++;
+          continue;
+        }
+
+        // Update oldest/newest date trackers
+        if (!oldestDate || jobDate < oldestDate) oldestDate = jobDate;
+        if (!newestDate || jobDate > newestDate) newestDate = jobDate;
 
         // Deduplication Logic
         const existingJob = await Job.findOne({ dedupeHash: unified.dedupeHash });
@@ -119,10 +166,13 @@ export async function runSourceSync(source: JobSource, keywords: string[]): Prom
           existingJob.fetchedAt = new Date();
           existingJob.applyUrl = unified.applyUrl || existingJob.applyUrl;
           existingJob.sourceUrl = unified.sourceUrl || existingJob.sourceUrl;
-          const updatedDate = unified.postedAt || existingJob.postedAtDate || new Date();
-          existingJob.postedAtDate = updatedDate;
-          existingJob.postedAt = toRelativeTimeString(updatedDate instanceof Date ? updatedDate : new Date(updatedDate));
+          existingJob.postedAtDate = jobDate;
+          existingJob.postedAt = toRelativeTimeString(jobDate);
+          existingJob.matchedSkill = matchedSkill;
+          existingJob.expiresAt = new Date(Date.now() + TWENTY_FOUR_HOURS_MS); // TTL index deletion target
+          existingJob.isActive = true;
           await existingJob.save();
+          jobsUpdated++;
           console.log(`[Pipeline] Updated existing job: ${unified.title} at ${unified.company} (${source})`);
         } else {
           // Format compatible fields for frontend
@@ -151,8 +201,8 @@ export async function runSourceSync(source: JobSource, keywords: string[]): Prom
             jobType: unified.jobType,
             skills: unified.skills,
             matchScore: 70 + Math.floor(Math.random() * 25), // Random Match Score for AI feature
-            postedAt: toRelativeTimeString(unified.postedAt),
-            postedAtDate: unified.postedAt || new Date(),
+            postedAt: toRelativeTimeString(jobDate),
+            postedAtDate: jobDate,
             description: unified.description,
             descriptionHtml: unified.descriptionHtml,
             source: source,
@@ -164,12 +214,15 @@ export async function runSourceSync(source: JobSource, keywords: string[]): Prom
             isRemote: unified.isRemote,
             salaryCurrency: unified.salaryCurrency,
             salaryPeriod: unified.salaryPeriod,
-            expiresAt: unified.expiresAt,
+            expiresAt: new Date(Date.now() + TWENTY_FOUR_HOURS_MS), // TTL index deletion target
             fetchedAt: unified.fetchedAt,
             dedupeHash: unified.dedupeHash,
             category: "Engineering",
-            featured: Math.random() > 0.85 // Make some jobs featured randomly
+            featured: Math.random() > 0.85, // Make some jobs featured randomly
+            matchedSkill: matchedSkill,
+            isActive: true
           });
+          jobsAdded++;
           console.log(`[Pipeline] Inserted new job: ${unified.title} at ${unified.company} (${source})`);
         }
 
@@ -185,25 +238,37 @@ export async function runSourceSync(source: JobSource, keywords: string[]): Prom
       }
     }
 
+    // Hard-expire any job older than 24 hours in the DB for this source
+    const cutoff = new Date(Date.now() - TWENTY_FOUR_HOURS_MS);
+    const expired = await Job.updateMany(
+      {
+        source: source,
+        postedAtDate: { $lt: cutoff },
+        isActive: true,
+      },
+      { $set: { isActive: false } }
+    );
+
+    console.log(`[Pipeline] Expired ${expired.modifiedCount} jobs older than 24 hours for ${source}`);
+
     // Log success
     await FetchLog.create({
       source,
       status: "success",
       jobsFetched: successCount,
+      jobsAdded,
+      jobsUpdated,
+      jobsExpired: expired.modifiedCount,
+      skillsUsed: keywordsToSearch,
+      jobsRejected: {
+        noDate: rejectedNoDate,
+        tooOld: rejectedTooOld,
+        noSkillMatch: rejectedNoSkill,
+      },
+      oldestJobStored: oldestDate,
+      newestJobStored: newestDate,
+      crawledAt: new Date(),
     });
-
-    // Mark jobs from this source not seen in 12h as inactive
-    // (missed 2+ crawl cycles at 6h intervals)
-    if (source === "careers" || source === "aggregator") {
-      await Job.updateMany(
-        {
-          source: source,
-          fetchedAt: { $lt: new Date(Date.now() - 12 * 60 * 60 * 1000) },
-          isActive: { $ne: false },
-        },
-        { $set: { isActive: false } }
-      );
-    }
 
     return { success: true, count: successCount };
   } catch (error: any) {
