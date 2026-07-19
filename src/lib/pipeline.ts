@@ -1,8 +1,5 @@
 import crypto from "crypto";
-import { connectDB } from "./mongodb";
-import Job from "../models/Job";
-import FetchLog from "../models/FetchLog";
-import FailedJob from "../models/FailedJob";
+import { prisma } from "./prisma";
 import { JobSource, UnifiedJob } from "./adapters/types";
 import { WellfoundAdapter } from "./adapters/wellfound";
 import { CareersAdapter } from "./adapters/careers";
@@ -51,7 +48,6 @@ export function toRelativeTimeString(date: Date | null | undefined): string {
 // Fetch and process jobs for a specific source
 export async function runSourceSync(source: JobSource, keywords: string[]): Promise<{ success: boolean; count: number; error?: string }> {
   try {
-    await connectDB();
     console.log(`[Pipeline] Starting sync for source: ${source}`);
 
     let adapter;
@@ -111,21 +107,32 @@ export async function runSourceSync(source: JobSource, keywords: string[]): Prom
         // Map and normalize
         const unified = adapter.mapToUnified(raw);
 
-        // Deduplication Logic
-        const existingJob = await Job.findOne({ dedupeHash: unified.dedupeHash });
+        if (!unified.dedupeHash) {
+          throw new Error("Missing dedupeHash from adapter mapping");
+        }
+
+        // Deduplication Logic - check Postgres
+        const existingJob = await prisma.job.findUnique({
+          where: { dedupeHash: unified.dedupeHash }
+        });
 
         if (existingJob) {
-          // Update fetched timestamp and source urls if source is new
-          existingJob.fetchedAt = new Date();
-          existingJob.applyUrl = unified.applyUrl || existingJob.applyUrl;
-          existingJob.sourceUrl = unified.sourceUrl || existingJob.sourceUrl;
+          // Update in Postgres
           const updatedDate = unified.postedAt || existingJob.postedAtDate || new Date();
-          existingJob.postedAtDate = updatedDate;
-          existingJob.postedAt = toRelativeTimeString(updatedDate instanceof Date ? updatedDate : new Date(updatedDate));
-          await existingJob.save();
+          const updatedJob = await prisma.job.update({
+            where: { id: existingJob.id },
+            data: {
+              fetchedAt: new Date(),
+              applyUrl: unified.applyUrl || existingJob.applyUrl,
+              sourceUrl: unified.sourceUrl || existingJob.sourceUrl,
+              postedAtDate: updatedDate,
+              postedAt: toRelativeTimeString(updatedDate instanceof Date ? updatedDate : new Date(updatedDate))
+            }
+          });
+
           console.log(`[Pipeline] Updated existing job: ${unified.title} at ${unified.company} (${source})`);
         } else {
-          // Format compatible fields for frontend
+          // Format compatible fields
           const experienceString = unified.experienceLevel === "entry" ? "Entry Level" :
                                    unified.experienceLevel === "senior" ? "Senior (5+ yrs)" :
                                    unified.experienceLevel === "lead" ? "Lead / Principal" : "Mid Level";
@@ -134,88 +141,125 @@ export async function runSourceSync(source: JobSource, keywords: string[]): Prom
             ? `₹${Math.round(unified.salaryMin / 100000)}L – ₹${Math.round(unified.salaryMax / 100000)}L`
             : "Not disclosed";
 
-          // Create new Job
-          await Job.create({
-            title: unified.title,
-            company: unified.company,
-            companyLogo: unified.companyLogoUrl || unified.company.charAt(0),
-            companyColor: getCompanyColor(source),
-            location: unified.location || "Remote, India",
-            locationType: unified.isRemote ? "remote" : "onsite",
-            salary: salaryString,
-            salaryMin: unified.salaryMin || 0,
-            salaryMax: unified.salaryMax || 0,
-            experience: experienceString,
-            experienceLevel: unified.experienceLevel || "mid",
-            type: unified.jobType || "full-time",
-            jobType: unified.jobType,
-            skills: unified.skills,
-            matchScore: 70 + Math.floor(Math.random() * 25), // Random Match Score for AI feature
-            postedAt: toRelativeTimeString(unified.postedAt),
-            postedAtDate: unified.postedAt || new Date(),
-            description: unified.description,
-            descriptionHtml: unified.descriptionHtml,
-            source: source,
-            sourceId: unified.sourceId,
-            sourceUrl: unified.sourceUrl,
-            applyUrl: unified.applyUrl,
-            city: unified.city,
-            country: unified.country,
-            isRemote: unified.isRemote,
-            salaryCurrency: unified.salaryCurrency,
-            salaryPeriod: unified.salaryPeriod,
-            expiresAt: unified.expiresAt,
-            fetchedAt: unified.fetchedAt,
-            dedupeHash: unified.dedupeHash,
-            category: "Engineering",
-            featured: Math.random() > 0.85 // Make some jobs featured randomly
+          // Map enum JobType
+          let pgType = "full_time";
+          if (unified.jobType === "full-time") pgType = "full_time";
+          else if (unified.jobType === "part-time") pgType = "part_time";
+          else if (["contract", "internship", "freelance"].includes(unified.jobType || "")) {
+            pgType = unified.jobType || "full_time";
+          }
+
+          // Create in Postgres
+          const createdJob = await prisma.job.create({
+            data: {
+              title: unified.title,
+              company: unified.company,
+              companyLogo: unified.companyLogoUrl || unified.company.charAt(0),
+              companyColor: getCompanyColor(source),
+              location: unified.location || "Remote, India",
+              locationType: unified.isRemote ? "remote" : "onsite",
+              salary: salaryString,
+              salaryMin: unified.salaryMin || 0,
+              salaryMax: unified.salaryMax || 0,
+              experience: experienceString,
+              experienceLevel: (unified.experienceLevel || "mid") as any,
+              type: pgType as any,
+              jobType: unified.jobType,
+              skills: unified.skills,
+              matchScore: 70 + Math.floor(Math.random() * 25), // Random Match Score for AI feature
+              postedAt: toRelativeTimeString(unified.postedAt),
+              postedAtDate: unified.postedAt || new Date(),
+              description: unified.description,
+              descriptionHtml: unified.descriptionHtml,
+              source: source,
+              sourceId: unified.sourceId,
+              sourceUrl: unified.sourceUrl,
+              applyUrl: unified.applyUrl,
+              city: unified.city,
+              country: unified.country,
+              isRemote: unified.isRemote,
+              salaryCurrency: unified.salaryCurrency,
+              salaryPeriod: unified.salaryPeriod,
+              expiresAt: unified.expiresAt,
+              fetchedAt: unified.fetchedAt,
+              dedupeHash: unified.dedupeHash,
+              category: "Engineering",
+              featured: Math.random() > 0.85
+            }
           });
+
           console.log(`[Pipeline] Inserted new job: ${unified.title} at ${unified.company} (${source})`);
         }
 
         successCount++;
       } catch (err: any) {
         console.error(`[Pipeline] Job normalization failed for ${source}:`, err.message);
-        // Log to failed_jobs table
-        await FailedJob.create({
-          source,
-          rawPayload: raw,
-          errorMsg: err.message || "Failed to normalize job payload",
-        }).catch(dbErr => console.error("Error creating FailedJob record:", dbErr.message));
+        
+        // Log to FailedJob in Postgres
+        try {
+          await prisma.failedJob.create({
+            data: {
+              source,
+              rawPayload: raw || {},
+              errorMsg: err.message || "Failed to normalize job payload",
+            }
+          });
+        } catch (pgErr) {
+          console.error("Error creating FailedJob in PG:", pgErr);
+        }
       }
     }
 
-    // Log success
-    await FetchLog.create({
-      source,
-      status: "success",
-      jobsFetched: successCount,
-    });
+    // Log success in Postgres
+    try {
+      await prisma.fetchLog.create({
+        data: {
+          source,
+          status: "success",
+          jobsFetched: successCount
+        }
+      });
+    } catch (pgErr) {
+      console.error("Error logging success in PG:", pgErr);
+    }
 
-    // Mark jobs from this source not seen in 12h as inactive
-    // (missed 2+ crawl cycles at 6h intervals)
+    // Mark jobs from this source not seen in 12h as inactive in Postgres
     if (source === "careers" || source === "aggregator") {
-      await Job.updateMany(
-        {
-          source: source,
-          fetchedAt: { $lt: new Date(Date.now() - 12 * 60 * 60 * 1000) },
-          isActive: { $ne: false },
-        },
-        { $set: { isActive: false } }
-      );
+      const cutoff = new Date(Date.now() - 12 * 60 * 60 * 1000);
+      try {
+        await prisma.job.updateMany({
+          where: {
+            source,
+            fetchedAt: { lt: cutoff },
+            isActive: true
+          },
+          data: {
+            isActive: false
+          }
+        });
+      } catch (pgErr) {
+        console.error("Error marking inactive jobs in PG:", pgErr);
+      }
     }
 
     return { success: true, count: successCount };
   } catch (error: any) {
     console.error(`[Pipeline] Fatal error syncing ${source}:`, error.message);
     
-    // Log failure
-    await FetchLog.create({
-      source,
-      status: error.message?.includes("CAPTCHA") ? "captcha" : "failed",
-      jobsFetched: 0,
-      errorMsg: error.message || "Unknown pipeline error",
-    }).catch(dbErr => console.error("Error creating FetchLog record:", dbErr.message));
+    // Log failure in Postgres
+    const fetchStatus = error.message?.includes("CAPTCHA") ? "captcha" : "failed";
+    try {
+      await prisma.fetchLog.create({
+        data: {
+          source,
+          status: fetchStatus as any,
+          jobsFetched: 0,
+          errorMsg: error.message || "Unknown pipeline error"
+        }
+      });
+    } catch (pgErr) {
+      console.error("Error logging fetch failure in PG:", pgErr);
+    }
 
     return { success: false, count: 0, error: error.message };
   }

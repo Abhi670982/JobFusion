@@ -2,8 +2,6 @@ import { Queue, Worker, QueueEvents } from "bullmq";
 import IORedis from "ioredis";
 import { runSourceSync } from "./pipeline";
 import { JobSource } from "./adapters/types";
-import { connectDB } from "./mongodb";
-import Job from "../models/Job";
 
 const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
 const FETCH_KEYWORDS = (process.env.FETCH_KEYWORDS || "software engineer,frontend developer,backend developer").split(",");
@@ -48,18 +46,24 @@ const activeIntervals: NodeJS.Timeout[] = [];
 // Cleanup jobs older than 60 days
 export async function cleanupExpiredJobs() {
   try {
-    await connectDB();
+    const { prisma } = await import("./prisma");
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - 60);
 
     console.log(`[Scheduler] Cleaning up jobs posted before: ${cutoffDate.toISOString()}`);
-    const res = await Job.deleteMany({
-      $or: [
-        { postedAtDate: { $lt: cutoffDate } },
-        { createdAt: { $lt: cutoffDate } }
-      ]
+    
+    // Delete in PostgreSQL
+    const res = await prisma.job.deleteMany({
+      where: {
+        OR: [
+          { postedAtDate: { lt: cutoffDate } },
+          { createdAt: { lt: cutoffDate } }
+        ]
+      }
     });
-    console.log(`[Scheduler] Expired job cleanup completed. Deleted ${res.deletedCount} jobs.`);
+    console.log(`[Scheduler] Expired job cleanup completed in Postgres. Deleted ${res.count} jobs.`);
+
+
   } catch (err: any) {
     console.error(`[Scheduler] Expired job cleanup failed:`, err.message);
   }

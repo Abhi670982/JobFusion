@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
 import { verifyAdmin } from "@/lib/admin-auth";
-import User from "@/models/User";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -11,8 +10,6 @@ export async function GET(req: NextRequest) {
     if (!admin) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
-
-    await connectDB();
 
     const { searchParams } = new URL(req.url);
     const query = searchParams.get("q") || "";
@@ -25,15 +22,15 @@ export async function GET(req: NextRequest) {
 
     // Apply Search
     if (query) {
-      filter.$or = [
-        { fullName: { $regex: query, $options: "i" } },
-        { email: { $regex: query, $options: "i" } },
+      filter.OR = [
+        { fullName: { contains: query, mode: "insensitive" } },
+        { email: { contains: query, mode: "insensitive" } },
       ];
     }
 
     // Apply Filters
     if (status) {
-      filter.status = status;
+      filter.status = status === "suspended" ? "suspended" : "active";
     }
     if (role) {
       filter.role = role;
@@ -41,14 +38,30 @@ export async function GET(req: NextRequest) {
 
     const skip = (page - 1) * limit;
 
-    const [users, total] = await Promise.all([
-      User.find(filter)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      User.countDocuments(filter),
+    const [pgUsers, total] = await Promise.all([
+      prisma.user.findMany({
+        where: filter,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+      }),
+      prisma.user.count({
+        where: filter,
+      }),
     ]);
+
+    // Map to MongoDB-like payload
+    const users = pgUsers.map(u => ({
+      _id: u.id,
+      clerkId: u.clerkId,
+      fullName: u.fullName,
+      email: u.email,
+      profileImage: u.profileImage,
+      role: u.role,
+      status: u.status,
+      createdAt: u.createdAt,
+      updatedAt: u.updatedAt
+    }));
 
     return NextResponse.json({
       success: true,

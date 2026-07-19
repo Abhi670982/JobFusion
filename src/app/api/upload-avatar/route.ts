@@ -1,16 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
 import cloudinary from "@/lib/cloudinary";
 import { getOrCreateMongoUser } from "@/lib/auth-sync";
-import User from "@/models/User";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-
 export async function POST(req: NextRequest) {
   try {
-    await connectDB();
-    
     // Auth Check
     const mongoUser = await getOrCreateMongoUser();
     if (!mongoUser) {
@@ -58,8 +54,11 @@ export async function POST(req: NextRequest) {
     const imageUrl = cloudinaryResult.secure_url;
     console.log(`[Avatar Upload] Uploaded successfully: ${imageUrl}`);
 
-    // Update User model in MongoDB
-    await User.findByIdAndUpdate(mongoUser._id, { profileImage: imageUrl });
+    // Update User model in PostgreSQL
+    await prisma.user.update({
+      where: { id: mongoUser._id.toString() },
+      data: { profileImage: imageUrl }
+    });
 
     return NextResponse.json({
       success: true,

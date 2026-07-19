@@ -1,25 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
 import { getOrCreateMongoUser } from "@/lib/auth-sync";
-import User from "@/models/User";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
+function mapUser(u: any) {
+  if (!u) return null;
+  return {
+    _id: u.id,
+    clerkId: u.clerkId,
+    email: u.email,
+    fullName: u.fullName,
+    profileImage: u.profileImage,
+    role: u.role,
+    status: u.status,
+    createdAt: u.createdAt,
+    updatedAt: u.updatedAt
+  };
+}
 
 export async function GET() {
   try {
-    await connectDB();
-    const user = await getOrCreateMongoUser();
-    if (!user) {
+    const mongoUser = await getOrCreateMongoUser();
+    if (!mongoUser) {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
         { status: 401 }
       );
     }
 
+    const pgUser = await prisma.user.findUnique({
+      where: { id: mongoUser._id.toString() }
+    });
+
     return NextResponse.json({
       success: true,
-      user,
+      user: mapUser(pgUser),
     });
   } catch (error: any) {
     console.error("Error in GET /api/users:", error);
@@ -35,9 +51,8 @@ export async function GET() {
 
 export async function PUT(req: NextRequest) {
   try {
-    await connectDB();
-    const user = await getOrCreateMongoUser();
-    if (!user) {
+    const mongoUser = await getOrCreateMongoUser();
+    if (!mongoUser) {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
         { status: 401 }
@@ -45,22 +60,22 @@ export async function PUT(req: NextRequest) {
     }
 
     const body = await req.json();
-    
-    // Only allow updating allowed user fields
     const { fullName, email, profileImage } = body;
+    
     const updateData: any = {};
     if (fullName !== undefined) updateData.fullName = fullName;
     if (email !== undefined) updateData.email = email;
     if (profileImage !== undefined) updateData.profileImage = profileImage;
 
-    const updatedUser = await User.findByIdAndUpdate(user._id, updateData, {
-      new: true,
-      runValidators: true,
+    // Update in PostgreSQL
+    const updatedPgUser = await prisma.user.update({
+      where: { id: mongoUser._id.toString() },
+      data: updateData
     });
 
     return NextResponse.json({
       success: true,
-      user: updatedUser,
+      user: mapUser(updatedPgUser),
     });
   } catch (error: any) {
     return NextResponse.json(

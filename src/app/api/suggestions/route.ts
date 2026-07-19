@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
-import Job from "@/models/Job";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -54,11 +53,6 @@ const SUGGESTIONS_MAP: Record<string, string[]> = {
 
 // In-memory cache for fast lookups
 const cache = new Map<string, string[]>();
-
-// Regex escaping helper to avoid regex injection
-function escapeRegExp(string: string): string {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 // Levenshtein edit distance for fuzzy matching
 function getEditDistance(a: string, b: string): number {
@@ -158,37 +152,81 @@ export async function GET(req: NextRequest) {
     }
 
     let dbSuggestions: string[] = [];
-    const escapedQuery = escapeRegExp(q);
-    const regex = new RegExp(escapedQuery, "i");
 
     try {
-      await connectDB();
-
       if (category === "roles") {
-        // Query unique job titles or company names
-        const matchedTitles = await Job.distinct("title", { title: { $regex: regex } });
-        const matchedCompanies = await Job.distinct("company", { company: { $regex: regex } });
-        dbSuggestions = Array.from(new Set([...matchedTitles, ...matchedCompanies]));
+        const [titles, companies] = await Promise.all([
+          prisma.job.findMany({
+            select: { title: true },
+            where: { title: { contains: q, mode: "insensitive" } },
+            distinct: ["title"],
+            take: 100
+          }),
+          prisma.job.findMany({
+            select: { company: true },
+            where: { company: { contains: q, mode: "insensitive" } },
+            distinct: ["company"],
+            take: 100
+          })
+        ]);
+        dbSuggestions = Array.from(new Set([
+          ...titles.map(t => t.title),
+          ...companies.map(c => c.company)
+        ]));
       } else if (category === "locations") {
-        const matchedLocs = await Job.distinct("location", { location: { $regex: regex } });
-        const matchedCities = await Job.distinct("city", { city: { $regex: regex } });
-        const matchedCountries = await Job.distinct("country", { country: { $regex: regex } });
-        dbSuggestions = Array.from(new Set([...matchedLocs, ...matchedCities, ...matchedCountries]));
+        const [locs, cities, countries] = await Promise.all([
+          prisma.job.findMany({
+            select: { location: true },
+            where: { location: { contains: q, mode: "insensitive" } },
+            distinct: ["location"],
+            take: 100
+          }),
+          prisma.job.findMany({
+            select: { city: true },
+            where: { city: { contains: q, mode: "insensitive" } },
+            distinct: ["city"],
+            take: 100
+          }),
+          prisma.job.findMany({
+            select: { country: true },
+            where: { country: { contains: q, mode: "insensitive" } },
+            distinct: ["country"],
+            take: 100
+          })
+        ]);
+        dbSuggestions = Array.from(new Set([
+          ...locs.map(l => l.location).filter(Boolean),
+          ...cities.map(c => c.city).filter(Boolean),
+          ...countries.map(c => c.country).filter(Boolean)
+        ] as string[]));
         if ("remote".includes(q.toLowerCase())) {
           dbSuggestions.push("remote");
         }
       } else if (category === "skills") {
-        const matchedSkills = await Job.aggregate([
-          { $unwind: "$skills" },
-          { $match: { skills: { $regex: regex } } },
-          { $group: { _id: "$skills" } },
-          { $limit: 100 }
-        ]);
-        dbSuggestions = matchedSkills.map(r => r._id);
+        const matchedSkills: { skill: string }[] = await prisma.$queryRaw`
+          SELECT DISTINCT skill FROM (
+            SELECT unnest(skills) as skill FROM jobs
+          ) s 
+          WHERE skill ILIKE ${'%' + q + '%'}
+          LIMIT 100
+        `;
+        dbSuggestions = matchedSkills.map(r => r.skill);
       } else if (category === "companies") {
-        dbSuggestions = await Job.distinct("company", { company: { $regex: regex } });
+        const companies = await prisma.job.findMany({
+          select: { company: true },
+          where: { company: { contains: q, mode: "insensitive" } },
+          distinct: ["company"],
+          take: 100
+        });
+        dbSuggestions = companies.map(c => c.company);
       } else if (category === "categories") {
-        dbSuggestions = await Job.distinct("category", { category: { $regex: regex } });
+        const categories = await prisma.job.findMany({
+          select: { category: true },
+          where: { category: { contains: q, mode: "insensitive" } },
+          distinct: ["category"],
+          take: 100
+        });
+        dbSuggestions = categories.map(c => c.category);
       }
     } catch (dbErr: any) {
       console.warn("[Suggestions API] Database query failed — falling back to local:", dbErr.message);
@@ -211,7 +249,7 @@ export async function GET(req: NextRequest) {
 
     localMatches.forEach(item => combinedSet.add(item));
 
-    // Convert Set back to Array, filter out matching query itself if not exact, and rank
+    // Convert Set back to Array and rank
     const rawList = Array.from(combinedSet);
     const ranked = rankSuggestions(rawList, q);
     

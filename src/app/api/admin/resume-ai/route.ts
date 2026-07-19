@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
 import { verifyAdmin } from "@/lib/admin-auth";
-import ResumeParsingLog from "@/models/ResumeParsingLog";
-import Profile from "@/models/Profile";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -13,45 +11,65 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
-    await connectDB();
-
     const [
       totalParses,
       successCount,
       failedCount,
-      avgTimeRaw,
+      avgAggregate,
       topSkillsRaw,
-      failedLogs,
+      pgFailedLogs,
     ] = await Promise.all([
-      ResumeParsingLog.countDocuments({}),
-      ResumeParsingLog.countDocuments({ status: "success" }),
-      ResumeParsingLog.countDocuments({ status: "failed" }),
-      
-      // Average parsing time
-      ResumeParsingLog.aggregate([
-        { $group: { _id: null, avgTime: { $avg: "$parsingTimeMs" } } },
-      ]),
-
-      // Top skills extracted
-      Profile.aggregate([
-        { $unwind: "$skills" },
-        { $group: { _id: "$skills.name", count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-        { $limit: 10 },
-      ]),
-
-      // Recent failed parsing logs
-      ResumeParsingLog.find({ status: "failed" })
-        .populate("userId", "fullName email")
-        .sort({ timestamp: -1 })
-        .limit(20)
-        .lean(),
+      prisma.resumeParsingLog.count(),
+      prisma.resumeParsingLog.count({ where: { status: "success" } }),
+      prisma.resumeParsingLog.count({ where: { status: "failed" } }),
+      prisma.resumeParsingLog.aggregate({
+        _avg: {
+          parsingTimeMs: true
+        }
+      }),
+      prisma.$queryRaw<{ name: string; count: number }[]>`
+        SELECT name, COUNT(*)::int as count
+        FROM profile_skills
+        GROUP BY name
+        ORDER BY count DESC
+        LIMIT 10
+      `,
+      prisma.resumeParsingLog.findMany({
+        where: { status: "failed" },
+        include: {
+          user: {
+            select: {
+              fullName: true,
+              email: true
+            }
+          }
+        },
+        orderBy: { timestamp: "desc" },
+        take: 20
+      })
     ]);
 
-    const averageTimeMs = avgTimeRaw[0]?.avgTime || 0;
+    const averageTimeMs = avgAggregate._avg.parsingTimeMs || 0;
     const topSkills = topSkillsRaw.map(s => ({
-      name: s._id,
+      name: s.name,
       count: s.count,
+    }));
+
+    const failedLogs = pgFailedLogs.map(log => ({
+      _id: log.id,
+      userId: log.user ? {
+        _id: log.userId,
+        fullName: log.user.fullName,
+        email: log.user.email
+      } : log.userId,
+      status: log.status,
+      errorMessage: log.errorMsg,
+      fileName: log.fileName,
+      fileSize: 0,
+      parsingTimeMs: log.parsingTimeMs,
+      timestamp: log.timestamp,
+      createdAt: log.createdAt,
+      updatedAt: log.updatedAt
     }));
 
     return NextResponse.json({
@@ -66,6 +84,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error: any) {
+    console.error("Error in GET /api/admin/resume-ai:", error);
     return NextResponse.json(
       { success: false, error: error.message || "Failed to load resume analytics" },
       { status: 500 }

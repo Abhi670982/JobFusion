@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
 import { verifyAdmin } from "@/lib/admin-auth";
-import Company from "@/models/Company";
-import Job from "@/models/Job";
-import Activity from "@/models/Activity";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -14,27 +11,36 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
-    await connectDB();
-
-    // ── AUTO-BOOTSTRAP COMPANIES FROM JOBS ───────────────────────────────────
-    const initialCount = await Company.countDocuments({});
+    // ── AUTO-BOOTSTRAP COMPANIES FROM JOBS (PostgreSQL check) ────────────────
+    const initialCount = await prisma.company.count();
     if (initialCount === 0) {
-      console.log("[Companies API] Bootstrapping Company collection from existing Job entries...");
-      const uniqueCompanyNames = await Job.distinct("company");
+      console.log("[Companies API] Bootstrapping PostgreSQL Company table from existing Job entries...");
       
+      // Fetch distinct companies from PostgreSQL Job table
+      const uniqueCompanies = await prisma.job.findMany({
+        select: { company: true },
+        distinct: ['company'],
+      });
+
+      const uniqueCompanyNames = uniqueCompanies.map(j => j.company).filter(Boolean);
+
       const companyDocs = [];
       for (const name of uniqueCompanyNames) {
-        if (!name) continue;
-        const sampleJob = await Job.findOne({ company: name }).lean();
-        const jobsCount = await Job.countDocuments({ company: name });
-        
+        // Find sample job to get career url / timestamp
+        const sampleJob = await prisma.job.findFirst({
+          where: { company: name }
+        });
+        const jobsCount = await prisma.job.count({
+          where: { company: name }
+        });
+
         let careerUrl = "";
-        if (sampleJob && (sampleJob as any).applyUrl) {
+        if (sampleJob && sampleJob.applyUrl) {
           try {
-            const url = new URL((sampleJob as any).applyUrl);
+            const url = new URL(sampleJob.applyUrl);
             careerUrl = `${url.protocol}//${url.hostname}`;
           } catch {
-            careerUrl = (sampleJob as any).applyUrl;
+            careerUrl = sampleJob.applyUrl;
           }
         }
         
@@ -45,15 +51,17 @@ export async function GET(req: NextRequest) {
         companyDocs.push({
           name,
           careerUrl,
-          crawlStatus: "idle",
-          lastSync: sampleJob ? (sampleJob as any).createdAt || new Date() : new Date(),
+          crawlStatus: "idle" as const,
+          lastSync: sampleJob ? sampleJob.createdAt : new Date(),
           jobsFound: jobsCount,
           isEnabled: true,
         });
       }
 
       if (companyDocs.length > 0) {
-        await Company.insertMany(companyDocs);
+        await prisma.company.createMany({
+          data: companyDocs
+        });
       }
     }
 
@@ -66,7 +74,7 @@ export async function GET(req: NextRequest) {
     const filter: any = {};
 
     if (query) {
-      filter.name = { $regex: query, $options: "i" };
+      filter.name = { contains: query, mode: "insensitive" };
     }
 
     if (isEnabled === "true") {
@@ -77,14 +85,31 @@ export async function GET(req: NextRequest) {
 
     const skip = (page - 1) * limit;
 
-    const [companies, total] = await Promise.all([
-      Company.find(filter)
-        .sort({ name: 1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      Company.countDocuments(filter),
+    const [pgCompanies, total] = await Promise.all([
+      prisma.company.findMany({
+        where: filter,
+        orderBy: { name: "asc" },
+        skip,
+        take: limit,
+      }),
+      prisma.company.count({
+        where: filter,
+      }),
     ]);
+
+    // Map database output to MongoDB-like payload
+    const companies = pgCompanies.map(c => ({
+      _id: c.id,
+      name: c.name,
+      careerUrl: c.careerUrl,
+      crawlStatus: c.crawlStatus,
+      lastSync: c.lastSync,
+      jobsFound: c.jobsFound,
+      lastError: c.lastError,
+      isEnabled: c.isEnabled,
+      createdAt: c.createdAt,
+      updatedAt: c.updatedAt
+    }));
 
     return NextResponse.json({
       success: true,
@@ -110,7 +135,6 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
-    await connectDB();
     const body = await req.json();
     const { companyId, isEnabled, careerUrl } = body;
 
@@ -118,31 +142,55 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: false, error: "companyId is required" }, { status: 400 });
     }
 
-    const company = await Company.findById(companyId);
+    const company = await prisma.company.findUnique({
+      where: { id: companyId }
+    });
+
     if (!company) {
       return NextResponse.json({ success: false, error: "Company not found" }, { status: 404 });
     }
 
-    if (isEnabled !== undefined) {
-      company.isEnabled = isEnabled;
-    }
-    if (careerUrl !== undefined) {
-      company.careerUrl = careerUrl;
-    }
-
-    await company.save();
-
-    // Log admin action
-    await Activity.create({
-      userId: admin._id,
-      type: "admin_action",
-      details: `${company.isEnabled ? "Enabled" : "Disabled"} crawls for company: '${company.name}'`,
+    // Update in Postgres
+    const updatedCompany = await prisma.company.update({
+      where: { id: companyId },
+      data: {
+        isEnabled: isEnabled !== undefined ? isEnabled : undefined,
+        careerUrl: careerUrl !== undefined ? careerUrl : undefined,
+      }
     });
+
+    // Log admin action in Postgres using Prisma
+    try {
+      await prisma.activity.create({
+        data: {
+          userId: admin.id,
+          type: "admin_action",
+          details: `${updatedCompany.isEnabled ? "Enabled" : "Disabled"} crawls for company: '${updatedCompany.name}'`
+        }
+      });
+    } catch (pgErr) {
+      console.error("[Postgres Activity Log Error]", pgErr);
+    }
+
+    // Log admin action in MongoDB
+
+    const mappedCompany = {
+      _id: updatedCompany.id,
+      name: updatedCompany.name,
+      careerUrl: updatedCompany.careerUrl,
+      crawlStatus: updatedCompany.crawlStatus,
+      lastSync: updatedCompany.lastSync,
+      jobsFound: updatedCompany.jobsFound,
+      lastError: updatedCompany.lastError,
+      isEnabled: updatedCompany.isEnabled,
+      createdAt: updatedCompany.createdAt,
+      updatedAt: updatedCompany.updatedAt
+    };
 
     return NextResponse.json({
       success: true,
       message: "Company settings updated successfully",
-      data: company,
+      data: mappedCompany,
     });
   } catch (error: any) {
     return NextResponse.json(

@@ -1,9 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
 import { verifyAdmin } from "@/lib/admin-auth";
-import AdminNotification from "@/models/AdminNotification";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
+
+function mapNotif(n: any) {
+  if (!n) return null;
+  return {
+    _id: n.id,
+    type: n.type,
+    title: n.title,
+    message: n.message,
+    isRead: n.isRead,
+    metadata: n.metadata,
+    timestamp: n.timestamp,
+    createdAt: n.createdAt,
+    updatedAt: n.updatedAt
+  };
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -12,16 +26,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
-    await connectDB();
-
-    const notifications = await AdminNotification.find({})
-      .sort({ timestamp: -1 })
-      .limit(30)
-      .lean();
+    const pgNotifications = await prisma.adminNotification.findMany({
+      orderBy: { timestamp: "desc" },
+      take: 30
+    });
 
     return NextResponse.json({
       success: true,
-      data: notifications,
+      data: pgNotifications.map(mapNotif),
     });
   } catch (error: any) {
     return NextResponse.json(
@@ -38,12 +50,16 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
-    await connectDB();
     const body = await req.json();
     const { notificationId, all } = body;
 
     if (all) {
-      await AdminNotification.updateMany({ isRead: false }, { isRead: true });
+      // Update in PostgreSQL
+      await prisma.adminNotification.updateMany({
+        where: { isRead: false },
+        data: { isRead: true }
+      });
+
       return NextResponse.json({
         success: true,
         message: "All notifications marked as read",
@@ -54,18 +70,24 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: false, error: "notificationId is required" }, { status: 400 });
     }
 
-    const notif = await AdminNotification.findById(notificationId);
+    const notif = await prisma.adminNotification.findUnique({
+      where: { id: notificationId }
+    });
+
     if (!notif) {
       return NextResponse.json({ success: false, error: "Notification not found" }, { status: 404 });
     }
 
-    notif.isRead = true;
-    await notif.save();
+    // Update in PostgreSQL
+    const updatedNotif = await prisma.adminNotification.update({
+      where: { id: notificationId },
+      data: { isRead: true }
+    });
 
     return NextResponse.json({
       success: true,
       message: "Notification marked as read",
-      data: notif,
+      data: mapNotif(updatedNotif),
     });
   } catch (error: any) {
     return NextResponse.json(

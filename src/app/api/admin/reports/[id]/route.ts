@@ -1,10 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
 import { verifyAdmin } from "@/lib/admin-auth";
-import Report from "@/models/Report";
-import Activity from "@/models/Activity";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
+
+function mapReport(r: any) {
+  if (!r) return null;
+  return {
+    _id: r.id,
+    userId: r.userId,
+    type: r.type,
+    title: r.title,
+    description: r.description,
+    jobId: r.jobId,
+    status: r.status,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt
+  };
+}
 
 export async function PATCH(
   req: NextRequest,
@@ -16,7 +29,6 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
-    await connectDB();
     const resolvedParams = await params;
     const reportId = resolvedParams.id;
     const body = await req.json();
@@ -26,25 +38,33 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: "Invalid status" }, { status: 400 });
     }
 
-    const report = await Report.findById(reportId);
-    if (!report) {
+    const reportExists = await prisma.report.findUnique({
+      where: { id: reportId }
+    });
+
+    if (!reportExists) {
       return NextResponse.json({ success: false, error: "Report not found" }, { status: 404 });
     }
 
-    report.status = status;
-    await report.save();
+    // Update in Postgres
+    const updatedReport = await prisma.report.update({
+      where: { id: reportId },
+      data: { status: status as any }
+    });
 
-    // Log admin action
-    await Activity.create({
-      userId: admin._id,
-      type: "admin_action",
-      details: `Marked report '${report.title}' (${report.type}) as ${status}`,
+    // Log admin action in Postgres
+    await prisma.activity.create({
+      data: {
+        userId: admin.id,
+        type: "admin_action",
+        details: `Marked report '${updatedReport.title}' (${updatedReport.type}) as ${status}`,
+      }
     });
 
     return NextResponse.json({
       success: true,
       message: `Report status updated to ${status}`,
-      data: report,
+      data: mapReport(updatedReport),
     });
   } catch (error: any) {
     return NextResponse.json(
@@ -64,22 +84,29 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
-    await connectDB();
     const resolvedParams = await params;
     const reportId = resolvedParams.id;
 
-    const report = await Report.findById(reportId);
-    if (!report) {
+    const reportExists = await prisma.report.findUnique({
+      where: { id: reportId }
+    });
+
+    if (!reportExists) {
       return NextResponse.json({ success: false, error: "Report not found" }, { status: 404 });
     }
 
-    await Report.findByIdAndDelete(reportId);
+    // Delete in Postgres
+    await prisma.report.delete({
+      where: { id: reportId }
+    });
 
-    // Log admin action
-    await Activity.create({
-      userId: admin._id,
-      type: "admin_action",
-      details: `Deleted report ticket: '${report.title}' (${report.type})`,
+    // Log admin action in Postgres
+    await prisma.activity.create({
+      data: {
+        userId: admin.id,
+        type: "admin_action",
+        details: `Deleted report ticket: '${reportExists.title}' (${reportExists.type})`,
+      }
     });
 
     return NextResponse.json({

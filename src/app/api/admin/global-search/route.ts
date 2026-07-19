@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
 import { verifyAdmin } from "@/lib/admin-auth";
-import User from "@/models/User";
-import Job from "@/models/Job";
-import Report from "@/models/Report";
-import Company from "@/models/Company";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +10,6 @@ export async function GET(req: NextRequest) {
     if (!admin) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
-
-    await connectDB();
 
     const { searchParams } = new URL(req.url);
     const query = searchParams.get("q") || "";
@@ -27,70 +21,91 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const regex = { $regex: query, $options: "i" };
-
     const [usersRaw, jobsRaw, reportsRaw, companiesRaw] = await Promise.all([
       // 1. Search Users
-      User.find({
-        $or: [
-          { fullName: regex },
-          { email: regex },
-        ],
-      })
-        .limit(5)
-        .select("fullName email profileImage")
-        .lean(),
+      prisma.user.findMany({
+        where: {
+          OR: [
+            { fullName: { contains: query, mode: "insensitive" } },
+            { email: { contains: query, mode: "insensitive" } },
+          ],
+        },
+        take: 5,
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+        },
+      }),
 
       // 2. Search Jobs
-      Job.find({
-        $or: [
-          { title: regex },
-          { company: regex },
-        ],
-      })
-        .limit(5)
-        .select("title company")
-        .lean(),
+      prisma.job.findMany({
+        where: {
+          OR: [
+            { title: { contains: query, mode: "insensitive" } },
+            { company: { contains: query, mode: "insensitive" } },
+          ],
+        },
+        take: 5,
+        select: {
+          id: true,
+          title: true,
+          company: true,
+        },
+      }),
 
       // 3. Search Reports
-      Report.find({
-        $or: [
-          { title: regex },
-          { description: regex },
-        ],
-      })
-        .limit(5)
-        .select("title type status")
-        .lean(),
+      prisma.report.findMany({
+        where: {
+          OR: [
+            { title: { contains: query, mode: "insensitive" } },
+            { description: { contains: query, mode: "insensitive" } },
+          ],
+        },
+        take: 5,
+        select: {
+          id: true,
+          title: true,
+          type: true,
+          status: true,
+        },
+      }),
 
       // 4. Search Companies
-      Company.find({ name: regex })
-        .limit(5)
-        .select("name careerUrl")
-        .lean(),
+      prisma.company.findMany({
+        where: {
+          name: { contains: query, mode: "insensitive" },
+        },
+        take: 5,
+        select: {
+          id: true,
+          name: true,
+          careerUrl: true,
+        },
+      }),
     ]);
 
-    const users = usersRaw.map((u: any) => ({
-      id: u._id,
+    const users = usersRaw.map((u) => ({
+      id: u.id,
       name: u.fullName,
       email: u.email,
     }));
 
-    const jobs = jobsRaw.map((j: any) => ({
-      id: j._id,
+    const jobs = jobsRaw.map((j) => ({
+      id: j.id,
       title: j.title,
       company: j.company,
     }));
 
-    const reports = reportsRaw.map((r: any) => ({
-      id: r._id,
+    const reports = reportsRaw.map((r) => ({
+      id: r.id,
       title: r.title,
       type: r.type,
       status: r.status,
     }));
 
-    const companies = companiesRaw.map((c: any) => ({
-      id: c._id,
+    const companies = companiesRaw.map((c) => ({
+      id: c.id,
       name: c.name,
       careerUrl: c.careerUrl,
     }));

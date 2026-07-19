@@ -1,12 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
 import { verifyAdmin } from "@/lib/admin-auth";
-import User from "@/models/User";
-import Settings from "@/models/Settings";
-import AdminNotification from "@/models/AdminNotification";
+import { prisma } from "@/lib/prisma";
 import { logAdminAction } from "@/lib/audit-logger";
 
 export const dynamic = "force-dynamic";
+
+function mapUser(u: any) {
+  if (!u) return null;
+  return {
+    _id: u.id,
+    clerkId: u.clerkId,
+    email: u.email,
+    fullName: u.fullName,
+    profileImage: u.profileImage,
+    role: u.role,
+    status: u.status,
+    createdAt: u.createdAt,
+    updatedAt: u.updatedAt
+  };
+}
 
 // ── SUSPEND / ACTIVATE ADMIN ───────────────────────────────────────────────
 export async function PATCH(
@@ -19,13 +31,15 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
-    await connectDB();
     const resolvedParams = await params;
     const adminId = resolvedParams.id;
     const body = await req.json();
     const { status } = body; // "active" | "suspended"
 
-    const targetAdmin = await User.findById(adminId);
+    const targetAdmin = await prisma.user.findUnique({
+      where: { id: adminId }
+    });
+
     if (!targetAdmin || targetAdmin.role !== "admin") {
       return NextResponse.json({ success: false, error: "Admin not found." }, { status: 404 });
     }
@@ -37,19 +51,31 @@ export async function PATCH(
 
     // If suspending, ensure there's at least one active admin remaining
     if (status === "suspended") {
-      const activeAdminsCount = await User.countDocuments({ role: "admin", status: { $ne: "suspended" } });
+      const activeAdminsCount = await prisma.user.count({
+        where: {
+          role: "admin",
+          status: { not: "suspended" }
+        }
+      });
       if (activeAdminsCount <= 1) {
         return NextResponse.json({ success: false, error: "Cannot suspend the last remaining active admin." }, { status: 400 });
       }
     }
 
-    targetAdmin.status = status;
-    await targetAdmin.save();
+    // Update in Postgres
+    const updatedAdmin = await prisma.user.update({
+      where: { id: adminId },
+      data: { status }
+    });
 
     // Log action
     await logAdminAction({
       req,
-      admin,
+      admin: {
+        _id: admin.id,
+        fullName: admin.fullName,
+        email: admin.email
+      },
       action: status === "suspended" ? "Suspended Admin" : "Activated Admin",
       resource: "Admin",
       resourceId: adminId,
@@ -59,7 +85,7 @@ export async function PATCH(
     return NextResponse.json({
       success: true,
       message: `Admin account status updated to ${status}.`,
-      data: targetAdmin,
+      data: mapUser(updatedAdmin),
     });
   } catch (error: any) {
     return NextResponse.json(
@@ -80,11 +106,13 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
-    await connectDB();
     const resolvedParams = await params;
     const adminId = resolvedParams.id;
 
-    const targetAdmin = await User.findById(adminId);
+    const targetAdmin = await prisma.user.findUnique({
+      where: { id: adminId }
+    });
+
     if (!targetAdmin || targetAdmin.role !== "admin") {
       return NextResponse.json({ success: false, error: "Admin not found." }, { status: 404 });
     }
@@ -95,42 +123,62 @@ export async function DELETE(
     }
 
     // Ensure there's at least one active admin remaining
-    const activeAdminsCount = await User.countDocuments({ role: "admin", status: { $ne: "suspended" } });
+    const activeAdminsCount = await prisma.user.count({
+      where: {
+        role: "admin",
+        status: { not: "suspended" }
+      }
+    });
     const isTargetActive = targetAdmin.status !== "suspended";
     if (isTargetActive && activeAdminsCount <= 1) {
       return NextResponse.json({ success: false, error: "Cannot remove the last remaining active admin." }, { status: 400 });
     }
 
-    // Demote role to "jobseeker"
-    targetAdmin.role = "jobseeker";
-    await targetAdmin.save();
+    // Demote role to "jobseeker" in Postgres
+    await prisma.user.update({
+      where: { id: adminId },
+      data: { role: "jobseeker" }
+    });
 
-    // Remove email from Settings allowedAdminEmails
-    const globalSettings = await Settings.findOne({ settingsId: "global" });
+    // Remove email from Settings allowedAdminEmails in Postgres
+    let globalSettings = await prisma.settings.findUnique({
+      where: { settingsId: "global" }
+    });
+
     if (globalSettings && targetAdmin.email) {
       const emailLower = targetAdmin.email.toLowerCase();
-      globalSettings.allowedAdminEmails = (globalSettings.allowedAdminEmails || []).filter(
-        (e: string) => e.toLowerCase() !== emailLower
-      );
-      await globalSettings.save();
+      const allowedEmails = (globalSettings.allowedAdminEmails as string[]) || [];
+      const updatedEmails = allowedEmails.filter((e: string) => e.toLowerCase() !== emailLower);
+
+      await prisma.settings.update({
+        where: { settingsId: "global" },
+        data: { allowedAdminEmails: updatedEmails }
+      });
     }
 
     // Log action
     await logAdminAction({
       req,
-      admin,
+      admin: {
+        _id: admin.id,
+        fullName: admin.fullName,
+        email: admin.email
+      },
       action: "Removed Admin",
       resource: "Admin",
       resourceId: adminId,
       details: `Demoted admin ${targetAdmin.fullName} (${targetAdmin.email}) to jobseeker`,
     });
 
-    // Create Notification
-    await AdminNotification.create({
-      type: "admin_removed",
-      title: "Admin Removed",
-      message: `${targetAdmin.fullName} (${targetAdmin.email}) was demoted by ${admin.fullName}`,
-      isRead: false,
+    // Create Notification in Postgres
+    const notif = await prisma.adminNotification.create({
+      data: {
+        type: "system_warning",
+        title: "Admin Removed",
+        message: `${targetAdmin.fullName} (${targetAdmin.email}) was demoted by ${admin.fullName}`,
+        isRead: false,
+        timestamp: new Date()
+      }
     });
 
     return NextResponse.json({

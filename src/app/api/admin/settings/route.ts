@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
 import { verifyAdmin } from "@/lib/admin-auth";
-import Settings from "@/models/Settings";
-import Activity from "@/models/Activity";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -13,26 +11,46 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
-    await connectDB();
+    let settings = await prisma.settings.findUnique({
+      where: { settingsId: "global" }
+    });
 
-    let settings = await Settings.findOne({ settingsId: "global" });
     if (!settings) {
-      settings = await Settings.create({
-        settingsId: "global",
-        maintenanceMode: false,
-        homepageAnnouncement: "",
-        geminiKeyPlaceholder: "",
-        featureFlags: {
-          aiRecommendations: true,
-          scraperEnabled: true,
-          resumeParsing: true,
+      settings = await prisma.settings.create({
+        data: {
+          settingsId: "global",
+          maintenanceMode: false,
+          homepageAnnouncement: "",
+          geminiKeyPlaceholder: "",
+          featureFlags: {
+            aiRecommendations: true,
+            scraperEnabled: true,
+            resumeParsing: true,
+          },
         },
       });
+
+      // Maintain MongoDB parity
     }
+
+    // Map to MongoDB-like representation
+    const mappedSettings = {
+      _id: settings.id,
+      settingsId: settings.settingsId,
+      maintenanceMode: settings.maintenanceMode,
+      homepageAnnouncement: settings.homepageAnnouncement,
+      geminiKeyPlaceholder: settings.geminiKeyPlaceholder,
+      featureFlags: settings.featureFlags,
+      futureIntegrations: settings.futureIntegrations,
+      allowedAdminEmails: settings.allowedAdminEmails,
+      contactEmail: settings.contactEmail,
+      createdAt: settings.createdAt,
+      updatedAt: settings.updatedAt
+    };
 
     return NextResponse.json({
       success: true,
-      data: settings,
+      data: mappedSettings,
     });
   } catch (error: any) {
     return NextResponse.json(
@@ -49,48 +67,71 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
-    await connectDB();
     const body = await req.json();
     const { maintenanceMode, homepageAnnouncement, geminiKeyPlaceholder, contactEmail, featureFlags, futureIntegrations } = body;
 
-    let settings = await Settings.findOne({ settingsId: "global" });
-    if (!settings) {
-      settings = new Settings({ settingsId: "global" });
-    }
-
-    if (maintenanceMode !== undefined) settings.maintenanceMode = maintenanceMode;
-    if (homepageAnnouncement !== undefined) settings.homepageAnnouncement = homepageAnnouncement;
-    if (geminiKeyPlaceholder !== undefined) settings.geminiKeyPlaceholder = geminiKeyPlaceholder;
-    if (featureFlags !== undefined) settings.featureFlags = featureFlags;
-    if (futureIntegrations !== undefined) settings.futureIntegrations = futureIntegrations;
-    
-    if (contactEmail !== undefined) {
-      if (contactEmail.trim()) {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(contactEmail.trim())) {
-          return NextResponse.json({ success: false, error: "Invalid contact email format" }, { status: 400 });
-        }
+    if (contactEmail !== undefined && contactEmail.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(contactEmail.trim())) {
+        return NextResponse.json({ success: false, error: "Invalid contact email format" }, { status: 400 });
       }
-      settings.contactEmail = contactEmail.trim();
     }
 
-    await settings.save();
+    // Update PostgreSQL settings
+    const settings = await prisma.settings.upsert({
+      where: { settingsId: "global" },
+      update: {
+        maintenanceMode: maintenanceMode !== undefined ? maintenanceMode : undefined,
+        homepageAnnouncement: homepageAnnouncement !== undefined ? homepageAnnouncement : undefined,
+        geminiKeyPlaceholder: geminiKeyPlaceholder !== undefined ? geminiKeyPlaceholder : undefined,
+        contactEmail: contactEmail !== undefined ? contactEmail.trim() : undefined,
+        featureFlags: featureFlags !== undefined ? featureFlags : undefined,
+        futureIntegrations: futureIntegrations !== undefined ? futureIntegrations : undefined,
+      },
+      create: {
+        settingsId: "global",
+        maintenanceMode: maintenanceMode ?? false,
+        homepageAnnouncement: homepageAnnouncement ?? "",
+        geminiKeyPlaceholder: geminiKeyPlaceholder ?? "",
+        contactEmail: contactEmail ? contactEmail.trim() : "akchauhan1172@gmail.com",
+        featureFlags: featureFlags ?? { aiRecommendations: true, scraperEnabled: true, resumeParsing: true },
+        futureIntegrations: futureIntegrations ?? {},
+      }
+    });
 
     // Log admin action using structured audit logger
     const { logAdminAction } = await import("@/lib/audit-logger");
     await logAdminAction({
       req,
-      admin,
+      admin: {
+        _id: admin.id,
+        fullName: admin.fullName,
+        email: admin.email
+      },
       action: "Updated Settings",
       resource: "Settings",
       resourceId: "global",
       details: "Updated global platform settings and feature flags",
     });
 
+    const mappedSettings = {
+      _id: settings.id,
+      settingsId: settings.settingsId,
+      maintenanceMode: settings.maintenanceMode,
+      homepageAnnouncement: settings.homepageAnnouncement,
+      geminiKeyPlaceholder: settings.geminiKeyPlaceholder,
+      featureFlags: settings.featureFlags,
+      futureIntegrations: settings.futureIntegrations,
+      allowedAdminEmails: settings.allowedAdminEmails,
+      contactEmail: settings.contactEmail,
+      createdAt: settings.createdAt,
+      updatedAt: settings.updatedAt
+    };
+
     return NextResponse.json({
       success: true,
       message: "Platform settings updated successfully",
-      data: settings,
+      data: mappedSettings,
     });
   } catch (error: any) {
     return NextResponse.json(

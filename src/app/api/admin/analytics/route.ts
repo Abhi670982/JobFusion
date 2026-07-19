@@ -1,12 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
 import { verifyAdmin } from "@/lib/admin-auth";
-import User from "@/models/User";
-import Application from "@/models/Application";
-import Job from "@/models/Job";
-import Profile from "@/models/Profile";
-import ResumeParsingLog from "@/models/ResumeParsingLog";
-import Activity from "@/models/Activity";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -17,14 +11,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
-    await connectDB();
-
     const now = new Date();
     const last7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const last14Days = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
     const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-    // Helper: generate list of past 14 days
+    // Helper: generate list of past N days in YYYY-MM-DD format
     const generateDateList = (days: number) => {
       const dates = [];
       for (let i = days - 1; i >= 0; i--) {
@@ -38,17 +30,14 @@ export async function GET(req: NextRequest) {
 
     // ── 1. USER GROWTH Aggregations (Daily, Weekly, Monthly) ─────────────────
     // Daily User registrations (last 14 days)
-    const dailyRegistrationsRaw = await User.aggregate([
-      { $match: { createdAt: { $gte: last14Days } } },
-      {
-        $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
-          count: { $sum: 1 },
-        },
-      },
-    ]);
+    const dailyRegistrationsRaw: { date_str: string; count: number }[] = await prisma.$queryRaw`
+      SELECT TO_CHAR(created_at, 'YYYY-MM-DD') as date_str, COUNT(*)::int as count
+      FROM users
+      WHERE created_at >= ${last14Days}
+      GROUP BY date_str
+    `;
 
-    const dailyRegistrationsMap = new Map(dailyRegistrationsRaw.map(d => [d._id, d.count]));
+    const dailyRegistrationsMap = new Map(dailyRegistrationsRaw.map(d => [d.date_str, d.count]));
     const dailyUsers = dateList14.map(date => ({
       date: new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
       value: dailyRegistrationsMap.get(date) || 0,
@@ -56,16 +45,13 @@ export async function GET(req: NextRequest) {
 
     // Weekly registrations (last 8 weeks)
     const last8Weeks = new Date(now.getTime() - 8 * 7 * 24 * 60 * 60 * 1000);
-    const weeklyRegistrationsRaw = await User.aggregate([
-      { $match: { createdAt: { $gte: last8Weeks } } },
-      {
-        $group: {
-          _id: { $week: "$createdAt" },
-          count: { $sum: 1 },
-        },
-      },
-      { $sort: { _id: 1 } },
-    ]);
+    const weeklyRegistrationsRaw: { week_num: number; count: number }[] = await prisma.$queryRaw`
+      SELECT EXTRACT(WEEK FROM created_at)::int as week_num, COUNT(*)::int as count
+      FROM users
+      WHERE created_at >= ${last8Weeks}
+      GROUP BY week_num
+      ORDER BY week_num ASC
+    `;
     const weeklyUsers = weeklyRegistrationsRaw.map((w, idx) => ({
       date: `Week ${idx + 1}`,
       value: w.count,
@@ -73,74 +59,66 @@ export async function GET(req: NextRequest) {
 
     // Monthly registrations (last 6 months)
     const last6Months = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-    const monthlyRegistrationsRaw = await User.aggregate([
-      { $match: { createdAt: { $gte: last6Months } } },
-      {
-        $group: {
-          _id: {
-            year: { $year: "$createdAt" },
-            month: { $month: "$createdAt" },
-          },
-          count: { $sum: 1 },
-        },
-      },
-      { $sort: { "_id.year": 1, "_id.month": 1 } },
-    ]);
+    const monthlyRegistrationsRaw: { year_num: number; month_num: number; count: number }[] = await prisma.$queryRaw`
+      SELECT EXTRACT(YEAR FROM created_at)::int as year_num, EXTRACT(MONTH FROM created_at)::int as month_num, COUNT(*)::int as count
+      FROM users
+      WHERE created_at >= ${last6Months}
+      GROUP BY year_num, month_num
+      ORDER BY year_num ASC, month_num ASC
+    `;
     const monthlyUsers = monthlyRegistrationsRaw.map(m => {
-      const monthName = new Date(m._id.year, m._id.month - 1).toLocaleDateString("en-US", { month: "short" });
+      const monthName = new Date(m.year_num, m.month_num - 1).toLocaleDateString("en-US", { month: "short" });
       return {
-        date: `${monthName} ${m._id.year}`,
+        date: `${monthName} ${m.year_num}`,
         value: m.count,
       };
     });
 
     // ── 2. RESUME UPLOAD TREND (last 14 days) ─────────────────────────────────
-    const dailyUploadsRaw = await ResumeParsingLog.aggregate([
-      { $match: { timestamp: { $gte: last14Days }, status: "success" } },
-      {
-        $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp" } },
-          count: { $sum: 1 },
-        },
-      },
-    ]);
-    const dailyUploadsMap = new Map(dailyUploadsRaw.map(d => [d._id, d.count]));
+    const dailyUploadsRaw: { date_str: string; count: number }[] = await prisma.$queryRaw`
+      SELECT TO_CHAR(timestamp, 'YYYY-MM-DD') as date_str, COUNT(*)::int as count
+      FROM resume_parsing_logs
+      WHERE timestamp >= ${last14Days} AND status = 'success'
+      GROUP BY date_str
+    `;
+    const dailyUploadsMap = new Map(dailyUploadsRaw.map(d => [d.date_str, d.count]));
     const resumeUploads = dateList14.map(date => ({
       date: new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
       value: dailyUploadsMap.get(date) || 0,
     }));
 
     // ── 3. JOB APPLICATIONS TREND (last 14 days) ──────────────────────────────
-    const dailyAppsRaw = await Application.aggregate([
-      { $match: { appliedAt: { $gte: last14Days } } },
-      {
-        $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$appliedAt" } },
-          count: { $sum: 1 },
-        },
-      },
-    ]);
-    const dailyAppsMap = new Map(dailyAppsRaw.map(d => [d._id, d.count]));
+    const dailyAppsRaw: { date_str: string; count: number }[] = await prisma.$queryRaw`
+      SELECT TO_CHAR(applied_at, 'YYYY-MM-DD') as date_str, COUNT(*)::int as count
+      FROM applications
+      WHERE applied_at >= ${last14Days}
+      GROUP BY date_str
+    `;
+    const dailyAppsMap = new Map(dailyAppsRaw.map(d => [d.date_str, d.count]));
     const jobApplications = dateList14.map(date => ({
       date: new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
       value: dailyAppsMap.get(date) || 0,
     }));
 
     // ── 4. JOB SOURCE DISTRIBUTION ───────────────────────────────────────────
-    const jobSourcesRaw = await Job.aggregate([
-      { $match: { source: { $in: ["careers", "wellfound", "foundit"] } } },
-      { $group: { _id: "$source", count: { $sum: 1 } } },
-    ]);
+    const jobSourcesRaw: { source: string; count: number }[] = await prisma.$queryRaw`
+      SELECT source, COUNT(*)::int as count
+      FROM jobs
+      WHERE source IN ('careers', 'wellfound', 'foundit', 'aggregator')
+      GROUP BY source
+    `;
     const jobSources = jobSourcesRaw.map(s => ({
-      name: s._id === "careers" ? "Company Careers" : s._id.charAt(0).toUpperCase() + s._id.slice(1),
+      name: s.source === "careers" ? "Company Careers" : s.source.charAt(0).toUpperCase() + s.source.slice(1),
       value: s.count,
     }));
 
     // ── 5. AI PARSING SUCCESS RATE ────────────────────────────────────────────
-    const parseLogsRaw = await ResumeParsingLog.aggregate([
-      { $group: { _id: "$status", count: { $sum: 1 } } },
-    ]);
-    const parseLogsMap = new Map(parseLogsRaw.map(p => [p._id, p.count]));
+    const parseLogsRaw: { status: string; count: number }[] = await prisma.$queryRaw`
+      SELECT status::text, COUNT(*)::int as count
+      FROM resume_parsing_logs
+      GROUP BY status
+    `;
+    const parseLogsMap = new Map(parseLogsRaw.map(p => [p.status, p.count]));
     const aiSuccessRate = [
       { name: "Success", value: parseLogsMap.get("success") || 0, color: "#10b981" },
       { name: "Failed", value: parseLogsMap.get("failed") || 0, color: "#ef4444" },
@@ -148,34 +126,41 @@ export async function GET(req: NextRequest) {
     ];
 
     // ── 6. TOP EXTRACTED SKILLS ──────────────────────────────────────────────
-    const topSkillsRaw = await Profile.aggregate([
-      { $unwind: "$skills" },
-      { $group: { _id: "$skills.name", count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-      { $limit: 8 },
-    ]);
+    const topSkillsRaw: { name: string; count: number }[] = await prisma.$queryRaw`
+      SELECT name, COUNT(*)::int as count
+      FROM profile_skills
+      GROUP BY name
+      ORDER BY count DESC
+      LIMIT 8
+    `;
     const topSkills = topSkillsRaw.map(s => ({
-      name: s._id,
+      name: s.name,
       value: s.count,
     }));
 
     // ── 7. WEEKLY PLATFORM ACTIVITY (last 7 days) ─────────────────────────────
-    const weeklySignupsRaw = await User.aggregate([
-      { $match: { createdAt: { $gte: last7Days } } },
-      { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }, count: { $sum: 1 } } },
-    ]);
-    const weeklyUploadsRaw = await ResumeParsingLog.aggregate([
-      { $match: { timestamp: { $gte: last7Days }, status: "success" } },
-      { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp" } }, count: { $sum: 1 } } },
-    ]);
-    const weeklyAppsRaw = await Application.aggregate([
-      { $match: { appliedAt: { $gte: last7Days } } },
-      { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$appliedAt" } }, count: { $sum: 1 } } },
-    ]);
+    const weeklySignupsRaw: { date_str: string; count: number }[] = await prisma.$queryRaw`
+      SELECT TO_CHAR(created_at, 'YYYY-MM-DD') as date_str, COUNT(*)::int as count
+      FROM users
+      WHERE created_at >= ${last7Days}
+      GROUP BY date_str
+    `;
+    const weeklyUploadsRaw: { date_str: string; count: number }[] = await prisma.$queryRaw`
+      SELECT TO_CHAR(timestamp, 'YYYY-MM-DD') as date_str, COUNT(*)::int as count
+      FROM resume_parsing_logs
+      WHERE timestamp >= ${last7Days} AND status = 'success'
+      GROUP BY date_str
+    `;
+    const weeklyAppsRaw: { date_str: string; count: number }[] = await prisma.$queryRaw`
+      SELECT TO_CHAR(applied_at, 'YYYY-MM-DD') as date_str, COUNT(*)::int as count
+      FROM applications
+      WHERE applied_at >= ${last7Days}
+      GROUP BY date_str
+    `;
 
-    const weeklySignupsMap = new Map(weeklySignupsRaw.map(d => [d._id, d.count]));
-    const weeklyUploadsMap = new Map(weeklyUploadsRaw.map(d => [d._id, d.count]));
-    const weeklyAppsMap = new Map(weeklyAppsRaw.map(d => [d._id, d.count]));
+    const weeklySignupsMap = new Map(weeklySignupsRaw.map(d => [d.date_str, d.count]));
+    const weeklyUploadsMap = new Map(weeklyUploadsRaw.map(d => [d.date_str, d.count]));
+    const weeklyAppsMap = new Map(weeklyAppsRaw.map(d => [d.date_str, d.count]));
 
     const weeklyActivity = dateList7.map(date => {
       const dayLabel = new Date(date).toLocaleDateString("en-US", { weekday: "short" });
@@ -188,13 +173,20 @@ export async function GET(req: NextRequest) {
     });
 
     // ── 8. RECENT ACTIVITY FEED ──────────────────────────────────────────────
-    const recentActivities = await Activity.find({})
-      .populate("userId", "fullName email profileImage")
-      .sort({ createdAt: -1 })
-      .limit(10)
-      .lean();
+    const pgActivities = await prisma.activity.findMany({
+      include: {
+        user: {
+          select: {
+            fullName: true,
+            profileImage: true
+          }
+        }
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10
+    });
 
-    const activityFeed = recentActivities.map((act: any) => {
+    const activityFeed = pgActivities.map((act) => {
       const date = new Date(act.createdAt);
       const timeLabel = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       const relativeDate = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -215,10 +207,10 @@ export async function GET(req: NextRequest) {
       }
 
       return {
-        _id: act._id,
-        user: act.userId ? {
-          fullName: act.userId.fullName,
-          profileImage: act.userId.profileImage,
+        _id: act.id,
+        user: act.user ? {
+          fullName: act.user.fullName,
+          profileImage: act.user.profileImage,
         } : null,
         time: timeLabel,
         date: relativeDate,
@@ -245,6 +237,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error: any) {
+    console.error("Error in GET /api/admin/analytics:", error);
     return NextResponse.json(
       { success: false, error: error.message || "Failed to fetch analytics" },
       { status: 500 }

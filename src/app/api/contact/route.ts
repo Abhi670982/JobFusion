@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
-import ContactMessage from "@/models/ContactMessage";
-import Settings from "@/models/Settings";
+import { prisma } from "@/lib/prisma";
 import { sendContactNotification } from "@/lib/email";
 import sanitizeHtml from "sanitize-html";
 
@@ -9,7 +7,6 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    await connectDB();
     const body = await req.json();
     const { name, email, subject, message } = body;
 
@@ -69,19 +66,23 @@ export async function POST(req: NextRequest) {
     const cleanSubject = sanitizeHtml(trimmedSubject, { allowedTags: [], allowedAttributes: {} });
     const cleanMessage = sanitizeHtml(trimmedMessage, { allowedTags: [], allowedAttributes: {} });
 
-    // Store in MongoDB
-    const newMessage = await ContactMessage.create({
-      name: cleanName,
-      email: trimmedEmail,
-      subject: cleanSubject,
-      message: cleanMessage,
-      status: "unread",
+    // Store in PostgreSQL
+    const newMessage = await prisma.contactMessage.create({
+      data: {
+        name: cleanName,
+        email: trimmedEmail,
+        subject: cleanSubject,
+        message: cleanMessage,
+        status: "unread",
+      }
     });
 
-    // Retrieve configured support email
+    // Retrieve configured support email from Postgres
     let supportEmail = "akchauhan1172@gmail.com";
     try {
-      const globalSettings = await Settings.findOne({ settingsId: "global" });
+      const globalSettings = await prisma.settings.findUnique({
+        where: { settingsId: "global" }
+      });
       if (globalSettings && globalSettings.contactEmail) {
         supportEmail = globalSettings.contactEmail;
       }
@@ -105,7 +106,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       message: "Your message has been sent successfully. We'll get back to you as soon as possible.",
-      data: { id: newMessage._id },
+      data: { id: newMessage.id },
     });
   } catch (error: any) {
     console.error("[Contact API] Internal Server Error:", error);

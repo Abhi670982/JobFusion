@@ -1,13 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
 import { verifyAdmin } from "@/lib/admin-auth";
-import User from "@/models/User";
-import Job from "@/models/Job";
-import Application from "@/models/Application";
-import SavedJob from "@/models/SavedJob";
-import Profile from "@/models/Profile";
-import Report from "@/models/Report";
-import PageView from "@/models/PageView";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -18,21 +11,19 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
-    await connectDB();
-
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
     const last7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const prev7DaysStart = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
     const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-    // ── KPI Queries ──────────────────────────────────────────────────────────
+    // ── KPI Queries in PostgreSQL ─────────────────────────────────────────────
     const [
       totalUsers,
       newUsersToday,
       newUsersThisWeek,
       newUsersPrevWeek,
-      activeUsersCount, // Active in 30d (distinct users from PageView in last 30d)
+      activeUsers,
       totalJobs,
       newJobsThisWeek,
       newJobsPrevWeek,
@@ -44,29 +35,50 @@ export async function GET(req: NextRequest) {
       totalSavedJobs,
       pendingReportsCount,
     ] = await Promise.all([
-      // Users
-      User.countDocuments({}),
-      User.countDocuments({ createdAt: { $gte: todayStart } }),
-      User.countDocuments({ createdAt: { $gte: last7Days } }),
-      User.countDocuments({ createdAt: { $gte: prev7DaysStart, $lt: last7Days } }),
-      // Active Users
-      PageView.distinct("userId", { timestamp: { $gte: last30Days }, userId: { $ne: null } }).then(arr => arr.length),
-      // Jobs
-      Job.countDocuments({}),
-      Job.countDocuments({ createdAt: { $gte: last7Days } }),
-      Job.countDocuments({ createdAt: { $gte: prev7DaysStart, $lt: last7Days } }),
-      // Resume & AI
-      Profile.countDocuments({ resumeUrl: { $nin: [null, ""] } }),
-      Profile.countDocuments({ lastAnalyzedAt: { $exists: true, $ne: null } }),
-      // Applications
-      Application.countDocuments({}),
-      Application.countDocuments({ appliedAt: { $gte: last7Days } }),
-      Application.countDocuments({ appliedAt: { $gte: prev7DaysStart, $lt: last7Days } }),
-      // Saved Jobs
-      SavedJob.countDocuments({}),
-      // Reports
-      Report.countDocuments({ status: "pending" }),
+      // Users counts
+      prisma.user.count(),
+      prisma.user.count({ where: { createdAt: { gte: todayStart } } }),
+      prisma.user.count({ where: { createdAt: { gte: last7Days } } }),
+      prisma.user.count({ where: { createdAt: { gte: prev7DaysStart, lt: last7Days } } }),
+      // Distinct active users in last 30 days
+      prisma.pageView.findMany({
+        where: {
+          timestamp: { gte: last30Days },
+          userId: { not: null }
+        },
+        distinct: ["userId"],
+        select: { userId: true }
+      }),
+      // Jobs counts
+      prisma.job.count(),
+      prisma.job.count({ where: { createdAt: { gte: last7Days } } }),
+      prisma.job.count({ where: { createdAt: { gte: prev7DaysStart, lt: last7Days } } }),
+      // Profiles with uploaded resumes
+      prisma.profile.count({
+        where: {
+          NOT: [
+            { resumeUrl: null },
+            { resumeUrl: "" }
+          ]
+        }
+      }),
+      // Profiles with AI analyses
+      prisma.profile.count({
+        where: {
+          lastAnalyzedAt: { not: null }
+        }
+      }),
+      // Applications counts
+      prisma.application.count(),
+      prisma.application.count({ where: { appliedAt: { gte: last7Days } } }),
+      prisma.application.count({ where: { appliedAt: { gte: prev7DaysStart, lt: last7Days } } }),
+      // Saved Jobs count
+      prisma.savedJob.count(),
+      // Pending Reports count
+      prisma.report.count({ where: { status: "pending" } })
     ]);
+
+    const activeUsersCount = activeUsers.length;
 
     // Calculate Trend percentages (compare last 7 days vs previous 7 days)
     const calculateTrend = (curr: number, prev: number) => {
@@ -79,7 +91,6 @@ export async function GET(req: NextRequest) {
     const appTrend = calculateTrend(appsThisWeek, appsPrevWeek);
 
     // System Health Status Summary
-    // We consider it "healthy" unless there's a database connection problem
     const systemHealthStatus = "healthy";
 
     return NextResponse.json({
@@ -148,6 +159,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error: any) {
+    console.error("Error in GET /api/admin/stats:", error);
     return NextResponse.json(
       { success: false, error: error.message || "Failed to load admin stats" },
       { status: 500 }

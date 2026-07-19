@@ -1,21 +1,51 @@
 import { NextRequest, NextResponse } from "next/server";
-import mongoose from "mongoose";
-import { connectDB } from "@/lib/mongodb";
-import Application from "@/models/Application";
-import User from "@/models/User";
-import Job from "@/models/Job";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-const isValidObjectId = (id: string | null | undefined): boolean => {
-  if (!id) return false;
-  return mongoose.Types.ObjectId.isValid(id);
-};
+function mapApplication(app: any) {
+  if (!app) return null;
+  return {
+    _id: app.id,
+    userId: app.user ? {
+      _id: app.user.id,
+      clerkId: app.user.clerkId,
+      fullName: app.user.fullName,
+      email: app.user.email,
+      profileImage: app.user.profileImage,
+      role: app.user.role,
+      status: app.user.status,
+      createdAt: app.user.createdAt,
+      updatedAt: app.user.updatedAt
+    } : app.userId,
+    jobId: app.job ? {
+      _id: app.job.id,
+      title: app.job.title,
+      company: app.job.company,
+      companyLogo: app.job.companyLogo,
+      companyColor: app.job.companyColor,
+      location: app.job.location,
+      locationType: app.job.locationType,
+      salary: app.job.salary,
+      experience: app.job.experience,
+      experienceLevel: app.job.experienceLevel,
+      type: app.job.type === "full_time" ? "full-time" : (app.job.type === "part_time" ? "part-time" : app.job.type),
+      postedAt: app.job.postedAt,
+      postedAtDate: app.job.postedAtDate,
+      category: app.job.category,
+      source: app.job.source,
+      applyUrl: app.job.applyUrl
+    } : app.jobId,
+    status: app.status === "Under_Review" ? "Under Review" : app.status,
+    appliedAt: app.appliedAt,
+    createdAt: app.createdAt,
+    updatedAt: app.updatedAt
+  };
+}
 
 // 1. POST - Create an Application
 export async function POST(req: NextRequest) {
   try {
-    await connectDB();
     const body = await req.json();
     const { userId, jobId, status } = body;
 
@@ -27,17 +57,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!isValidObjectId(userId) || !isValidObjectId(jobId)) {
-      return NextResponse.json(
-        { success: false, error: "Invalid userId or jobId format" },
-        { status: 400 }
-      );
-    }
-
-    // Verify User and Job exist
+    // Verify User and Job exist in PostgreSQL
     const [userExists, jobExists] = await Promise.all([
-      User.findById(userId),
-      Job.findById(jobId),
+      prisma.user.findUnique({ where: { id: userId } }),
+      prisma.job.findUnique({ where: { id: jobId } }),
     ]);
 
     if (!userExists) {
@@ -54,8 +77,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check for duplicate application
-    const existingApplication = await Application.findOne({ userId, jobId });
+    // Check for duplicate application in PostgreSQL
+    const existingApplication = await prisma.application.findUnique({
+      where: { userId_jobId: { userId, jobId } }
+    });
+
     if (existingApplication) {
       return NextResponse.json(
         { success: false, error: "You have already applied for this job" },
@@ -63,18 +89,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const application = await Application.create({
-      userId,
-      jobId,
-      status: status || "Applied",
+    // Translate status for Postgres
+    let pgStatus = "Applied";
+    if (status === "Under Review") pgStatus = "Under_Review";
+    else if (status) pgStatus = status;
+
+    // Create in PostgreSQL
+    const application = await prisma.application.create({
+      data: {
+        userId,
+        jobId,
+        status: pgStatus as any,
+      },
+      include: {
+        user: true,
+        job: true
+      }
     });
 
-    const populatedApplication = await Application.findById(application._id)
-      .populate("userId")
-      .populate("jobId");
-
     return NextResponse.json(
-      { success: true, data: populatedApplication },
+      { success: true, data: mapApplication(application) },
       { status: 201 }
     );
   } catch (error: any) {
@@ -88,7 +122,6 @@ export async function POST(req: NextRequest) {
 // 2. GET - Read Applications (Single, by User, by Job, or All)
 export async function GET(req: NextRequest) {
   try {
-    await connectDB();
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
     const userId = searchParams.get("userId");
@@ -96,60 +129,45 @@ export async function GET(req: NextRequest) {
 
     // Get specific application by application ID
     if (id) {
-      if (!isValidObjectId(id)) {
-        return NextResponse.json(
-          { success: false, error: "Invalid application ID format" },
-          { status: 400 }
-        );
-      }
-      const application = await Application.findById(id)
-        .populate("userId")
-        .populate("jobId");
+      const application = await prisma.application.findUnique({
+        where: { id },
+        include: { user: true, job: true }
+      });
       if (!application) {
         return NextResponse.json(
           { success: false, error: "Application not found" },
           { status: 404 }
         );
       }
-      return NextResponse.json({ success: true, data: application });
+      return NextResponse.json({ success: true, data: mapApplication(application) });
     }
 
     // Get applications by userId
     if (userId) {
-      if (!isValidObjectId(userId)) {
-        return NextResponse.json(
-          { success: false, error: "Invalid userId format" },
-          { status: 400 }
-        );
-      }
-      const applications = await Application.find({ userId })
-        .populate("userId")
-        .populate("jobId")
-        .sort({ appliedAt: -1 });
-      return NextResponse.json({ success: true, data: applications });
+      const applications = await prisma.application.findMany({
+        where: { userId },
+        include: { user: true, job: true },
+        orderBy: { appliedAt: "desc" }
+      });
+      return NextResponse.json({ success: true, data: applications.map(mapApplication) });
     }
 
     // Get applications by jobId
     if (jobId) {
-      if (!isValidObjectId(jobId)) {
-        return NextResponse.json(
-          { success: false, error: "Invalid jobId format" },
-          { status: 400 }
-        );
-      }
-      const applications = await Application.find({ jobId })
-        .populate("userId")
-        .populate("jobId")
-        .sort({ appliedAt: -1 });
-      return NextResponse.json({ success: true, data: applications });
+      const applications = await prisma.application.findMany({
+        where: { jobId },
+        include: { user: true, job: true },
+        orderBy: { appliedAt: "desc" }
+      });
+      return NextResponse.json({ success: true, data: applications.map(mapApplication) });
     }
 
     // Get all applications
-    const applications = await Application.find()
-      .populate("userId")
-      .populate("jobId")
-      .sort({ appliedAt: -1 });
-    return NextResponse.json({ success: true, data: applications });
+    const applications = await prisma.application.findMany({
+      include: { user: true, job: true },
+      orderBy: { appliedAt: "desc" }
+    });
+    return NextResponse.json({ success: true, data: applications.map(mapApplication) });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message || "Something went wrong" },
@@ -161,10 +179,8 @@ export async function GET(req: NextRequest) {
 // 3. PUT - Update an Application (e.g. status)
 export async function PUT(req: NextRequest) {
   try {
-    await connectDB();
     const body = await req.json();
     const { searchParams } = new URL(req.url);
-
     const id = searchParams.get("id") || body.id;
 
     if (!id) {
@@ -174,35 +190,24 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    if (!isValidObjectId(id)) {
-      return NextResponse.json(
-        { success: false, error: "Invalid application ID format" },
-        { status: 400 }
-      );
-    }
+    const { _id, userId, jobId, status, ...updateData } = body;
 
-    // Prevent modifying core relationships in PUT
-    const { _id, userId, jobId, ...updateData } = body;
+    // Translate status for Postgres
+    let pgStatus = undefined;
+    if (status === "Under Review") pgStatus = "Under_Review";
+    else if (status) pgStatus = status;
 
-    const updatedApplication = await Application.findByIdAndUpdate(
-      id,
-      updateData,
-      {
-        new: true,
-        runValidators: true,
-      }
-    )
-      .populate("userId")
-      .populate("jobId");
+    const dataToUpdate: any = { ...updateData };
+    if (pgStatus) dataToUpdate.status = pgStatus;
 
-    if (!updatedApplication) {
-      return NextResponse.json(
-        { success: false, error: "Application not found to update" },
-        { status: 404 }
-      );
-    }
+    // Update in Postgres
+    const updatedApplication = await prisma.application.update({
+      where: { id },
+      data: dataToUpdate,
+      include: { user: true, job: true }
+    });
 
-    return NextResponse.json({ success: true, data: updatedApplication });
+    return NextResponse.json({ success: true, data: mapApplication(updatedApplication) });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message || "Something went wrong" },
@@ -214,7 +219,6 @@ export async function PUT(req: NextRequest) {
 // 4. DELETE - Delete an Application
 export async function DELETE(req: NextRequest) {
   try {
-    await connectDB();
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
 
@@ -225,24 +229,22 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    if (!isValidObjectId(id)) {
-      return NextResponse.json(
-        { success: false, error: "Invalid application ID format" },
-        { status: 400 }
-      );
-    }
+    // Delete in PostgreSQL
+    const deletedApplication = await prisma.application.delete({
+      where: { id }
+    });
 
-    const deletedApplication = await Application.findByIdAndDelete(id);
-    if (!deletedApplication) {
-      return NextResponse.json(
-        { success: false, error: "Application not found to delete" },
-        { status: 404 }
-      );
-    }
+    // Map minimal deleted payload
+    const mappedDeleted = {
+      _id: deletedApplication.id,
+      userId: deletedApplication.userId,
+      jobId: deletedApplication.jobId,
+      status: deletedApplication.status === "Under_Review" ? "Under Review" : deletedApplication.status
+    };
 
     return NextResponse.json({
       success: true,
-      data: deletedApplication,
+      data: mappedDeleted,
       message: "Application deleted successfully",
     });
   } catch (error: any) {

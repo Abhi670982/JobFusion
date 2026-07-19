@@ -1,6 +1,5 @@
 import { NextRequest } from "next/server";
-import { connectDB } from "./mongodb";
-import Activity from "@/models/Activity";
+import { prisma } from "./prisma";
 
 interface AuditParams {
   req?: NextRequest;
@@ -24,8 +23,6 @@ export async function logAdminAction({
   details,
 }: AuditParams) {
   try {
-    await connectDB();
-
     let ipAddress = "127.0.0.1";
     if (req) {
       ipAddress = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "127.0.0.1";
@@ -35,17 +32,24 @@ export async function logAdminAction({
       }
     }
 
-    await Activity.create({
-      userId: admin._id,
-      type: "admin_action",
-      details,
-      adminName: admin.fullName || "Admin",
-      adminEmail: admin.email || "",
-      action,
-      resource,
-      resourceId,
-      ipAddress,
-    });
+    // Write to PostgreSQL
+    try {
+      await prisma.activity.create({
+        data: {
+          userId: admin._id ? admin._id.toString() : null,
+          type: "admin_action",
+          details,
+          adminName: admin.fullName || "Admin",
+          adminEmail: admin.email || "",
+          action,
+          resource,
+          resourceId,
+          ipAddress,
+        }
+      });
+    } catch (pgErr) {
+      console.error("[Audit Logger Postgres] Failed to log admin action:", pgErr);
+    }
   } catch (err) {
     console.error("[Audit Logger] Failed to record admin action:", err);
   }

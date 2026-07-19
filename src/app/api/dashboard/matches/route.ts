@@ -1,14 +1,58 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
 import { getOrCreateMongoUser } from "@/lib/auth-sync";
-import Profile from "@/models/Profile";
-import Job from "@/models/Job";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
+function mapJob(job: any, matchScore: number) {
+  if (!job) return null;
+  return {
+    _id: job.id,
+    title: job.title,
+    company: job.company,
+    companyLogo: job.companyLogo,
+    companyColor: job.companyColor,
+    location: job.location,
+    locationType: job.locationType,
+    salary: job.salary,
+    salaryMin: job.salaryMin,
+    salaryMax: job.salaryMax,
+    experience: job.experience,
+    experienceLevel: job.experienceLevel,
+    type: job.type === "full_time" ? "full-time" : (job.type === "part_time" ? "part-time" : job.type),
+    skills: job.skills,
+    matchScore,
+    postedAt: job.postedAt,
+    postedAtDate: job.postedAtDate,
+    description: job.description,
+    requirements: job.requirements,
+    responsibilities: job.responsibilities,
+    benefits: job.benefits,
+    applicants: job.applicants,
+    featured: job.featured,
+    category: job.category,
+    source: job.source,
+    applyUrl: job.applyUrl,
+    sourceId: job.sourceId,
+    sourceUrl: job.sourceUrl,
+    city: job.city,
+    country: job.country,
+    isRemote: job.isRemote,
+    jobType: job.jobType,
+    salaryCurrency: job.salaryCurrency,
+    salaryPeriod: job.salaryPeriod,
+    descriptionHtml: job.descriptionHtml,
+    expiresAt: job.expiresAt,
+    fetchedAt: job.fetchedAt,
+    dedupeHash: job.dedupeHash,
+    isActive: job.isActive,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt
+  };
+}
+
 export async function GET() {
   try {
-    await connectDB();
     const user = await getOrCreateMongoUser();
     if (!user) {
       return NextResponse.json(
@@ -17,8 +61,12 @@ export async function GET() {
       );
     }
 
-    const profile = await Profile.findOne({ userId: user._id });
-    if (!profile) {
+    const pgProfile = await prisma.profile.findUnique({
+      where: { userId: user._id.toString() },
+      include: { skills: true }
+    });
+
+    if (!pgProfile) {
       return NextResponse.json({
         success: true,
         totalMatches: 0,
@@ -27,11 +75,14 @@ export async function GET() {
       });
     }
 
-    const userSkills = (profile.skills || []).map((s: any) => s.name.toLowerCase());
-    const userDomain = (profile.resumeCategory || "").toLowerCase().trim();
+    const userSkills = (pgProfile.skills || []).map(s => s.name.toLowerCase());
+    const userDomain = (pgProfile.resumeCategory || "").toLowerCase().trim();
 
-    // Fetch all jobs to perform match calculations
-    const allJobs = await Job.find().lean();
+    // Fetch active jobs from Postgres
+    const allJobs = await prisma.job.findMany({
+      where: { isActive: true }
+    });
+
     if (allJobs.length === 0) {
       return NextResponse.json({
         success: true,
@@ -41,9 +92,9 @@ export async function GET() {
       });
     }
 
-    const matchedJobs = allJobs.map((job: any) => {
-      const jobSkills = (job.skills || []).map((s: string) => s.toLowerCase());
-      const overlap = jobSkills.filter((s: string) => userSkills.includes(s));
+    const matchedJobs = allJobs.map((job) => {
+      const jobSkills = (job.skills || []).map(s => s.toLowerCase());
+      const overlap = jobSkills.filter(s => userSkills.includes(s));
       
       let score = 0;
       if (jobSkills.length > 0) {
@@ -65,21 +116,21 @@ export async function GET() {
       const matchScore = Math.min(100, Math.max(45, Math.round(score)));
 
       return {
-        ...job,
+        job,
         matchScore,
       };
     });
 
     // Filter jobs with a decent match score (>= 60%) or all if total matches is small
     const threshold = userSkills.length > 0 ? 60 : 50;
-    const filteredMatches = matchedJobs.filter((job) => job.matchScore >= threshold);
+    const filteredMatches = matchedJobs.filter((jm) => jm.matchScore >= threshold);
     
     // Sort by match score descending
     filteredMatches.sort((a, b) => b.matchScore - a.matchScore);
 
-    const topMatches = filteredMatches.slice(0, 10);
+    const topMatches = filteredMatches.slice(0, 10).map(jm => mapJob(jm.job, jm.matchScore));
     const avgScore = filteredMatches.length > 0
-      ? Math.round(filteredMatches.reduce((acc, job) => acc + job.matchScore, 0) / filteredMatches.length)
+      ? Math.round(filteredMatches.reduce((acc, jm) => acc + jm.matchScore, 0) / filteredMatches.length)
       : 0;
 
     return NextResponse.json({

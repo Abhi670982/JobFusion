@@ -1,12 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
 import { verifyAdmin } from "@/lib/admin-auth";
-import User from "@/models/User";
-import Settings from "@/models/Settings";
-import AdminNotification from "@/models/AdminNotification";
+import { prisma } from "@/lib/prisma";
 import { logAdminAction } from "@/lib/audit-logger";
 
 export const dynamic = "force-dynamic";
+
+function mapUser(u: any) {
+  if (!u) return null;
+  return {
+    _id: u.id,
+    clerkId: u.clerkId,
+    email: u.email,
+    fullName: u.fullName,
+    profileImage: u.profileImage,
+    role: u.role,
+    status: u.status,
+    createdAt: u.createdAt,
+    updatedAt: u.updatedAt
+  };
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -15,20 +27,25 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
-    await connectDB();
     const { searchParams } = new URL(req.url);
     const query = searchParams.get("q") || "";
 
-    const filter: any = { role: "admin" };
+    const andConditions: any[] = [{ role: "admin" }];
     if (query) {
-      filter.$or = [
-        { fullName: { $regex: query, $options: "i" } },
-        { email: { $regex: query, $options: "i" } },
-      ];
+      andConditions.push({
+        OR: [
+          { fullName: { contains: query, mode: "insensitive" } },
+          { email: { contains: query, mode: "insensitive" } },
+        ]
+      });
     }
 
-    const admins = await User.find(filter).sort({ createdAt: -1 }).lean();
-    return NextResponse.json({ success: true, data: admins });
+    const pgAdmins = await prisma.user.findMany({
+      where: { AND: andConditions },
+      orderBy: { createdAt: "desc" }
+    });
+
+    return NextResponse.json({ success: true, data: pgAdmins.map(mapUser) });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message || "Failed to load admins" },
@@ -44,7 +61,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
-    await connectDB();
     const body = await req.json();
     const { email } = body;
 
@@ -54,8 +70,11 @@ export async function POST(req: NextRequest) {
 
     const emailNormalized = email.trim().toLowerCase();
 
-    // Verify user exists in MongoDB
-    const targetUser = await User.findOne({ email: new RegExp(`^${emailNormalized}$`, "i") });
+    // Verify user exists in PostgreSQL
+    const targetUser = await prisma.user.findFirst({
+      where: { email: { equals: emailNormalized, mode: "insensitive" } }
+    });
+
     if (!targetUser) {
       return NextResponse.json({ success: false, error: "User account does not exist in JobFusion." }, { status: 404 });
     }
@@ -70,44 +89,61 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "User is already an admin." }, { status: 400 });
     }
 
-    // Promotion logic
-    targetUser.role = "admin";
-    await targetUser.save();
+    // Promotion logic in Postgres
+    const updatedUser = await prisma.user.update({
+      where: { id: targetUser.id },
+      data: { role: "admin" }
+    });
 
-    // Add email to Settings allowedAdminEmails list
-    let globalSettings = await Settings.findOne({ settingsId: "global" });
+    // Add email to Settings allowedAdminEmails list in Postgres
+    let globalSettings = await prisma.settings.findUnique({
+      where: { settingsId: "global" }
+    });
+
     if (!globalSettings) {
-      globalSettings = new Settings({ settingsId: "global" });
+      globalSettings = await prisma.settings.create({
+        data: { settingsId: "global", allowedAdminEmails: [] }
+      });
     }
-    const currentEmails: string[] = globalSettings.allowedAdminEmails || [];
+
+    const currentEmails = (globalSettings.allowedAdminEmails as string[]) || [];
     if (!currentEmails.map(e => e.toLowerCase()).includes(emailNormalized)) {
       currentEmails.push(emailNormalized);
-      globalSettings.allowedAdminEmails = currentEmails;
-      await globalSettings.save();
+      await prisma.settings.update({
+        where: { settingsId: "global" },
+        data: { allowedAdminEmails: currentEmails }
+      });
     }
 
     // Log the action in Activity Logs
     await logAdminAction({
       req,
-      admin,
+      admin: {
+        _id: admin.id,
+        fullName: admin.fullName,
+        email: admin.email
+      },
       action: "Added Admin",
       resource: "Admin",
-      resourceId: targetUser._id.toString(),
+      resourceId: targetUser.id,
       details: `Promoted user ${targetUser.fullName} (${targetUser.email}) to admin role`,
     });
 
-    // Generate an Admin Notification
-    await AdminNotification.create({
-      type: "admin_added",
-      title: "New Admin Added",
-      message: `${targetUser.fullName} (${targetUser.email}) was promoted to admin by ${admin.fullName}`,
-      isRead: false,
+    // Generate an Admin Notification in Postgres
+    const notif = await prisma.adminNotification.create({
+      data: {
+        type: "system_warning",
+        title: "New Admin Added",
+        message: `${targetUser.fullName} (${targetUser.email}) was promoted to admin by ${admin.fullName}`,
+        isRead: false,
+        timestamp: new Date()
+      }
     });
 
     return NextResponse.json({
       success: true,
       message: `${targetUser.fullName} promoted to admin successfully.`,
-      data: targetUser,
+      data: mapUser(updatedUser),
     });
   } catch (error: any) {
     return NextResponse.json(

@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
-import PageView from "@/models/PageView";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    await connectDB();
-
     const body = await req.json().catch(() => ({}));
     const { path, userId } = body;
 
@@ -31,7 +28,20 @@ export async function POST(req: NextRequest) {
       req.headers.get("x-real-ip") ||
       null;
 
-    await PageView.create({ path, userId: userId || null, userAgent, ip });
+    // Write to PostgreSQL
+    let newView: any;
+    try {
+      newView = await prisma.pageView.create({
+        data: {
+          path,
+          userId: userId || null,
+          userAgent,
+          ip,
+        }
+      });
+    } catch (pgErr) {
+      console.error("[Track Visit Postgres Error]", pgErr);
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

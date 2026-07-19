@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
 import { verifyAdmin } from "@/lib/admin-auth";
-import Job from "@/models/Job";
-import Activity from "@/models/Activity";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -16,23 +14,33 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
-    await connectDB();
     const resolvedParams = await params;
     const jobId = resolvedParams.id;
 
-    const job = await Job.findById(jobId);
+    // Fetch job details from Postgres
+    const job = await prisma.job.findUnique({
+      where: { id: jobId }
+    });
+
     if (!job) {
       return NextResponse.json({ success: false, error: "Job not found" }, { status: 404 });
     }
 
-    await Job.findByIdAndDelete(jobId);
+    // Delete in PostgreSQL
+    await prisma.job.delete({
+      where: { id: jobId }
+    });
 
     // Log admin action using structured audit logger
     const { logAdminAction } = await import("@/lib/audit-logger");
     await logAdminAction({
       req,
-      admin,
-      action: "Deleted Manual Job", // or "Deleted Job" if imported
+      admin: {
+        _id: admin.id,
+        fullName: admin.fullName,
+        email: admin.email
+      },
+      action: "Deleted Manual Job",
       resource: "Job",
       resourceId: jobId,
       details: `Deleted job posting: '${job.title}' by ${job.company}`,

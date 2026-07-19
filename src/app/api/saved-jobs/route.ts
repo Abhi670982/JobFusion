@@ -1,22 +1,50 @@
 import { NextRequest, NextResponse } from "next/server";
-import mongoose from "mongoose";
-import { connectDB } from "@/lib/mongodb";
-import SavedJob from "@/models/SavedJob";
-import User from "@/models/User";
-import Job from "@/models/Job";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-
-const isValidObjectId = (id: string | null | undefined): boolean => {
-  if (!id) return false;
-  return mongoose.Types.ObjectId.isValid(id);
-};
+function mapSavedJob(sj: any) {
+  if (!sj) return null;
+  return {
+    _id: sj.id,
+    userId: sj.user ? {
+      _id: sj.user.id,
+      clerkId: sj.user.clerkId,
+      fullName: sj.user.fullName,
+      email: sj.user.email,
+      profileImage: sj.user.profileImage,
+      role: sj.user.role,
+      status: sj.user.status,
+      createdAt: sj.user.createdAt,
+      updatedAt: sj.user.updatedAt
+    } : sj.userId,
+    jobId: sj.job ? {
+      _id: sj.job.id,
+      title: sj.job.title,
+      company: sj.job.company,
+      companyLogo: sj.job.companyLogo,
+      companyColor: sj.job.companyColor,
+      location: sj.job.location,
+      locationType: sj.job.locationType,
+      salary: sj.job.salary,
+      experience: sj.job.experience,
+      experienceLevel: sj.job.experienceLevel,
+      type: sj.job.type === "full_time" ? "full-time" : (sj.job.type === "part_time" ? "part-time" : sj.job.type),
+      postedAt: sj.job.postedAt,
+      postedAtDate: sj.job.postedAtDate,
+      category: sj.job.category,
+      source: sj.job.source,
+      applyUrl: sj.job.applyUrl
+    } : sj.jobId,
+    savedAt: sj.savedAt,
+    createdAt: sj.createdAt,
+    updatedAt: sj.updatedAt
+  };
+}
 
 // 1. POST - Save a Job
 export async function POST(req: NextRequest) {
   try {
-    await connectDB();
     const body = await req.json();
     const { userId, jobId } = body;
 
@@ -28,17 +56,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!isValidObjectId(userId) || !isValidObjectId(jobId)) {
-      return NextResponse.json(
-        { success: false, error: "Invalid userId or jobId format" },
-        { status: 400 }
-      );
-    }
-
-    // Verify User and Job exist
+    // Verify User and Job exist in PostgreSQL
     const [userExists, jobExists] = await Promise.all([
-      User.findById(userId),
-      Job.findById(jobId),
+      prisma.user.findUnique({ where: { id: userId } }),
+      prisma.job.findUnique({ where: { id: jobId } }),
     ]);
 
     if (!userExists) {
@@ -55,8 +76,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if job is already saved
-    const existingSavedJob = await SavedJob.findOne({ userId, jobId });
+    // Check if job is already saved in PostgreSQL
+    const existingSavedJob = await prisma.savedJob.findUnique({
+      where: { userId_jobId: { userId, jobId } }
+    });
+
     if (existingSavedJob) {
       return NextResponse.json(
         { success: false, error: "Job is already saved by this user" },
@@ -64,17 +88,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const savedJob = await SavedJob.create({
-      userId,
-      jobId,
+    // Create in PostgreSQL
+    const savedJob = await prisma.savedJob.create({
+      data: {
+        userId,
+        jobId,
+      },
+      include: {
+        user: true,
+        job: true
+      }
     });
 
-    const populatedSavedJob = await SavedJob.findById(savedJob._id)
-      .populate("userId")
-      .populate("jobId");
-
     return NextResponse.json(
-      { success: true, data: populatedSavedJob },
+      { success: true, data: mapSavedJob(savedJob) },
       { status: 201 }
     );
   } catch (error: any) {
@@ -88,7 +115,6 @@ export async function POST(req: NextRequest) {
 // 2. GET - Read Saved Jobs (Single, by User, by Job, or All)
 export async function GET(req: NextRequest) {
   try {
-    await connectDB();
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
     const userId = searchParams.get("userId");
@@ -96,60 +122,46 @@ export async function GET(req: NextRequest) {
 
     // Get specific saved job by ID
     if (id) {
-      if (!isValidObjectId(id)) {
-        return NextResponse.json(
-          { success: false, error: "Invalid saved job ID format" },
-          { status: 400 }
-        );
-      }
-      const savedJob = await SavedJob.findById(id)
-        .populate("userId")
-        .populate("jobId");
+      const savedJob = await prisma.savedJob.findUnique({
+        where: { id },
+        include: { user: true, job: true }
+      });
+
       if (!savedJob) {
         return NextResponse.json(
           { success: false, error: "Saved job record not found" },
           { status: 404 }
         );
       }
-      return NextResponse.json({ success: true, data: savedJob });
+      return NextResponse.json({ success: true, data: mapSavedJob(savedJob) });
     }
 
     // Get saved jobs by userId
     if (userId) {
-      if (!isValidObjectId(userId)) {
-        return NextResponse.json(
-          { success: false, error: "Invalid userId format" },
-          { status: 400 }
-        );
-      }
-      const savedJobs = await SavedJob.find({ userId })
-        .populate("userId")
-        .populate("jobId")
-        .sort({ savedAt: -1 });
-      return NextResponse.json({ success: true, data: savedJobs });
+      const savedJobs = await prisma.savedJob.findMany({
+        where: { userId },
+        include: { user: true, job: true },
+        orderBy: { savedAt: "desc" }
+      });
+      return NextResponse.json({ success: true, data: savedJobs.map(mapSavedJob) });
     }
 
     // Get saved jobs by jobId
     if (jobId) {
-      if (!isValidObjectId(jobId)) {
-        return NextResponse.json(
-          { success: false, error: "Invalid jobId format" },
-          { status: 400 }
-        );
-      }
-      const savedJobs = await SavedJob.find({ jobId })
-        .populate("userId")
-        .populate("jobId")
-        .sort({ savedAt: -1 });
-      return NextResponse.json({ success: true, data: savedJobs });
+      const savedJobs = await prisma.savedJob.findMany({
+        where: { jobId },
+        include: { user: true, job: true },
+        orderBy: { savedAt: "desc" }
+      });
+      return NextResponse.json({ success: true, data: savedJobs.map(mapSavedJob) });
     }
 
     // Get all saved jobs
-    const savedJobs = await SavedJob.find()
-      .populate("userId")
-      .populate("jobId")
-      .sort({ savedAt: -1 });
-    return NextResponse.json({ success: true, data: savedJobs });
+    const savedJobs = await prisma.savedJob.findMany({
+      include: { user: true, job: true },
+      orderBy: { savedAt: "desc" }
+    });
+    return NextResponse.json({ success: true, data: savedJobs.map(mapSavedJob) });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message || "Something went wrong" },
@@ -158,13 +170,11 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// 3. PUT - Update a Saved Job (e.g. modify savedAt or metadata)
+// 3. PUT - Update a Saved Job
 export async function PUT(req: NextRequest) {
   try {
-    await connectDB();
     const body = await req.json();
     const { searchParams } = new URL(req.url);
-
     const id = searchParams.get("id") || body.id;
 
     if (!id) {
@@ -174,31 +184,16 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    if (!isValidObjectId(id)) {
-      return NextResponse.json(
-        { success: false, error: "Invalid saved job ID format" },
-        { status: 400 }
-      );
-    }
-
-    // Prevent modifying core relationships in PUT
     const { _id, userId, jobId, ...updateData } = body;
 
-    const updatedSavedJob = await SavedJob.findByIdAndUpdate(id, updateData, {
-      new: true,
-      runValidators: true,
-    })
-      .populate("userId")
-      .populate("jobId");
+    // Update in Postgres
+    const updatedSavedJob = await prisma.savedJob.update({
+      where: { id },
+      data: updateData,
+      include: { user: true, job: true }
+    });
 
-    if (!updatedSavedJob) {
-      return NextResponse.json(
-        { success: false, error: "Saved job record not found to update" },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({ success: true, data: updatedSavedJob });
+    return NextResponse.json({ success: true, data: mapSavedJob(updatedSavedJob) });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message || "Something went wrong" },
@@ -210,52 +205,38 @@ export async function PUT(req: NextRequest) {
 // 4. DELETE - Delete a Saved Job (Unsave)
 export async function DELETE(req: NextRequest) {
   try {
-    await connectDB();
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
     const userId = searchParams.get("userId");
     const jobId = searchParams.get("jobId");
 
+    let deletedSavedJob = null;
+
     // Case A: Delete by unique SavedJob ID
     if (id) {
-      if (!isValidObjectId(id)) {
-        return NextResponse.json(
-          { success: false, error: "Invalid saved job ID format" },
-          { status: 400 }
-        );
-      }
-      const deletedSavedJob = await SavedJob.findByIdAndDelete(id);
-      if (!deletedSavedJob) {
-        return NextResponse.json(
-          { success: false, error: "Saved job record not found to delete" },
-          { status: 404 }
-        );
-      }
-      return NextResponse.json({
-        success: true,
-        data: deletedSavedJob,
-        message: "Job unsaved successfully",
+      deletedSavedJob = await prisma.savedJob.delete({
+        where: { id }
+      });
+    }
+    // Case B: Delete by userId and jobId combination
+    else if (userId && jobId) {
+      deletedSavedJob = await prisma.savedJob.delete({
+        where: { userId_jobId: { userId, jobId } }
       });
     }
 
-    // Case B: Delete by userId and jobId combination
-    if (userId && jobId) {
-      if (!isValidObjectId(userId) || !isValidObjectId(jobId)) {
-        return NextResponse.json(
-          { success: false, error: "Invalid userId or jobId format" },
-          { status: 400 }
-        );
-      }
-      const deletedSavedJob = await SavedJob.findOneAndDelete({ userId, jobId });
-      if (!deletedSavedJob) {
-        return NextResponse.json(
-          { success: false, error: "Saved job record not found to delete" },
-          { status: 404 }
-        );
-      }
+    if (deletedSavedJob) {
+      // Map basic info for payload compatibility
+      const mappedDeleted = {
+        _id: deletedSavedJob.id,
+        userId: deletedSavedJob.userId,
+        jobId: deletedSavedJob.jobId,
+        savedAt: deletedSavedJob.savedAt
+      };
+      
       return NextResponse.json({
         success: true,
-        data: deletedSavedJob,
+        data: mappedDeleted,
         message: "Job unsaved successfully",
       });
     }

@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
 import { getOrCreateMongoUser } from "@/lib/auth-sync";
-import Application from "@/models/Application";
-import SavedJob from "@/models/SavedJob";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    await connectDB();
     const user = await getOrCreateMongoUser();
     if (!user) {
       return NextResponse.json(
@@ -17,14 +14,14 @@ export async function GET() {
       );
     }
 
-    const userId = user._id;
+    const userIdStr = user._id.toString();
 
     // Dates for week and month filters
     const now = new Date();
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-    // Queries
+    // Queries in PostgreSQL using Prisma
     const [
       appliedCount,
       appliedThisWeek,
@@ -33,12 +30,12 @@ export async function GET() {
       offerCount,
       savedCount,
     ] = await Promise.all([
-      Application.countDocuments({ userId }),
-      Application.countDocuments({ userId, appliedAt: { $gte: oneWeekAgo } }),
-      Application.countDocuments({ userId, appliedAt: { $gte: oneMonthAgo } }),
-      Application.countDocuments({ userId, status: "Interview" }),
-      Application.countDocuments({ userId, status: "Offer" }),
-      SavedJob.countDocuments({ userId }),
+      prisma.application.count({ where: { userId: userIdStr } }),
+      prisma.application.count({ where: { userId: userIdStr, appliedAt: { gte: oneWeekAgo } } }),
+      prisma.application.count({ where: { userId: userIdStr, appliedAt: { gte: oneMonthAgo } } }),
+      prisma.application.count({ where: { userId: userIdStr, status: "Interview" } }),
+      prisma.application.count({ where: { userId: userIdStr, status: "Offer" } }),
+      prisma.savedJob.count({ where: { userId: userIdStr } }),
     ]);
 
     return NextResponse.json({

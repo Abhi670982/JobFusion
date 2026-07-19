@@ -1,25 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
-import FetchLog from "@/models/FetchLog";
-import Job from "@/models/Job";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    await connectDB();
-
     const sources = ["wellfound", "careers", "aggregator"];
     const healthStatus: any = {};
 
     for (const source of sources) {
-      // Find the latest fetch log for this source
-      const lastLog = await FetchLog.findOne({ source })
-        .sort({ timestamp: -1 });
+      // Find the latest fetch log for this source in Postgres
+      const lastLog = await prisma.fetchLog.findFirst({
+        where: { source },
+        orderBy: { timestamp: "desc" }
+      });
 
-      // Get count of jobs currently stored for this source (case-insensitive regex match)
-      const jobCount = await Job.countDocuments({
-        source: { $regex: new RegExp(`^${source}$`, "i") }
+      // Get count of jobs currently stored for this source (case-insensitive)
+      const jobCount = await prisma.job.count({
+        where: {
+          source: { equals: source, mode: "insensitive" }
+        }
       });
 
       healthStatus[source] = {

@@ -1,15 +1,11 @@
 import { NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
 import { getOrCreateMongoUser } from "@/lib/auth-sync";
-import Profile from "@/models/Profile";
-import SavedJob from "@/models/SavedJob";
-import Activity from "@/models/Activity";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    await connectDB();
     const user = await getOrCreateMongoUser();
     if (!user) {
       return NextResponse.json(
@@ -18,31 +14,60 @@ export async function GET() {
       );
     }
 
-    const userId = user._id;
+    const userIdStr = user._id.toString();
 
-    // Run lookups concurrently
-    const [
-      profile,
-      savedCount,
-      visitedJobIds,
-    ] = await Promise.all([
-      Profile.findOne({ userId }).lean(),
-      SavedJob.countDocuments({ userId }),
-      Activity.distinct("jobId", { userId, type: "viewed", jobId: { $ne: null } }),
+    // Query stats in PostgreSQL
+    const [profile, savedCount, visitedJobs] = await Promise.all([
+      prisma.profile.findUnique({
+        where: { userId: userIdStr },
+        include: { skills: true }
+      }),
+      prisma.savedJob.count({
+        where: { userId: userIdStr }
+      }),
+      prisma.activity.findMany({
+        select: { jobId: true },
+        where: {
+          userId: userIdStr,
+          type: "viewed",
+          jobId: { not: null }
+        },
+        distinct: ["jobId"]
+      })
     ]);
 
-    const visitedCount = visitedJobIds.length;
+    const visitedCount = visitedJobs.length;
+
+    // Map profile back to MongoDB casing
+    const mappedProfile = profile ? {
+      _id: profile.id,
+      userId: profile.userId,
+      skills: profile.skills.map(s => ({ _id: s.id, name: s.name, level: s.level })),
+      headline: profile.headline,
+      bio: profile.bio,
+      location: profile.location,
+      experience: profile.experience,
+      resumeUrl: profile.resumeUrl,
+      resumeName: profile.resumeName,
+      resumeUpdatedAt: profile.resumeUpdatedAt,
+      phone: profile.phone,
+      portfolioUrl: profile.portfolioUrl,
+      githubUrl: profile.githubUrl,
+      linkedinUrl: profile.linkedinUrl,
+      isOnboarded: profile.isOnboarded,
+      createdAt: profile.createdAt,
+      updatedAt: profile.updatedAt
+    } : null;
 
     return NextResponse.json({
       success: true,
       user,
-      profile,
+      profile: mappedProfile,
       stats: {
         visitedCount,
         skillsCount: profile?.skills?.length || 0,
         savedCount,
       },
-
     });
   } catch (error: any) {
     console.error("Error in GET /api/dashboard:", error);

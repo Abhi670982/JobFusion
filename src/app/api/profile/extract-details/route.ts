@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
 import { getOrCreateMongoUser } from "@/lib/auth-sync";
-import Profile from "@/models/Profile";
 import { extractProfileDetails } from "@/lib/profile-extractor";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    await connectDB();
     const mongoUser = await getOrCreateMongoUser();
     if (!mongoUser) {
       return NextResponse.json(
@@ -34,43 +32,46 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const profile = await Profile.findOne({ userId: mongoUser._id });
-    if (!profile) {
+    // Fetch profile from Postgres
+    const pgProfile = await prisma.profile.findUnique({
+      where: { userId: mongoUser._id.toString() }
+    });
+
+    if (!pgProfile) {
       return NextResponse.json(
         { success: false, error: "Profile not found" },
         { status: 404 }
       );
     }
 
-    if (!profile.resumeUrl) {
+    if (!pgProfile.resumeUrl) {
       return NextResponse.json(
         { success: false, error: "No uploaded resume found for this user. Please upload a resume first." },
         { status: 400 }
       );
     }
 
-    let extractedText = profile.resumeText || "";
+    let extractedText = pgProfile.resumeText || "";
     
-    // Fallback: If resumeText is not cached in db but resumeUrl exists, we should try to extract it first.
-    if (!extractedText && profile.resumeUrl) {
+    // Fallback: If resumeText is empty but resumeUrl exists, we should try to extract it first.
+    if (!extractedText && pgProfile.resumeUrl) {
       console.log(`[Extract Details] resumeText is empty. We need to parse first.`);
-      // We can call the internal parse route or read/download the file. Let's do a fast file read or download.
-      const extension = profile.resumeName?.split(".").pop()?.toLowerCase() || 
-                        (profile.resumeUrl.toLowerCase().includes(".docx") ? "docx" : "pdf");
+      const extension = pgProfile.resumeName?.split(".").pop()?.toLowerCase() || 
+                        (pgProfile.resumeUrl.toLowerCase().includes(".docx") ? "docx" : "pdf");
       const { parsePdf, parseDocx } = await import("@/lib/parser");
       const fs = await import("fs");
       const path = await import("path");
 
       let buffer: Buffer;
-      if (profile.resumeUrl.startsWith("/")) {
-        const filePath = path.join(process.cwd(), "public", profile.resumeUrl);
+      if (pgProfile.resumeUrl.startsWith("/")) {
+        const filePath = path.join(process.cwd(), "public", pgProfile.resumeUrl);
         if (fs.existsSync(filePath)) {
           buffer = fs.readFileSync(filePath);
         } else {
           return NextResponse.json({ success: false, error: "Local resume file not found." }, { status: 404 });
         }
       } else {
-        const response = await fetch(profile.resumeUrl);
+        const response = await fetch(pgProfile.resumeUrl);
         if (!response.ok) {
           return NextResponse.json({ success: false, error: "Failed to download resume file from Cloudinary." }, { status: 500 });
         }
@@ -85,8 +86,11 @@ export async function POST(req: NextRequest) {
       }
       
       if (extractedText) {
-        profile.resumeText = extractedText;
-        await profile.save();
+        // Save to PostgreSQL
+        await prisma.profile.update({
+          where: { id: pgProfile.id },
+          data: { resumeText: extractedText }
+        });
       }
     }
 
@@ -102,48 +106,54 @@ export async function POST(req: NextRequest) {
     console.log(`[Extract Details] Extraction result:`, details);
 
     // Save details if currently empty or set to placeholder/default
-    let updated = false;
+    const updateFields: any = {};
 
     // Treat +91 98765 43210 as default/empty
-    const isDefaultPhone = !profile.phone || profile.phone === "+91 98765 43210";
+    const isDefaultPhone = !pgProfile.phone || pgProfile.phone === "+91 98765 43210";
     if (details.phone && isDefaultPhone) {
-      profile.phone = details.phone;
-      updated = true;
+      updateFields.phone = details.phone;
     }
 
-    if (details.location && !profile.location) {
-      profile.location = details.location;
-      updated = true;
+    if (details.location && !pgProfile.location) {
+      updateFields.location = details.location;
     }
 
-    if (details.portfolioUrl && !profile.portfolioUrl) {
-      profile.portfolioUrl = details.portfolioUrl;
-      updated = true;
+    if (details.portfolioUrl && !pgProfile.portfolioUrl) {
+      updateFields.portfolioUrl = details.portfolioUrl;
     }
 
-    if (details.linkedinUrl && !profile.linkedinUrl) {
-      profile.linkedinUrl = details.linkedinUrl;
-      updated = true;
+    if (details.linkedinUrl && !pgProfile.linkedinUrl) {
+      updateFields.linkedinUrl = details.linkedinUrl;
     }
 
-    if (details.githubUrl && !profile.githubUrl) {
-      profile.githubUrl = details.githubUrl;
-      updated = true;
+    if (details.githubUrl && !pgProfile.githubUrl) {
+      updateFields.githubUrl = details.githubUrl;
     }
 
-    if (updated) {
-      await profile.save();
+    if (Object.keys(updateFields).length > 0) {
+      // Save to PostgreSQL
+      await prisma.profile.update({
+        where: { id: pgProfile.id },
+        data: updateFields
+      });
+      
       console.log(`[Extract Details] Updated profile document with extracted fields.`);
     }
+
+    const currentPhone = updateFields.phone || pgProfile.phone;
+    const currentLocation = updateFields.location || pgProfile.location;
+    const currentPortfolio = updateFields.portfolioUrl || pgProfile.portfolioUrl;
+    const currentLinkedin = updateFields.linkedinUrl || pgProfile.linkedinUrl;
+    const currentGithub = updateFields.githubUrl || pgProfile.githubUrl;
 
     return NextResponse.json({
       success: true,
       data: {
-        phone: profile.phone,
-        location: profile.location,
-        portfolioUrl: profile.portfolioUrl,
-        linkedinUrl: profile.linkedinUrl,
-        githubUrl: profile.githubUrl,
+        phone: currentPhone,
+        location: currentLocation,
+        portfolioUrl: currentPortfolio,
+        linkedinUrl: currentLinkedin,
+        githubUrl: currentGithub,
         extracted: details
       }
     });

@@ -1,24 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import mongoose from "mongoose";
-import { connectDB } from "@/lib/mongodb";
-import Job from "@/models/Job";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
-
-
-const isValidObjectId = (id: string | null | undefined): boolean => {
-  if (!id) return false;
-  return mongoose.Types.ObjectId.isValid(id);
-};
-
-function escapeRegExp(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
 
 // 1. POST - Create a Job
 export async function POST(req: NextRequest) {
   try {
-    await connectDB();
     const body = await req.json();
     const { title, company, location, salary, description, source, applyUrl } = body;
 
@@ -30,20 +17,40 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const job = await Job.create({
-      title,
-      company,
-      location,
-      salary,
-      description,
-      source,
-      applyUrl,
-      postedAt: new Date().toString(),
-      postedAtDate: new Date(),
+    // Create in PostgreSQL
+    const job = await prisma.job.create({
+      data: {
+        title,
+        company,
+        location: location || null,
+        salary: salary || null,
+        description: description || null,
+        source: source || null,
+        applyUrl: applyUrl || null,
+        postedAt: "Just now",
+        postedAtDate: new Date(),
+        fetchedAt: new Date()
+      }
     });
 
+    // Map output to MongoDB-like payload
+    const mappedJob = {
+      _id: job.id,
+      title: job.title,
+      company: job.company,
+      location: job.location,
+      salary: job.salary,
+      description: job.description,
+      source: job.source,
+      applyUrl: job.applyUrl,
+      postedAt: job.postedAt,
+      postedAtDate: job.postedAtDate,
+      createdAt: job.createdAt,
+      updatedAt: job.updatedAt
+    };
+
     return NextResponse.json(
-      { success: true, data: job },
+      { success: true, data: mappedJob },
       { status: 201 }
     );
   } catch (error: any) {
@@ -57,26 +64,66 @@ export async function POST(req: NextRequest) {
 // 2. GET - Read Jobs (Single, Specific, or Filtered Search)
 export async function GET(req: NextRequest) {
   try {
-    await connectDB();
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
 
     // Get specific job
     if (id) {
-      if (!isValidObjectId(id)) {
-        return NextResponse.json(
-          { success: false, error: "Invalid job ID format" },
-          { status: 400 }
-        );
-      }
-      const job = await Job.findById(id);
+      const job = await prisma.job.findUnique({
+        where: { id }
+      });
       if (!job) {
         return NextResponse.json(
           { success: false, error: "Job not found" },
           { status: 404 }
         );
       }
-      return NextResponse.json({ success: true, data: job });
+      
+      const mappedJob = {
+        _id: job.id,
+        title: job.title,
+        company: job.company,
+        companyLogo: job.companyLogo,
+        companyColor: job.companyColor,
+        location: job.location,
+        locationType: job.locationType,
+        salary: job.salary,
+        salaryMin: job.salaryMin,
+        salaryMax: job.salaryMax,
+        experience: job.experience,
+        experienceLevel: job.experienceLevel,
+        type: job.type === "full_time" ? "full-time" : (job.type === "part_time" ? "part-time" : job.type),
+        skills: job.skills,
+        matchScore: job.matchScore,
+        postedAt: job.postedAt,
+        postedAtDate: job.postedAtDate,
+        description: job.description,
+        requirements: job.requirements,
+        responsibilities: job.responsibilities,
+        benefits: job.benefits,
+        applicants: job.applicants,
+        featured: job.featured,
+        category: job.category,
+        source: job.source,
+        applyUrl: job.applyUrl,
+        sourceId: job.sourceId,
+        sourceUrl: job.sourceUrl,
+        city: job.city,
+        country: job.country,
+        isRemote: job.isRemote,
+        jobType: job.jobType,
+        salaryCurrency: job.salaryCurrency,
+        salaryPeriod: job.salaryPeriod,
+        descriptionHtml: job.descriptionHtml,
+        expiresAt: job.expiresAt,
+        fetchedAt: job.fetchedAt,
+        dedupeHash: job.dedupeHash,
+        isActive: job.isActive,
+        createdAt: job.createdAt,
+        updatedAt: job.updatedAt
+      };
+
+      return NextResponse.json({ success: true, data: mappedJob });
     }
 
     // Get filtered jobs
@@ -99,13 +146,13 @@ export async function GET(req: NextRequest) {
 
     const andConditions: any[] = [];
 
-    // 1. Full-text search (Title, Company, Description)
+    // 1. Full-text search
     if (q) {
       andConditions.push({
-        $or: [
-          { title: { $regex: q, $options: "i" } },
-          { company: { $regex: q, $options: "i" } },
-          { description: { $regex: q, $options: "i" } },
+        OR: [
+          { title: { contains: q, mode: "insensitive" } },
+          { company: { contains: q, mode: "insensitive" } },
+          { description: { contains: q, mode: "insensitive" } },
         ]
       });
     }
@@ -114,17 +161,17 @@ export async function GET(req: NextRequest) {
     if (source) {
       const sources = source.split(",").map((s) => s.trim().toLowerCase());
       andConditions.push({
-        source: { $in: sources }
+        source: { in: sources }
       });
     }
 
     // 3. Location filter
     if (location) {
       andConditions.push({
-        $or: [
-          { location: { $regex: location, $options: "i" } },
-          { city: { $regex: location, $options: "i" } },
-          { country: { $regex: location, $options: "i" } },
+        OR: [
+          { location: { contains: location, mode: "insensitive" } },
+          { city: { contains: location, mode: "insensitive" } },
+          { country: { contains: location, mode: "insensitive" } },
         ]
       });
     }
@@ -132,10 +179,15 @@ export async function GET(req: NextRequest) {
     // 4. Job type filter
     if (jobType) {
       const types = jobType.split(",").map((t) => t.trim().toLowerCase());
+      const mappedTypes = types.map(t => {
+        if (t === "full-time") return "full_time";
+        if (t === "part-time") return "part_time";
+        return t;
+      });
       andConditions.push({
-        $or: [
-          { type: { $in: types } },
-          { jobType: { $in: types } }
+        OR: [
+          { type: { in: mappedTypes as any } },
+          { jobType: { in: types } }
         ]
       });
     }
@@ -144,17 +196,17 @@ export async function GET(req: NextRequest) {
     if (experienceLevel) {
       const levels = experienceLevel.split(",").map((l) => l.trim().toLowerCase());
       andConditions.push({
-        experienceLevel: { $in: levels }
+        experienceLevel: { in: levels as any }
       });
     }
 
     // 6. Remote toggle
     if (remote === "true") {
       andConditions.push({
-        $or: [
+        OR: [
           { isRemote: true },
           { locationType: "remote" },
-          { location: { $regex: "remote", $options: "i" } }
+          { location: { contains: "remote", mode: "insensitive" } }
         ]
       });
     }
@@ -163,41 +215,36 @@ export async function GET(req: NextRequest) {
     if (salaryMin || salaryMax) {
       if (salaryMin) {
         andConditions.push({
-          $or: [
-            { salaryMax: { $gte: parseInt(salaryMin, 10) } },
-            { salaryMin: { $gte: parseInt(salaryMin, 10) } },
-            { salaryMin: { $eq: 0 } },
-            { salaryMin: { $eq: null } },
-            { salaryMin: { $exists: false } }
+          OR: [
+            { salaryMax: { gte: parseInt(salaryMin, 10) } },
+            { salaryMin: { gte: parseInt(salaryMin, 10) } },
+            { salaryMin: 0 },
+            { salaryMin: null }
           ]
         });
       }
       if (salaryMax) {
         andConditions.push({
-          $or: [
-            { salaryMin: { $lte: parseInt(salaryMax, 10) } },
-            { salaryMax: { $lte: parseInt(salaryMax, 10) } },
-            { salaryMin: { $eq: 0 } },
-            { salaryMin: { $eq: null } },
-            { salaryMin: { $exists: false } }
+          OR: [
+            { salaryMin: { lte: parseInt(salaryMax, 10) } },
+            { salaryMax: { lte: parseInt(salaryMax, 10) } },
+            { salaryMin: 0 },
+            { salaryMin: null }
           ]
         });
       }
     }
 
-    // 8. Skills filter (case-insensitive regex match for each skill)
+    // 8. Skills filter
     if (skills) {
-      const skillList = skills.split(",").map((s) => s.trim());
+      const skillList = skills.split(",").map((s) => s.trim().toLowerCase());
       andConditions.push({
-        skills: { 
-          $in: skillList.map(s => new RegExp(`^${escapeRegExp(s)}$`, "i")) 
-        }
+        skills: { hasSome: skillList }
       });
     }
 
-    const datePosted = searchParams.get("datePosted") || "";
-
     // 9. Date posted filter
+    const datePosted = searchParams.get("datePosted") || "";
     let dateLimit: Date | null = null;
     if (datePosted) {
       const now = new Date();
@@ -215,72 +262,111 @@ export async function GET(req: NextRequest) {
 
     if (dateLimit) {
       andConditions.push({
-        $or: [
-          { postedAtDate: { $gte: dateLimit } },
-          {
-            $and: [
-              { postedAtDate: { $exists: false } },
-              { createdAt: { $gte: dateLimit } }
-            ]
-          }
+        OR: [
+          { postedAtDate: { gte: dateLimit } },
+          { createdAt: { gte: dateLimit } }
         ]
       });
     }
 
-
     // 10. Category filter
     if (category) {
       andConditions.push({
-        category: { $regex: category, $options: "i" }
+        category: { contains: category, mode: "insensitive" }
       });
     }
 
-    // 11. Filter out closed jobs (expiresAt in the future, null, or not set)
+    // 11. Filter out closed jobs
     const now = new Date();
     andConditions.push({
-      $or: [
-        { expiresAt: { $gt: now } },
-        { expiresAt: null },
-        { expiresAt: { $exists: false } }
+      OR: [
+        { expiresAt: { gt: now } },
+        { expiresAt: null }
       ]
     });
 
-    // 12. Only show active jobs (isActive true or not set)
+    // 12. Only show active jobs
     andConditions.push({
-      $or: [
-        { isActive: true },
-        { isActive: { $exists: false } }
-      ]
+      isActive: true
     });
 
-    // Build final query conditions object
-    const queryConditions = andConditions.length > 0 ? { $and: andConditions } : {};
+    const queryConditions = andConditions.length > 0 ? { AND: andConditions } : {};
 
     // Construct sorting
     const sortField = sortBy === "salaryMin" ? "salaryMin" : "postedAtDate";
-    const sortDirection = order === "asc" ? 1 : -1;
-    const sortOptions: any = {};
-    sortOptions[sortField] = sortDirection;
-    sortOptions.createdAt = -1;
+    const sortDirection = order === "asc" ? "asc" : "desc";
+    const orderBy = [
+      { [sortField]: sortDirection },
+      { createdAt: "desc" as const }
+    ];
 
     // Execute query with pagination
-    const total = await Job.countDocuments(queryConditions);
+    const total = await prisma.job.count({ where: queryConditions });
     const totalPages = Math.ceil(total / limit);
     const offset = (page - 1) * limit;
 
-    const jobs = await Job.find(queryConditions)
-      .sort(sortOptions)
-      .skip(offset)
-      .limit(limit);
+    const pgJobs = await prisma.job.findMany({
+      where: queryConditions,
+      orderBy,
+      skip: offset,
+      take: limit
+    });
 
-    // Count per source dynamically based on other active filters (ignoring the source filter itself)
+    // Map Postgres model to Mongo-like representation for frontend
+    const jobs = pgJobs.map(job => ({
+      _id: job.id,
+      title: job.title,
+      company: job.company,
+      companyLogo: job.companyLogo,
+      companyColor: job.companyColor,
+      location: job.location,
+      locationType: job.locationType,
+      salary: job.salary,
+      salaryMin: job.salaryMin,
+      salaryMax: job.salaryMax,
+      experience: job.experience,
+      experienceLevel: job.experienceLevel,
+      type: job.type === "full_time" ? "full-time" : (job.type === "part_time" ? "part-time" : job.type),
+      skills: job.skills,
+      matchScore: job.matchScore,
+      postedAt: job.postedAt,
+      postedAtDate: job.postedAtDate,
+      description: job.description,
+      requirements: job.requirements,
+      responsibilities: job.responsibilities,
+      benefits: job.benefits,
+      applicants: job.applicants,
+      featured: job.featured,
+      category: job.category,
+      source: job.source,
+      applyUrl: job.applyUrl,
+      sourceId: job.sourceId,
+      sourceUrl: job.sourceUrl,
+      city: job.city,
+      country: job.country,
+      isRemote: job.isRemote,
+      jobType: job.jobType,
+      salaryCurrency: job.salaryCurrency,
+      salaryPeriod: job.salaryPeriod,
+      descriptionHtml: job.descriptionHtml,
+      expiresAt: job.expiresAt,
+      fetchedAt: job.fetchedAt,
+      dedupeHash: job.dedupeHash,
+      isActive: job.isActive,
+      createdAt: job.createdAt,
+      updatedAt: job.updatedAt
+    }));
+
+    // Dynamic counts per source
     const getSourceCount = async (src: string) => {
       const baseConditions = andConditions.filter(c => !c.source);
       baseConditions.push({ source: src });
-      return Job.countDocuments(baseConditions.length > 1 ? { $and: baseConditions } : baseConditions[0]);
+      return prisma.job.count({
+        where: baseConditions.length > 0 ? { AND: baseConditions } : {}
+      });
     };
 
-        const [wellfoundCount, careersCount, aggregatorCount] = await Promise.all([
+    const [wellfoundCount, careersCount, aggregatorCount] = await Promise.all([
       getSourceCount("wellfound"),
       getSourceCount("careers"),
       getSourceCount("aggregator")
@@ -311,10 +397,8 @@ export async function GET(req: NextRequest) {
 // 3. PUT - Update a Job
 export async function PUT(req: NextRequest) {
   try {
-    await connectDB();
     const body = await req.json();
     const { searchParams } = new URL(req.url);
-
     const id = searchParams.get("id") || body.id;
 
     if (!id) {
@@ -324,28 +408,36 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    if (!isValidObjectId(id)) {
-      return NextResponse.json(
-        { success: false, error: "Invalid job ID format" },
-        { status: 400 }
-      );
-    }
-
     const { _id, ...updateData } = body;
 
-    const updatedJob = await Job.findByIdAndUpdate(id, updateData, {
-      new: true,
-      runValidators: true,
+    // Map enums if present
+    const dataToUpdate: any = { ...updateData };
+    if (updateData.type === "full-time") dataToUpdate.type = "full_time";
+    else if (updateData.type === "part-time") dataToUpdate.type = "part_time";
+
+    // Update in Postgres
+    const updatedJob = await prisma.job.update({
+      where: { id },
+      data: dataToUpdate
     });
 
-    if (!updatedJob) {
-      return NextResponse.json(
-        { success: false, error: "Job not found to update" },
-        { status: 404 }
-      );
-    }
+    // Map output to MongoDB-like payload
+    const mappedJob = {
+      _id: updatedJob.id,
+      title: updatedJob.title,
+      company: updatedJob.company,
+      location: updatedJob.location,
+      salary: updatedJob.salary,
+      description: updatedJob.description,
+      source: updatedJob.source,
+      applyUrl: updatedJob.applyUrl,
+      postedAt: updatedJob.postedAt,
+      postedAtDate: updatedJob.postedAtDate,
+      createdAt: updatedJob.createdAt,
+      updatedAt: updatedJob.updatedAt
+    };
 
-    return NextResponse.json({ success: true, data: updatedJob });
+    return NextResponse.json({ success: true, data: mappedJob });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message || "Something went wrong" },
@@ -357,7 +449,6 @@ export async function PUT(req: NextRequest) {
 // 4. DELETE - Delete a Job
 export async function DELETE(req: NextRequest) {
   try {
-    await connectDB();
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
 
@@ -368,24 +459,29 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    if (!isValidObjectId(id)) {
-      return NextResponse.json(
-        { success: false, error: "Invalid job ID format" },
-        { status: 400 }
-      );
-    }
+    // Delete in PostgreSQL
+    const deletedJob = await prisma.job.delete({
+      where: { id }
+    });
 
-    const deletedJob = await Job.findByIdAndDelete(id);
-    if (!deletedJob) {
-      return NextResponse.json(
-        { success: false, error: "Job not found to delete" },
-        { status: 404 }
-      );
-    }
+    const mappedJob = {
+      _id: deletedJob.id,
+      title: deletedJob.title,
+      company: deletedJob.company,
+      location: deletedJob.location,
+      salary: deletedJob.salary,
+      description: deletedJob.description,
+      source: deletedJob.source,
+      applyUrl: deletedJob.applyUrl,
+      postedAt: deletedJob.postedAt,
+      postedAtDate: deletedJob.postedAtDate,
+      createdAt: deletedJob.createdAt,
+      updatedAt: deletedJob.updatedAt
+    };
 
     return NextResponse.json({
       success: true,
-      data: deletedJob,
+      data: mappedJob,
       message: "Job deleted successfully",
     });
   } catch (error: any) {

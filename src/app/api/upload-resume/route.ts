@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
-import Profile from "@/models/Profile";
-import User from "@/models/User";
 import cloudinary from "@/lib/cloudinary";
 import { parsePdf, parseDocx } from "@/lib/parser";
 import { extractSkills, extractSkillsWithAI } from "@/lib/skills-extractor";
 import { analyzeResume } from "@/lib/resume-intelligence";
 import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import { extractProfileDetails } from "@/lib/profile-extractor";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -16,50 +14,52 @@ export async function POST(req: NextRequest) {
   try {
     console.log("[Resume Upload] Request received");
 
-    // ── 1. DB Connection ────────────────────────────────────────
-    try {
-      await connectDB();
-    } catch (dbErr: any) {
-      console.error("[Resume Upload] DB connection error:", dbErr);
-      return NextResponse.json(
-        { success: false, step: "mongodb_connection", error: dbErr.message || "Database connection failed" },
-        { status: 500 }
-      );
-    }
-
-    // ── 2. Parse form data ──────────────────────────────────────
+    // ── 1. Parse form data ──────────────────────────────────────
     const formData = await req.formData();
-    const file     = formData.get("file") as File;
-    const userId   = formData.get("userId") as string;
+    const file = formData.get("file") as File;
+    const userId = formData.get("userId") as string;
 
-    if (!file)   return NextResponse.json({ success: false, step: "file_validation", error: "No file uploaded" }, { status: 400 });
+    if (!file) return NextResponse.json({ success: false, step: "file_validation", error: "No file uploaded" }, { status: 400 });
     if (!userId) return NextResponse.json({ success: false, step: "file_validation", error: "userId is required" }, { status: 400 });
 
-    // ── 3. Auth ─────────────────────────────────────────────────
+    // ── 2. Auth Check ───────────────────────────────────────────
     const mongoUser = await getOrCreateMongoUser();
     if (!mongoUser) return NextResponse.json({ success: false, step: "authentication", error: "Unauthorized" }, { status: 401 });
     if (userId !== mongoUser._id.toString()) return NextResponse.json({ success: false, step: "authorization", error: "Forbidden" }, { status: 403 });
 
-    // ── 4. Find / create profile ────────────────────────────────
-    let profile = await Profile.findOne({ userId });
-    if (!profile) {
-      const userExists = await User.findById(userId);
+    // ── 3. Find / Create Profile in PostgreSQL ──────────────────
+    let pgProfile = await prisma.profile.findUnique({
+      where: { userId },
+      include: { skills: true }
+    });
+
+    if (!pgProfile) {
+      const userExists = await prisma.user.findUnique({ where: { id: userId } });
       if (!userExists) return NextResponse.json({ success: false, step: "file_validation", error: "User not found" }, { status: 404 });
-      profile = await Profile.create({ userId, skills: [], experiences: [], education: [], certifications: [], projects: [] });
+      pgProfile = await prisma.profile.create({
+        data: {
+          user: { connect: { id: userId } },
+          resumeText: "",
+          resumeSkillMode: "merge",
+          resumeCategory: "",
+          resumeSummary: "",
+        },
+        include: { skills: true }
+      });
     }
 
-    // ── 5. Validate file ────────────────────────────────────────
-    const fileName  = file.name;
+    // ── 4. Validate file ────────────────────────────────────────
+    const fileName = file.name;
     const extension = fileName.split(".").pop()?.toLowerCase();
     if (!extension || !["pdf", "docx"].includes(extension)) {
       return NextResponse.json({ success: false, step: "file_validation", error: "Only PDF and DOCX files are allowed." }, { status: 400 });
     }
     console.log(`[Resume Upload] File: ${fileName} (${file.size} bytes)`);
 
-    // ── 6. Cloudinary Upload ────────────────────────────────────
+    // ── 5. Cloudinary Upload ────────────────────────────────────
     currentStep = "cloudinary_upload";
     console.log("[Resume Upload Step] Cloudinary upload started");
-    const bytes  = await file.arrayBuffer();
+    const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
     let cloudinaryResult: any;
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
     const resumeUrl = cloudinaryResult.secure_url;
     console.log("[Resume Upload Step] Cloudinary upload success:", resumeUrl);
 
-    // ── 7. Text Extraction ──────────────────────────────────────
+    // ── 6. Text Extraction ──────────────────────────────────────
     currentStep = "parser";
     console.log("[Resume Upload Step] Text extraction started");
     let extractedText = "";
@@ -91,19 +91,19 @@ export async function POST(req: NextRequest) {
     }
     console.log(`[Resume Upload Step] Extracted ${extractedText.length} characters`);
 
-    // ── 8. Skill Extraction ─────────────────────────────────────
+    // ── 7. Skill Extraction ─────────────────────────────────────
     currentStep = "skills_extraction";
     console.log("[Resume Upload Step] Skills extraction started");
     let newSkills: { name: string; level: number }[] = [];
     try {
       newSkills = await extractSkillsWithAI(extractedText);
-      console.log(`[Resume Upload Step] ${newSkills.length} skills extracted (Claude AI + cross-verified)`);
+      console.log(`[Resume Upload Step] ${newSkills.length} skills extracted`);
     } catch (skillsErr: any) {
       console.error("[Resume Upload] Skills error:", skillsErr);
-      // Non-fatal — fall back to empty, don't block upload
       newSkills = [];
     }
-    // ── 9. Resume Intelligence Analysis ────────────────────────
+
+    // ── 8. Resume Intelligence Analysis ────────────────────────
     currentStep = "intelligence";
     console.log("[Resume Upload Step] Resume intelligence analysis started");
     let intelligence;
@@ -111,7 +111,6 @@ export async function POST(req: NextRequest) {
       intelligence = analyzeResume(extractedText, newSkills.map(s => s.name));
     } catch (intErr: any) {
       console.error("[Resume Upload] Intelligence error:", intErr);
-      // Non-fatal — continue with defaults
       intelligence = {
         category: "General Professional",
         suggestedRoles: [],
@@ -119,50 +118,79 @@ export async function POST(req: NextRequest) {
         insights: { found: [], missing: [], tips: [] },
       };
     }
-    console.log(`[Resume Upload Step] Category: ${intelligence.category}, Roles: ${intelligence.suggestedRoles.join(", ")}`);
 
-    // ── 10. MongoDB Update ──────────────────────────────────────
-    currentStep = "mongodb_update";
-    console.log("[Resume Upload Step] MongoDB update started");
-    try {
-      const skillMode = profile.resumeSkillMode || "merge";
-      let finalSkills: { name: string; level: number }[] = [];
+    // ── 9. Database Updates ──────────────────────────────────────
+    currentStep = "postgres_update";
+    console.log("[Resume Upload Step] PostgreSQL update started");
 
-      if (skillMode === "replace") {
-        console.log("[Resume Upload] Replace mode: overwriting skills");
-        finalSkills = newSkills;
-      } else {
-        console.log("[Resume Upload] Merge mode: merging skills");
-        const existingSkills = profile.skills || [];
-        finalSkills = [...existingSkills];
-        for (const s of newSkills) {
-          if (!finalSkills.some((e: any) => e.name.toLowerCase() === s.name.toLowerCase())) {
-            finalSkills.push(s);
-          }
-        }
+    const skillMode = pgProfile.resumeSkillMode || "merge";
+    
+    // Update skills in Postgres
+    if (skillMode === "replace") {
+      await prisma.profileSkill.deleteMany({ where: { profileId: pgProfile.id } });
+      if (newSkills.length > 0) {
+        await prisma.profileSkill.createMany({
+          data: newSkills.map(s => ({
+            profileId: pgProfile.id,
+            name: s.name,
+            level: s.level ?? 80
+          }))
+        });
       }
+    } else {
+      const newUniqueSkills = newSkills.filter(
+        ns => !pgProfile!.skills.some(es => es.name.toLowerCase() === ns.name.toLowerCase())
+      );
+      if (newUniqueSkills.length > 0) {
+        await prisma.profileSkill.createMany({
+          data: newUniqueSkills.map(s => ({
+            profileId: pgProfile.id,
+            name: s.name,
+            level: s.level ?? 80
+          }))
+        });
+      }
+    }
 
-      profile.resumeUrl       = resumeUrl;
-      profile.resumeName      = fileName;
-      profile.resumeUpdatedAt = new Date();
-      profile.resumeText      = extractedText;
-      profile.skills          = finalSkills;
-      profile.lastAnalyzedAt  = new Date();
-      profile.resumeCategory  = intelligence.category;
-      profile.resumeSummary   = intelligence.resumeSummary;
-      profile.suggestedRoles  = intelligence.suggestedRoles;
-      profile.resumeInsights  = intelligence.insights;
+    // Save profile metadata in Postgres
+    const profileUpdate: any = {
+      resumeUrl,
+      resumeName: fileName,
+      resumeUpdatedAt: new Date(),
+      resumeText: extractedText,
+      lastAnalyzedAt: new Date(),
+      resumeCategory: intelligence.category,
+      resumeSummary: intelligence.resumeSummary,
+      suggestedRoles: intelligence.suggestedRoles,
+      insightsFound: intelligence.insights.found,
+      insightsMissing: intelligence.insights.missing,
+      insightsTips: intelligence.insights.tips
+    };
 
-      // Extract detailed profile sections (About Me, experiences, education, projects)
-      console.log("[Resume Upload] Extracting detailed profile sections");
-      try {
-        const details = await extractProfileDetails(extractedText);
-        
-        if (details.bio) {
-          profile.bio = details.bio;
-        }
-        if (details.experiences && details.experiences.length > 0) {
-          profile.experiences = details.experiences.map((exp: any) => ({
+    let details: any = {};
+    try {
+      details = await extractProfileDetails(extractedText);
+      if (details.bio) profileUpdate.bio = details.bio;
+      if (details.phone && (!pgProfile.phone || pgProfile.phone === "+91 98765 43210")) {
+        profileUpdate.phone = details.phone;
+      }
+      if (details.location && !pgProfile.location) profileUpdate.location = details.location;
+      if (details.portfolioUrl && !pgProfile.portfolioUrl) profileUpdate.portfolioUrl = details.portfolioUrl;
+      if (details.linkedinUrl && !pgProfile.linkedinUrl) profileUpdate.linkedinUrl = details.linkedinUrl;
+      if (details.githubUrl && !pgProfile.githubUrl) profileUpdate.githubUrl = details.githubUrl;
+
+      // Execute main profile update in Postgres
+      await prisma.profile.update({
+        where: { id: pgProfile.id },
+        data: profileUpdate
+      });
+
+      // Update sections
+      if (details.experiences && details.experiences.length > 0) {
+        await prisma.workExperience.deleteMany({ where: { profileId: pgProfile.id } });
+        await prisma.workExperience.createMany({
+          data: details.experiences.map((exp: any) => ({
+            profileId: pgProfile.id,
             company: exp.company || "",
             role: exp.role || "",
             period: exp.period || "",
@@ -171,68 +199,70 @@ export async function POST(req: NextRequest) {
             skills: exp.skills || [],
             companyColor: "#6366f1",
             logo: (exp.company || "C").charAt(0).toUpperCase()
-          }));
-        }
-        if (details.education && details.education.length > 0) {
-          profile.education = details.education.map((edu: any) => ({
+          }))
+        });
+      }
+
+      if (details.education && details.education.length > 0) {
+        await prisma.education.deleteMany({ where: { profileId: pgProfile.id } });
+        await prisma.education.createMany({
+          data: details.education.map((edu: any) => ({
+            profileId: pgProfile.id,
             school: edu.school || "",
             degree: edu.degree || "",
             period: edu.period || "",
             logo: (edu.school || "S").charAt(0).toUpperCase(),
             color: "#003580"
-          }));
-        }
-        if (details.projects && details.projects.length > 0) {
-          profile.projects = details.projects.map((proj: any) => ({
+          }))
+        });
+      }
+
+      if (details.projects && details.projects.length > 0) {
+        await prisma.project.deleteMany({ where: { profileId: pgProfile.id } });
+        await prisma.project.createMany({
+          data: details.projects.map((proj: any) => ({
+            profileId: pgProfile.id,
             name: proj.name || "",
             description: proj.description || "",
             tech: proj.tech || [],
             link: "#",
             stars: "0"
-          }));
-        }
-
-        // Also sync contact details if empty or default
-        if (details.phone && (!profile.phone || profile.phone === "+91 98765 43210")) {
-          profile.phone = details.phone;
-        }
-        if (details.location && !profile.location) {
-          profile.location = details.location;
-        }
-        if (details.portfolioUrl && !profile.portfolioUrl) {
-          profile.portfolioUrl = details.portfolioUrl;
-        }
-        if (details.linkedinUrl && !profile.linkedinUrl) {
-          profile.linkedinUrl = details.linkedinUrl;
-        }
-        if (details.githubUrl && !profile.githubUrl) {
-          profile.githubUrl = details.githubUrl;
-        }
-      } catch (extractErr) {
-        console.error("[Resume Upload] Non-fatal: Failed to extract detailed profile sections:", extractErr);
+          }))
+        });
       }
-
-      await profile.save();
-    } catch (dbErr: any) {
-      console.error("[Resume Upload] MongoDB save error:", dbErr);
-      return NextResponse.json({ success: false, step: "mongodb_update", error: dbErr.message || "Failed to save profile" }, { status: 500 });
+    } catch (extractErr) {
+      console.error("[Resume Upload] Non-fatal: Failed to extract detailed profile sections:", extractErr);
+      // Fallback update
+      await prisma.profile.update({
+        where: { id: pgProfile.id },
+        data: profileUpdate
+      });
     }
-    console.log("[Resume Upload Step] MongoDB update success");
+
+    // Retrieve fully updated profile from Postgres to return
+    const updatedPgProfile = await prisma.profile.findUnique({
+      where: { id: pgProfile.id },
+      include: { skills: true }
+    });
 
     return NextResponse.json({
       success: true,
       data: {
         resumeUrl,
-        resumeName:      fileName,
-        resumeUpdatedAt: profile.resumeUpdatedAt,
+        resumeName: fileName,
+        resumeUpdatedAt: updatedPgProfile!.resumeUpdatedAt,
         skillsExtracted: newSkills.length,
         extractedSkills: newSkills,
-        skills:          profile.skills,
-        resumeCategory:  profile.resumeCategory,
-        resumeSummary:   profile.resumeSummary,
-        suggestedRoles:  profile.suggestedRoles,
-        resumeInsights:  profile.resumeInsights,
-        lastAnalyzedAt:  profile.lastAnalyzedAt,
+        skills: updatedPgProfile!.skills.map(s => ({ _id: s.id, name: s.name, level: s.level })),
+        resumeCategory: updatedPgProfile!.resumeCategory,
+        resumeSummary: updatedPgProfile!.resumeSummary,
+        suggestedRoles: updatedPgProfile!.suggestedRoles,
+        resumeInsights: {
+          found: updatedPgProfile!.insightsFound,
+          missing: updatedPgProfile!.insightsMissing,
+          tips: updatedPgProfile!.insightsTips
+        },
+        lastAnalyzedAt: updatedPgProfile!.lastAnalyzedAt,
       },
     });
   } catch (err: any) {

@@ -1,13 +1,493 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+model User {
+  id           String             @id @default(uuid())
+  clerkId      String?            @unique
+  fullName     String
+  email        String             @unique
+  profileImage String?
+  role         String             @default("jobseeker")
+  status       UserStatus         @default(active)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  activities   Activity[]
+  applications Application[]
+  profile      Profile?
+  reports      Report[]
+  parsingLogs  ResumeParsingLog[]
+  savedJobs    SavedJob[]
+
+  @@map("users")
+}
+
+model Settings {
+  id                   String   @id @default(uuid())
+  settingsId           String   @unique @default("global")
+  maintenanceMode      Boolean  @default(false)
+  homepageAnnouncement String   @default("")
+  geminiKeyPlaceholder String   @default("")
+  featureFlags         Json     @default("{\"resumeParsing\": true, \"scraperEnabled\": true, \"aiRecommendations\": true}")
+  futureIntegrations   Json     @default("{}")
+  allowedAdminEmails   String[] @default([])
+  contactEmail         String   @default("akchauhan1172@gmail.com")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("settings")
+}
+
+model Company {
+  id          String      @id @default(uuid())
+  name        String      @unique
+  careerUrl   String
+  crawlStatus CrawlStatus @default(idle)
+  lastSync    DateTime?
+  jobsFound   Int         @default(0)
+  lastError   String?
+  isEnabled   Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([name])
+  @@index([isEnabled])
+  @@map("companies")
+}
+
+model Job {
+  id               String          @id @default(uuid())
+  title            String
+  company          String
+  companyLogo      String          @default("")
+  companyColor     String          @default("#6366f1")
+  location         String?
+  locationType     LocationType    @default(remote)
+  salary           String?
+  salaryMin        Int             @default(0)
+  salaryMax        Int             @default(0)
+  experience       String?
+  experienceLevel  ExperienceLevel @default(mid)
+  type             JobType         @default(full_time)
+  skills           String[]        @default([])
+  matchScore       Int             @default(80)
+  postedAt         String          @default("Just now")
+  postedAtDate     DateTime        @default(now())
+  description      String?
+  requirements     String[]        @default([])
+  responsibilities String[]        @default([])
+  benefits         String[]        @default([])
+  applicants       Int             @default(0)
+  featured         Boolean         @default(false)
+  category         String          @default("Engineering")
+  source           String?
+  applyUrl         String?
+  sourceId         String?
+  sourceUrl        String?
+  city             String?
+  country          String?
+  isRemote         Boolean         @default(false)
+  jobType          String?
+  salaryCurrency   String?
+  salaryPeriod     String?
+  descriptionHtml  String?
+  expiresAt        DateTime?
+  fetchedAt        DateTime        @default(now())
+  dedupeHash       String?         @unique
+  isActive         Boolean         @default(true)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  activities       Activity[]
+  applications     Application[]
+  reports          Report[]
+  savedJobs        SavedJob[]
+
+  @@index([source])
+  @@index([title])
+  @@index([company])
+  @@index([location])
+  @@index([category])
+  @@index([title, company])
+  @@index([createdAt(sort: Desc)])
+  @@index([postedAtDate(sort: Desc)])
+  @@index([skills])
+  @@index([city, country])
+  @@map("jobs")
+}
+
+model SavedJob {
+  id        String   @id @default(uuid())
+  userId    String
+  jobId     String
+  savedAt   DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jobId])
+  @@map("saved_jobs")
+}
+
+model Application {
+  id        String            @id @default(uuid())
+  userId    String
+  jobId     String
+  status    ApplicationStatus @default(Applied)
+  appliedAt DateTime          @default(now())
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  job       Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jobId])
+  @@map("applications")
+}
+
+model Profile {
+  id                             String           @id @default(uuid())
+  userId                         String           @unique
+  headline                       String?
+  bio                            String?
+  location                       String?
+  experience                     String?
+  resumeUrl                      String?
+  resumeName                     String?
+  resumeUpdatedAt                DateTime?
+  resumeText                     String           @default("")
+  resumeSkillMode                SkillMode        @default(merge)
+  resumeCategory                 String           @default("")
+  resumeSummary                  String           @default("")
+  suggestedRoles                 String[]         @default([])
+  lastAnalyzedAt                 DateTime?
+  insightsFound                  String[]         @default([])
+  insightsMissing                String[]         @default([])
+  insightsTips                   String[]         @default([])
+  noticePeriod                   String           @default("30 days")
+  expectedSalary                 String           @default("")
+  phone                          String           @default("")
+  portfolioUrl                   String           @default("")
+  githubUrl                      String           @default("")
+  linkedinUrl                    String           @default("")
+  isOnboarded                    Boolean          @default(false)
+  notificationJobMatches         Boolean          @default(true)
+  notificationApplicationUpdates Boolean          @default(true)
+  notificationRecruiterMessages  Boolean          @default(true)
+  notificationAiRecommendations  Boolean          @default(true)
+  notificationWeeklyDigest       Boolean          @default(false)
+  notificationMarketingEmails    Boolean          @default(false)
+  createdAt                      DateTime         @default(now())
+  updatedAt                      DateTime         @updatedAt
+  certifications                 Certification[]
+  education                      Education[]
+  skills                         ProfileSkill[]
+  user                           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projects                       Project[]
+  experiences                    WorkExperience[]
+
+  @@map("profiles")
+}
+
+model ProfileSkill {
+  id        String   @id @default(uuid())
+  profileId String
+  name      String
+  level     Int      @default(80)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@map("profile_skills")
+}
+
+model WorkExperience {
+  id           String   @id @default(uuid())
+  profileId    String
+  company      String
+  role         String
+  period       String
+  duration     String
+  description  String
+  skills       String[] @default([])
+  companyColor String?
+  logo         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  profile      Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@map("work_experiences")
+}
+
+model Education {
+  id        String   @id @default(uuid())
+  profileId String
+  school    String
+  degree    String
+  period    String
+  logo      String?
+  color     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@map("education_records")
+}
+
+model Certification {
+  id        String   @id @default(uuid())
+  profileId String
+  name      String
+  issuer    String
+  year      String
+  iconName  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@map("certifications")
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  profileId   String
+  name        String
+  description String
+  tech        String[] @default([])
+  link        String?
+  stars       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  profile     Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@map("projects")
+}
+
+model Activity {
+  id         String       @id @default(uuid())
+  userId     String?
+  type       ActivityType
+  jobId      String?
+  jobTitle   String?
+  company    String?
+  details    String?
+  adminName  String?
+  adminEmail String?
+  action     String?
+  resource   String?
+  resourceId String?
+  ipAddress  String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  job        Job?         @relation(fields: [jobId], references: [id])
+  user       User?        @relation(fields: [userId], references: [id])
+
+  @@map("activities")
+}
+
+model AdminNotification {
+  id        String                @id @default(uuid())
+  type      AdminNotificationType
+  title     String
+  message   String
+  isRead    Boolean               @default(false)
+  metadata  Json?
+  timestamp DateTime              @default(now())
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+
+  @@index([isRead, timestamp(sort: Desc)])
+  @@map("admin_notifications")
+}
+
+model ContactMessage {
+  id        String               @id @default(uuid())
+  name      String
+  email     String
+  subject   String
+  message   String
+  status    ContactMessageStatus @default(unread)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  @@index([status, createdAt(sort: Desc)])
+  @@map("contact_messages")
+}
+
+model FailedJob {
+  id         String   @id @default(uuid())
+  source     String
+  rawPayload Json
+  errorMsg   String
+  timestamp  DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([source, timestamp(sort: Desc)])
+  @@map("failed_jobs")
+}
+
+model FetchLog {
+  id          String      @id @default(uuid())
+  source      String
+  status      FetchStatus
+  jobsFetched Int         @default(0)
+  errorMsg    String?
+  timestamp   DateTime    @default(now())
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([source, timestamp(sort: Desc)])
+  @@map("fetch_logs")
+}
+
+model PageView {
+  id        String   @id @default(uuid())
+  path      String
+  userId    String?
+  userAgent String?
+  ip        String?
+  timestamp DateTime @default(now())
+
+  @@index([timestamp(sort: Desc)])
+  @@index([path, timestamp(sort: Desc)])
+  @@map("page_views")
+}
+
+model Report {
+  id          String       @id @default(uuid())
+  userId      String
+  type        ReportType
+  title       String
+  description String
+  jobId       String?
+  status      ReportStatus @default(pending)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  job         Job?         @relation(fields: [jobId], references: [id])
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt(sort: Desc)])
+  @@map("reports")
+}
+
+model ResumeParsingLog {
+  id                   String        @id @default(uuid())
+  userId               String
+  status               ParsingStatus
+  step                 String
+  errorMsg             String?
+  fileName             String        @default("unknown")
+  parsingTimeMs        Int           @default(0)
+  skillsExtractedCount Int           @default(0)
+  timestamp            DateTime      @default(now())
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  user                 User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, timestamp(sort: Desc)])
+  @@map("resume_parsing_logs")
+}
+
+enum UserStatus {
+  active
+  suspended
+}
+
+enum CrawlStatus {
+  idle
+  crawling
+  failed
+  success
+}
+
+enum LocationType {
+  remote
+  hybrid
+  onsite
+}
+
+enum ExperienceLevel {
+  entry
+  mid
+  senior
+  lead
+  executive
+}
+
+enum JobType {
+  full_time  @map("full-time")
+  part_time  @map("part-time")
+  contract
+  internship
+  freelance
+}
+
+enum ApplicationStatus {
+  Applied
+  Under_Review @map("Under Review")
+  Interview
+  Rejected
+  Offer
+}
+
+enum SkillMode {
+  merge
+  replace
+}
+
+enum ActivityType {
+  applied
+  saved
+  viewed
+  updated_profile
+  updated_resume
+  interview
+  offer
+  rejected
+  admin_action
+  failed_login
+  system_event
+  registered
+}
+
+enum AdminNotificationType {
+  new_report
+  parsing_failed
+  sync_failed
+  api_error
+  user_spike
+  system_warning
+}
+
+enum ContactMessageStatus {
+  unread
+  read
+  replied
+}
+
+enum FetchStatus {
+  success
+  failed
+  captcha
+}
+
+enum ReportType {
+  bug
+  feature_request
+  incorrect_job
+  resume_parsing
+}
+
+enum ReportStatus {
+  pending
+  resolved
+}
+
+enum ParsingStatus {
+  success
+  failed
 }

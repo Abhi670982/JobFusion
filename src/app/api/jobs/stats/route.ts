@@ -1,24 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
-import Job from "@/models/Job";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    await connectDB();
+    const totalJobs = await prisma.job.count();
 
-    const totalJobs = await Job.countDocuments();
-
-    // Group count by source
-    const sourceStats = await Job.aggregate([
-      {
-        $group: {
-          _id: "$source",
-          count: { $sum: 1 }
-        }
+    // Group count by source in PostgreSQL using Prisma
+    const sourceStats = await prisma.job.groupBy({
+      by: ["source"],
+      _count: {
+        id: true
       }
-    ]);
+    });
 
     const sourceBreakdown: Record<string, number> = {
       linkedin: 0,
@@ -29,16 +24,18 @@ export async function GET(req: NextRequest) {
     };
 
     sourceStats.forEach((stat) => {
-      const src = stat._id || "unknown";
-      sourceBreakdown[src] = stat.count;
+      const src = (stat.source || "unknown").toLowerCase();
+      sourceBreakdown[src] = stat._count.id;
     });
 
     // Count jobs added in the last 24 hours
     const oneDayAgo = new Date();
     oneDayAgo.setHours(oneDayAgo.getHours() - 24);
 
-    const recentJobsCount = await Job.countDocuments({
-      createdAt: { $gte: oneDayAgo }
+    const recentJobsCount = await prisma.job.count({
+      where: {
+        createdAt: { gte: oneDayAgo }
+      }
     });
 
     return NextResponse.json({

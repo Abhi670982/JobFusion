@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
-import Job from "@/models/Job";
+import { prisma } from "@/lib/prisma";
+import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -64,18 +64,55 @@ function parseSalaryMax(salary: string, index: number, min: number): number {
   return min + 600000 + (index * 150000);
 }
 
+function mapJob(j: any) {
+  if (!j) return null;
+  return {
+    _id: j.id,
+    title: j.title,
+    company: j.company,
+    companyLogo: j.companyLogo,
+    companyColor: j.companyColor,
+    location: j.location,
+    locationType: j.locationType === "remote" ? "remote" : (j.locationType === "onsite" ? "onsite" : "hybrid"),
+    salary: j.salary,
+    salaryMin: j.salaryMin,
+    salaryMax: j.salaryMax,
+    experience: j.experience,
+    experienceLevel: j.experienceLevel,
+    type: j.type === "full_time" ? "full-time" : (j.type === "part_time" ? "part-time" : j.type),
+    skills: j.skills,
+    matchScore: j.matchScore,
+    postedAt: j.postedAt,
+    postedAtDate: j.postedAtDate,
+    description: j.description,
+    requirements: j.requirements,
+    responsibilities: j.responsibilities,
+    benefits: j.benefits,
+    applicants: j.applicants,
+    featured: j.featured,
+    category: j.category,
+    source: j.source,
+    applyUrl: j.applyUrl,
+    dedupeHash: j.dedupeHash,
+    isActive: j.isActive,
+    createdAt: j.createdAt,
+    updatedAt: j.updatedAt
+  };
+}
+
 export async function POST(req: NextRequest) {
   try {
-    await connectDB();
     const body = await req.json();
     const { userId, skills } = body;
 
     if (!skills || !Array.isArray(skills) || skills.length === 0) {
       // If no skills are provided, return all jobs from DB
-      const jobs = await Job.find().sort({ createdAt: -1 });
+      const pgJobs = await prisma.job.findMany({
+        orderBy: { createdAt: "desc" }
+      });
       return NextResponse.json({
         success: true,
-        data: jobs,
+        data: pgJobs.map(mapJob),
         matchedCount: 0
       });
     }
@@ -112,26 +149,21 @@ export async function POST(req: NextRequest) {
 
     const dbMatchedJobs: any[] = [];
 
-    // 2. Map and upsert live jobs into MongoDB
+    // 2. Map and upsert live jobs into PostgreSQL using Prisma
     if (fetchedJobs.length > 0) {
       for (let i = 0; i < fetchedJobs.length; i++) {
         const item = fetchedJobs[i];
         const skill = item.querySkill;
         const portal = jobPortals[i % jobPortals.length];
-        
-        // Keep the original direct application URL from Himalayas
-        // so that users always have a 100% active, verified link to apply.
         const applyUrl = item.applicationLink || `https://himalayas.app/jobs?q=${encodeURIComponent(skill)}`;
-
         const category = (item.categories && item.categories[0]) || "Engineering";
         
-        // Strip HTML tags from description for clean display
         const rawDescription = item.description || "";
         const cleanDescription = rawDescription
           .replace(/<[^>]+>/g, " ")
           .replace(/\s+/g, " ")
           .trim()
-          .substring(0, 8000); // Limit size
+          .substring(0, 8000); 
 
         const salaryMin = item.minSalary || parseSalaryMin(item.excerpt || "", i);
         const salaryMax = item.maxSalary || parseSalaryMax(item.excerpt || "", i, salaryMin);
@@ -151,7 +183,6 @@ export async function POST(req: NextRequest) {
 
         const location = (item.locationRestrictions && item.locationRestrictions[0]) || item.location || mockLocations[i % mockLocations.length];
         
-        // Generate a company color based on portal
         const companyColor = 
           portal.source === 'LinkedIn' ? '#0077B5' : 
           portal.source === 'Indeed' ? '#003A9B' : 
@@ -160,22 +191,27 @@ export async function POST(req: NextRequest) {
           portal.source === 'SimplyHired' ? '#6366F1' : 
           '#6366F1';
 
+        const hashInput = `${item.title.trim().toLowerCase()}-${(item.companyName || "Unknown Company").trim().toLowerCase()}`;
+        const dedupeHash = crypto.createHash("md5").update(hashInput).digest("hex");
+
         try {
-          const dbJob = await Job.findOneAndUpdate(
-            { title: item.title, company: item.companyName || "Unknown Company" },
-            {
+          // Upsert in Postgres
+          const pgJob = await prisma.job.upsert({
+            where: { dedupeHash },
+            create: {
+              dedupeHash,
               title: item.title,
               company: item.companyName || "Unknown Company",
               companyLogo: item.companyLogo || (item.companyName ? item.companyName.charAt(0) : "J"),
-              companyColor: companyColor,
-              location: location,
+              companyColor,
+              location,
               locationType: "remote",
               salary: salaryString,
-              salaryMin: salaryMin,
-              salaryMax: salaryMax,
+              salaryMin,
+              salaryMax,
               experience: "2-5 years",
               experienceLevel: "mid",
-              type: "full-time",
+              type: "full_time",
               skills: jobSkills,
               matchScore: 82 + (i % 15),
               postedAt: "1 day ago",
@@ -197,37 +233,51 @@ export async function POST(req: NextRequest) {
               ],
               applicants: Math.floor(Math.random() * 20) + 4,
               featured: i % 4 === 0,
-              category: category,
+              category,
               source: portal.source,
-              applyUrl: applyUrl
+              applyUrl
             },
-            { upsert: true, new: true }
-          );
-          dbMatchedJobs.push(dbJob);
+            update: {
+              companyLogo: item.companyLogo || (item.companyName ? item.companyName.charAt(0) : "J"),
+              companyColor,
+              location,
+              salary: salaryString,
+              salaryMin,
+              salaryMax,
+              skills: jobSkills,
+              applyUrl
+            }
+          });
+
+          dbMatchedJobs.push(pgJob);
         } catch (dbErr) {
-          console.error("Failed to save live job to DB:", dbErr);
+          console.error("Failed to save live job to Postgres:", dbErr);
         }
       }
     }
 
-    // 3. Fallback: If live fetch fails or returns empty, query the database matching skills
+    // 3. Fallback: If live fetch fails, query database matching skills
     if (dbMatchedJobs.length === 0) {
       console.warn("[Job Matching] Live fetch returned 0 jobs. Falling back to DB search...");
-      const queryConditions = skills.map(skill => ({
-        skills: { $regex: new RegExp(`^${escapeRegExp(skill)}$`, "i") }
-      }));
-      const fallbackJobs = await Job.find({ $or: queryConditions }).sort({ createdAt: -1 });
+      const fallbackJobs = await prisma.job.findMany({
+        where: {
+          skills: {
+            hasSome: skills
+          }
+        },
+        orderBy: { createdAt: "desc" }
+      });
       
       return NextResponse.json({
         success: true,
-        data: fallbackJobs,
+        data: fallbackJobs.map(mapJob),
         matchedCount: fallbackJobs.length
       });
     }
 
     return NextResponse.json({
       success: true,
-      data: dbMatchedJobs,
+      data: dbMatchedJobs.map(mapJob),
       matchedCount: dbMatchedJobs.length
     });
 

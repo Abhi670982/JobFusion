@@ -1,9 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
 import { verifyAdmin } from "@/lib/admin-auth";
-import ContactMessage from "@/models/ContactMessage";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
+
+function mapMessage(m: any) {
+  if (!m) return null;
+  return {
+    _id: m.id,
+    name: m.name,
+    email: m.email,
+    subject: m.subject,
+    message: m.message,
+    status: m.status,
+    createdAt: m.createdAt,
+    updatedAt: m.updatedAt
+  };
+}
 
 // GET - List contact messages with search, filter, sort, and pagination
 export async function GET(req: NextRequest) {
@@ -13,8 +26,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
-    await connectDB();
-
     const { searchParams } = new URL(req.url);
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "10", 10);
@@ -23,33 +34,35 @@ export async function GET(req: NextRequest) {
     const sort = searchParams.get("sort") || "desc"; // desc = newest first
 
     const skip = (page - 1) * limit;
-
-    // Build query object
-    const query: any = {};
+    const andConditions: any[] = [];
 
     if (status) {
-      query.status = status;
+      andConditions.push({ status: status as any });
     }
 
     if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
-        { subject: { $regex: search, $options: "i" } },
-        { message: { $regex: search, $options: "i" } },
-      ];
+      andConditions.push({
+        OR: [
+          { name: { contains: search, mode: "insensitive" } },
+          { email: { contains: search, mode: "insensitive" } },
+          { subject: { contains: search, mode: "insensitive" } },
+          { message: { contains: search, mode: "insensitive" } },
+        ]
+      });
     }
 
-    // Determine sort
-    const sortOrder = sort === "asc" ? 1 : -1;
+    const queryConditions = andConditions.length > 0 ? { AND: andConditions } : {};
 
-    const [messages, total] = await Promise.all([
-      ContactMessage.find(query)
-        .sort({ createdAt: sortOrder })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      ContactMessage.countDocuments(query),
+    const [pgMessages, total] = await Promise.all([
+      prisma.contactMessage.findMany({
+        where: queryConditions,
+        orderBy: { createdAt: sort === "asc" ? "asc" : "desc" },
+        skip,
+        take: limit
+      }),
+      prisma.contactMessage.count({
+        where: queryConditions,
+      }),
     ]);
 
     const pages = Math.ceil(total / limit);
@@ -57,7 +70,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        messages,
+        messages: pgMessages.map(mapMessage),
         total,
         page,
         pages,
@@ -80,7 +93,6 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
-    await connectDB();
     const body = await req.json();
     const { id, status } = body;
 
@@ -92,30 +104,39 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Invalid status value" }, { status: 400 });
     }
 
-    const message = await ContactMessage.findByIdAndUpdate(
-      id,
-      { status },
-      { new: true }
-    );
+    // Verify contact message exists in Postgres
+    const msgExists = await prisma.contactMessage.findUnique({
+      where: { id }
+    });
 
-    if (!message) {
+    if (!msgExists) {
       return NextResponse.json({ success: false, error: "Message not found" }, { status: 404 });
     }
+
+    // Update in Postgres
+    const updatedMsg = await prisma.contactMessage.update({
+      where: { id },
+      data: { status: status as any }
+    });
 
     // Log admin action using structured audit logger
     const { logAdminAction } = await import("@/lib/audit-logger");
     await logAdminAction({
       req,
-      admin,
+      admin: {
+        _id: admin.id,
+        fullName: admin.fullName,
+        email: admin.email
+      },
       action: "Updated Contact Message Status",
       resource: "ContactMessage",
       resourceId: id,
-      details: `Updated message status from ${message.name} (${message.email}) to '${status}'`,
+      details: `Updated message status from ${updatedMsg.name} (${updatedMsg.email}) to '${status}'`,
     });
 
     return NextResponse.json({
       success: true,
-      data: message,
+      data: mapMessage(updatedMsg),
     });
   } catch (error: any) {
     console.error("[Admin Contact Messages API PATCH] Error:", error);
@@ -134,7 +155,6 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
-    await connectDB();
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
 
@@ -142,21 +162,32 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Missing message ID" }, { status: 400 });
     }
 
-    const message = await ContactMessage.findByIdAndDelete(id);
+    const msgExists = await prisma.contactMessage.findUnique({
+      where: { id }
+    });
 
-    if (!message) {
+    if (!msgExists) {
       return NextResponse.json({ success: false, error: "Message not found" }, { status: 404 });
     }
+
+    // Delete in Postgres
+    await prisma.contactMessage.delete({
+      where: { id }
+    });
 
     // Log admin action using structured audit logger
     const { logAdminAction } = await import("@/lib/audit-logger");
     await logAdminAction({
       req,
-      admin,
+      admin: {
+        _id: admin.id,
+        fullName: admin.fullName,
+        email: admin.email
+      },
       action: "Deleted Contact Message",
       resource: "ContactMessage",
       resourceId: id,
-      details: `Deleted contact inquiry from ${message.name} (${message.email})`,
+      details: `Deleted contact inquiry from ${msgExists.name} (${msgExists.email})`,
     });
 
     return NextResponse.json({

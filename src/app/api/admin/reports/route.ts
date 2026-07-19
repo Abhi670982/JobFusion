@@ -1,9 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
 import { verifyAdmin } from "@/lib/admin-auth";
-import Report from "@/models/Report";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
+
+function mapReport(r: any) {
+  if (!r) return null;
+  return {
+    _id: r.id,
+    userId: r.user ? {
+      _id: r.user.id,
+      fullName: r.user.fullName,
+      email: r.user.email
+    } : r.userId,
+    type: r.type,
+    title: r.title,
+    description: r.description,
+    jobId: r.job ? {
+      _id: r.job.id,
+      title: r.job.title,
+      company: r.job.company
+    } : r.jobId,
+    status: r.status,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt
+  };
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -12,49 +34,67 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
-    await connectDB();
-
     const { searchParams } = new URL(req.url);
     const query = searchParams.get("q") || "";
-    const type = searchParams.get("type") || ""; // bug, feature_request, incorrect_job, resume_parsing
-    const status = searchParams.get("status") || ""; // pending, resolved
+    const type = searchParams.get("type") || "";
+    const status = searchParams.get("status") || "";
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "10", 10);
 
-    const filter: any = {};
+    const andConditions: any[] = [];
 
     if (query) {
-      filter.$or = [
-        { title: { $regex: query, $options: "i" } },
-        { description: { $regex: query, $options: "i" } },
-      ];
+      andConditions.push({
+        OR: [
+          { title: { contains: query, mode: "insensitive" } },
+          { description: { contains: query, mode: "insensitive" } },
+        ]
+      });
     }
 
     if (type) {
-      filter.type = type;
+      andConditions.push({ type: type as any });
     }
 
     if (status) {
-      filter.status = status;
+      andConditions.push({ status: status as any });
     }
 
+    const queryConditions = andConditions.length > 0 ? { AND: andConditions } : {};
     const skip = (page - 1) * limit;
 
-    const [reports, total] = await Promise.all([
-      Report.find(filter)
-        .populate("userId", "fullName email")
-        .populate("jobId", "title company")
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      Report.countDocuments(filter),
+    const [pgReports, total] = await Promise.all([
+      prisma.report.findMany({
+        where: queryConditions,
+        include: {
+          user: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true
+            }
+          },
+          job: {
+            select: {
+              id: true,
+              title: true,
+              company: true
+            }
+          }
+        },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+      }),
+      prisma.report.count({
+        where: queryConditions,
+      }),
     ]);
 
     return NextResponse.json({
       success: true,
       data: {
-        reports,
+        reports: pgReports.map(mapReport),
         total,
         page,
         pages: Math.ceil(total / limit),
