@@ -1,76 +1,110 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { runSourceSync } from "@/lib/pipeline";
 import { JobSource } from "@/lib/adapters/types";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-let lastCrawlTime = 0;
-const COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes cooldown
+const COOLDOWN_MS = 3 * 60 * 60 * 1000; // 3 hours
 
 export async function POST(req: NextRequest) {
   try {
-    const now = Date.now();
-    
-    // Parse custom keywords and source if provided in request body or query params
+    // Secret-based auth (optional in local/dev when CRON_SECRET is unset)
+    const secret = req.headers.get("x-cron-secret");
+    const expectedSecret = process.env.CRON_SECRET;
+    if (expectedSecret && secret !== expectedSecret) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(req.url);
     const querySource = searchParams.get("source");
-    
-    let customKeywords: string[] = [];
+
     let bodySource = "";
+    let customKeywords: string[] = [];
     try {
-      // Make a clone of the request to read body, in case it is read again elsewhere
       const body = await req.clone().json();
       if (body) {
-        if (Array.isArray(body.keywords)) {
-          customKeywords = body.keywords.map((k: any) => String(k).trim()).filter(Boolean);
-        }
         if (body.source) {
           bodySource = String(body.source).trim().toLowerCase();
         }
+        if (Array.isArray(body.keywords)) {
+          customKeywords = body.keywords
+            .map((k: any) => String(k).trim())
+            .filter(Boolean);
+        }
       }
-    } catch (e) {
+    } catch {
       // Ignore if body is empty or not JSON
     }
 
-    const isCustom = customKeywords.length > 0;
     const targetSource = querySource || bodySource;
+    const isCustom = customKeywords.length > 0;
 
-    // Only apply rate cooldown limit to automated periodic crawls (non-custom)
-    if (!isCustom && !targetSource && now - lastCrawlTime < COOLDOWN_MS) {
-      const remainingSeconds = Math.ceil((COOLDOWN_MS - (now - lastCrawlTime)) / 1000);
-      console.log(`[Cron API] Crawl skipped. Rate-limit active. Cooldown remaining: ${remainingSeconds}s`);
-      return NextResponse.json(
-        {
-          success: true,
-          message: "Job crawler recently executed. Skipped to prevent server overload.",
-          cooldownRemainingSeconds: remainingSeconds
-        },
-        { status: 200 }
-      );
-    }
-
+    // DB-persisted cooldown (survives serverless cold starts)
     if (!isCustom && !targetSource) {
-      lastCrawlTime = now;
+      let settings = await prisma.settings.findUnique({
+        where: { settingsId: "global" },
+      });
+      if (!settings) {
+        settings = await prisma.settings.create({
+          data: { settingsId: "global" },
+        });
+      }
+
+      const now = Date.now();
+      if (
+        settings.lastCrawlAt &&
+        now - settings.lastCrawlAt.getTime() < COOLDOWN_MS
+      ) {
+        const remainingSeconds = Math.ceil(
+          (COOLDOWN_MS - (now - settings.lastCrawlAt.getTime())) / 1000
+        );
+        console.log(
+          `[Cron API] Cooldown active. Remaining: ${remainingSeconds}s`
+        );
+        return NextResponse.json(
+          {
+            success: true,
+            message:
+              "Job crawler recently executed. Skipped to prevent server overload.",
+            cooldownRemainingSeconds: remainingSeconds,
+          },
+          { status: 200 }
+        );
+      }
+
+      await prisma.settings.update({
+        where: { settingsId: "global" },
+        data: { lastCrawlAt: new Date(now) },
+      });
     }
-    
+
     console.log(`[Cron API] Triggering background job sync...`);
 
-    const keywords = isCustom ? customKeywords : (process.env.FETCH_KEYWORDS || "software engineer,frontend developer,backend developer").split(",");
-    
     let sources: JobSource[] = ["wellfound", "careers", "aggregator"];
     if (targetSource && sources.includes(targetSource as JobSource)) {
       sources = [targetSource as JobSource];
     }
 
-    // Run crawler in the background using after() to return 202 immediately but keep container alive
+    // Empty keywords → pipeline pulls skills from DB (Rule 2)
+    const keywords = isCustom ? customKeywords : [];
+
     after(async () => {
-      console.log("[Cron API Background] Starting sync cycle for sources:", sources, "keywords:", keywords);
+      console.log(
+        "[Cron API Background] Starting sync cycle for sources:",
+        sources,
+        "keywords:",
+        keywords.length ? keywords : "(from DB skills)"
+      );
       for (const source of sources) {
         try {
           console.log(`[Cron API Background] Syncing ${source}...`);
           await runSourceSync(source, keywords);
         } catch (err: any) {
-          console.error(`[Cron API Background] Sync failed for ${source}:`, err.message);
+          console.error(
+            `[Cron API Background] Sync failed for ${source}:`,
+            err.message
+          );
         }
       }
       console.log("[Cron API Background] Sync cycle complete.");
@@ -80,11 +114,11 @@ export async function POST(req: NextRequest) {
       {
         success: true,
         message: isCustom
-          ? `Job crawler successfully initiated for custom keywords in the background.`
+          ? "Job crawler successfully initiated for custom keywords in the background."
           : "Job crawler successfully initiated in the background.",
-        triggeredAt: new Date().toISOString()
+        triggeredAt: new Date().toISOString(),
       },
-      { status: 202 } // 202 Accepted
+      { status: 202 }
     );
   } catch (error: any) {
     console.error("Error triggering crawler API:", error);
@@ -95,7 +129,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Support GET requests as well for easy testing in browser or simple curl setups
 export async function GET(req: NextRequest) {
   return POST(req);
 }

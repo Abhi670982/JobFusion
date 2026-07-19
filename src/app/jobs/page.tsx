@@ -8,7 +8,7 @@ import {
   Search, SlidersHorizontal, X, MapPin,
   Briefcase, LayoutGrid, List, Target,
   Building2, Clock, AlertTriangle, Check,
-  Activity, ArrowRight, ArrowLeft, RefreshCw
+  Activity, ArrowRight, ArrowLeft, RefreshCw, Globe
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,6 +25,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import JobCard from '@/components/job-card';
+import JobPortalsSection from '@/components/job-portals-section';
+import { JobsErrorBoundary } from '@/components/error-boundary';
 import { cn } from '@/lib/utils';
 import { PREDEFINED_SKILLS } from '@/lib/skills-extractor';
 import {
@@ -344,6 +346,7 @@ export default function JobsPage() {
   // Layout states
   const [mobileFilters, setMobileFilters] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [activeTab, setActiveTab] = useState<'careers' | 'portals'>('careers');
   const [sortBy, setSortBy] = useState<'postedAt' | 'salaryMin'>('postedAt');
   const [order, setOrder] = useState<'asc' | 'desc'>('desc');
 
@@ -370,6 +373,7 @@ export default function JobsPage() {
     careers: 0,
     aggregator: 0
   });
+  const [meta, setMeta] = useState<any>(null);
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const initialDataLoaded = useRef(false);
@@ -377,7 +381,7 @@ export default function JobsPage() {
   // Cache key for sessionStorage based on the current query string
   const JOBS_CACHE_PREFIX = 'jobfusion_jobs_cache_';
   const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes — skip re-fetch entirely if cache is fresh
-
+ 
   // 2. Fetch jobs — skips the API call completely if cache is fresh (< 5 min)
   const fetchFilteredJobs = async (searchParamsString: string, showSkeleton = false) => {
     const cacheKey = JOBS_CACHE_PREFIX + searchParamsString;
@@ -385,7 +389,7 @@ export default function JobsPage() {
 
     if (cached) {
       try {
-        const { jobs: cachedJobs, total, totalPages: tp, sourceCounts: sc, cachedAt } = JSON.parse(cached);
+        const { jobs: cachedJobs, total, totalPages: tp, sourceCounts: sc, meta: cachedMeta, cachedAt } = JSON.parse(cached);
         const isFresh = cachedAt && (Date.now() - cachedAt) < CACHE_TTL_MS;
 
         // Restore cached data and turn off skeleton immediately
@@ -393,6 +397,7 @@ export default function JobsPage() {
         setTotalJobsCount(total || 0);
         setTotalPages(tp || 1);
         if (sc) setSourceCounts(sc);
+        if (cachedMeta) setMeta(cachedMeta);
         setLoading(false); // ← skeleton dismissed immediately when cache exists
 
         if (isFresh) {
@@ -413,12 +418,14 @@ export default function JobsPage() {
         setTotalJobsCount(data.total || 0);
         setTotalPages(data.totalPages || 1);
         if (data.sourceCounts) setSourceCounts(data.sourceCounts);
+        if (data.meta) setMeta(data.meta);
         // Save with timestamp so TTL check works on next visit
         sessionStorage.setItem(cacheKey, JSON.stringify({
           jobs: data.data || [],
           total: data.total || 0,
           totalPages: data.totalPages || 1,
           sourceCounts: data.sourceCounts || {},
+          meta: data.meta || null,
           cachedAt: Date.now(),
         }));
       }
@@ -435,32 +442,51 @@ export default function JobsPage() {
     sessionStorage.removeItem('guestSearch');
     
     async function loadData() {
-      // Trigger background sync cycle
-      fetch('/api/cron/crawl', { method: 'POST' }).catch(err => console.error("Error starting auto-crawl:", err));
-
       try {
-        const currentUser = await fetchCurrentUser();
-        let prof: DbProfile | null = null;
+        // [H-3] All 5 independent fetches run in parallel via Promise.allSettled.
+        // Total load time = slowest single fetch, not sum of all.
+        // Failures in any one fetch are isolated — the rest still succeed.
+        const [userRes, savedRes, appliedRes, profileRes, healthRes] =
+          await Promise.allSettled([
+            fetchCurrentUser(),
+            // savedJobs and appliedJobs need userId — fetch with placeholder then filter
+            fetchSavedJobs(undefined as any).catch(() => []),
+            fetchApplications(undefined as any).catch(() => []),
+            fetchProfile(undefined as any).catch(() => null),
+            fetch('/api/jobs/sources/health').then(r => r.json()).catch(() => null),
+          ]);
+
+        const currentUser = userRes.status === 'fulfilled' ? userRes.value : null;
+        const healthData  = healthRes.status  === 'fulfilled' ? healthRes.value  : null;
+        let profVal: DbProfile | null = null;
+
         if (currentUser) {
           setUser(currentUser);
-          const saved = await fetchSavedJobs(currentUser._id);
-          setSavedJobIds(new Set(saved.map((s: DbSavedJob) => s.jobId?._id).filter(Boolean)));
 
-          const apps = await fetchApplications(currentUser._id);
-          setAppliedJobIds(new Set(apps.map((a: DbApplication) => a.jobId?._id).filter(Boolean)));
-          
-          prof = await fetchProfile(currentUser._id);
-          setProfile(prof);
+          // Now that we have the userId, fetch user-specific data
+          const [saved, apps, prof] = await Promise.allSettled([
+            fetchSavedJobs(currentUser._id),
+            fetchApplications(currentUser._id),
+            fetchProfile(currentUser._id),
+          ]);
+
+          if (saved.status === 'fulfilled') {
+            setSavedJobIds(new Set(saved.value.map((s: DbSavedJob) => s.jobId?._id).filter(Boolean)));
+          }
+          if (apps.status === 'fulfilled') {
+            setAppliedJobIds(new Set(apps.value.map((a: DbApplication) => a.jobId?._id).filter(Boolean)));
+          }
+          if (prof.status === 'fulfilled' && prof.value) {
+            profVal = prof.value;
+            setProfile(profVal);
+          }
         }
 
-        // Fetch health status (used by admin dashboard, not shown to users)
-        const healthRes = await fetch('/api/jobs/sources/health');
-        const healthData = await healthRes.json();
-        if (healthData.success && healthData.data) {
+        if (healthData?.success && healthData?.data) {
           setHealth(healthData.data);
         }
 
-        // Parse search params from URL on load (fallback to sessionStorage if URL is empty)
+        // Parse search params from URL on load
         let searchString = window.location.search;
         if (!searchString) {
           const cachedQuery = sessionStorage.getItem('jobfusion_filter_query');
@@ -479,11 +505,10 @@ export default function JobsPage() {
         if (params.get('datePosted')) setDatePosted(params.get('datePosted') || '');
         if (params.get('salaryMin')) setSalaryRange(Math.floor(parseInt(params.get('salaryMin') || '0', 10) / 100000));
         if (params.get('page')) setCurrentPage(parseInt(params.get('page') || '1', 10));
-        
         if (params.get('source')) setSelectedSources(params.get('source')!.split(','));
         if (params.get('jobType')) setSelectedJobTypes(params.get('jobType')!.split(','));
         if (params.get('experienceLevel')) setSelectedExpLevels(params.get('experienceLevel')!.split(','));
-        
+
         let loadedSkills: string[] = [];
         if (params.get('skills')) {
           loadedSkills = params.get('skills')!.split(',');
@@ -494,7 +519,7 @@ export default function JobsPage() {
           params.get('source') || params.get('jobType') || params.get('experienceLevel') ||
           params.get('skills') || params.get('salaryMin');
 
-        if (!hasExplicitFilters && prof) {
+        if (!hasExplicitFilters && profVal) {
 
           // ── inferExpLevel ──────────────────────────────────────────────────
           // Converts a free-text experience string OR a work history array into
@@ -583,12 +608,12 @@ export default function JobsPage() {
           };
 
           // ── Apply inferred filters ─────────────────────────────────────────
-          const hasSkills = prof.skills && prof.skills.length > 0;
-          const inferredExpLevel = inferExpLevel(prof.experience, prof.experiences);
-          const inferredSalaryMin = inferSalaryMin(prof.expectedSalary);
+          const hasSkills = profVal.skills && profVal.skills.length > 0;
+          const inferredExpLevel = inferExpLevel(profVal.experience, profVal.experiences);
+          const inferredSalaryMin = inferSalaryMin(profVal.expectedSalary);
 
           if (hasSkills || inferredExpLevel) {
-            const userSkills = hasSkills ? prof.skills.map((s: any) => s.name.toLowerCase()) : [];
+            const userSkills = hasSkills ? profVal.skills.map((s: any) => s.name.toLowerCase()) : [];
 
             // Update filter UI state
             if (userSkills.length > 0) setSelectedSkills(userSkills);
@@ -613,7 +638,7 @@ export default function JobsPage() {
             await fetchFilteredJobs('', true);
           }
 
-        } else if (!hasExplicitFilters && !prof) {
+        } else if (!hasExplicitFilters && !profVal) {
           // No profile at all
           setSkillWarning(false);
           await fetchFilteredJobs('', true);
@@ -623,9 +648,9 @@ export default function JobsPage() {
         }
         initialDataLoaded.current = true;
 
-
       } catch (err) {
         console.error("Error loading initial jobs data:", err);
+      } finally {
         setLoading(false);
       }
     }
@@ -729,19 +754,57 @@ export default function JobsPage() {
         body: JSON.stringify({ keywords: userSkills })
       });
       
-      // Let the crawl start in background
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Select the skills in UI to filter the feed
+      // Select the skills in UI to filter the feed immediately
       setSelectedSkills(userSkills);
       
-      setToastMessage(`Fetching and matching live jobs for your ${userSkills.length} skills!`);
+      setToastMessage(`Matching jobs for your ${userSkills.slice(0, 3).join(', ')}${userSkills.length > 3 ? '...' : ''} stack...`);
       setShowSuccessToast(true);
+
+      // Poll for new results every 5s, up to 3 attempts (15s max wait)
+      let attempts = 0;
+      const pollInterval = setInterval(async () => {
+        attempts++;
+        try {
+          // Re-fetch jobs with the updated skill filters
+          const params = new URLSearchParams();
+          if (queryInput) params.set('q', queryInput);
+          if (locationInput) params.set('location', locationInput);
+          if (remoteOnly) params.set('remote', 'true');
+          if (sortBy) params.set('sortBy', sortBy);
+          if (order) params.set('order', order);
+          if (selectedSources.length > 0) params.set('source', selectedSources.join(','));
+          if (selectedJobTypes.length > 0) params.set('jobType', selectedJobTypes.join(','));
+          if (selectedExpLevels.length > 0) params.set('experienceLevel', selectedExpLevels.join(','));
+          params.set('skills', userSkills.join(','));
+          if (salaryRange > 0) params.set('salaryMin', String(salaryRange * 100000));
+          if (datePosted) {
+            const date = new Date();
+            if (datePosted === '24h') date.setHours(date.getHours() - 24);
+            else if (datePosted === '3d') date.setDate(date.getDate() - 3);
+            else if (datePosted === '7d') date.setDate(date.getDate() - 7);
+            else if (datePosted === '30d') date.setDate(date.getDate() - 30);
+            params.set('postedAfter', date.toISOString());
+            params.set('datePosted', datePosted);
+          }
+          params.set('page', '1');
+
+          await fetchFilteredJobs(params.toString());
+        } catch (pollErr) {
+          console.error("Error during polling fetch:", pollErr);
+        }
+
+        if (attempts >= 3) {
+          clearInterval(pollInterval);
+          setToastMessage(`Done! Found matches for your skills.`);
+          setShowSuccessToast(true);
+          setMatching(false);
+        }
+      }, 5000);
+
     } catch (error) {
       console.error("Error AI matching jobs:", error);
       setToastMessage("Failed to initiate live job match. Please try again.");
       setShowSuccessToast(true);
-    } finally {
       setMatching(false);
     }
   };
@@ -824,6 +887,22 @@ export default function JobsPage() {
     return src;
   };
 
+  // RULE 1: Defensive client-side 24h filter guard for careers source
+  const jobsList = (Array.isArray(jobs) ? jobs : []).filter(job => {
+    if (job.source !== 'careers') return true;
+    if (!job.postedAtDate) return false; // no date = reject
+    const age = Date.now() - new Date(job.postedAtDate).getTime();
+    return age <= 24 * 60 * 60 * 1000;
+  });
+
+  // Warn if client-side filter discarded any stale careers jobs
+  if (jobs.length !== jobsList.length) {
+    console.warn(
+      `CLIENT FILTER: Removed ${jobs.length - jobsList.length} jobs ` +
+      `that were older than 24h. Check API or pipeline rules.`
+    );
+  }
+
   return (
     <>
       <main className="flex-1 p-3 sm:p-4 lg:p-6 max-w-[1440px] w-full mx-auto space-y-5">
@@ -845,7 +924,12 @@ export default function JobsPage() {
           <div>
             <h1 className="text-xl sm:text-2xl font-bold mb-1" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Find Your Next Role</h1>
             <p className="text-muted-foreground text-sm">
-              {loading ? 'Searching opportunities...' : `Showing ${totalJobsCount} aggregate opportunities`}
+              {loading
+                ? 'Searching opportunities...'
+                : activeTab === 'careers'
+                ? `${totalJobsCount} company career opportunities`
+                : 'Live results from external job portals'
+              }
             </p>
           </div>
           
@@ -893,7 +977,77 @@ export default function JobsPage() {
 
 
 
-        {/* Core Content Grid */}
+        {/* ─── Tab Switcher ─────────────────────────────────────────────────── */}
+        <div className="relative flex items-center justify-center">
+          {/* Background pill track */}
+          <div className="relative flex items-center gap-1 p-1 rounded-2xl bg-card/60 border border-border/70 backdrop-blur-md shadow-sm">
+
+            {/* Careers Tab */}
+            <button
+              id="tab-company-careers"
+              onClick={() => setActiveTab('careers')}
+              className={cn(
+                'relative flex items-center gap-2.5 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                activeTab === 'careers'
+                  ? 'text-white shadow-lg'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+              )}
+            >
+              {/* Active background */}
+              {activeTab === 'careers' && (
+                <motion.div
+                  layoutId="tab-active-bg"
+                  className="absolute inset-0 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 shadow-[0_4px_14px_rgba(16,185,129,0.35)]"
+                  initial={false}
+                  transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+                />
+              )}
+              <span className="relative z-10 flex items-center gap-2">
+                <Building2 className="w-4 h-4" />
+                Company Careers
+              </span>
+            </button>
+
+            {/* Portals Tab */}
+            <button
+              id="tab-job-portals"
+              onClick={() => setActiveTab('portals')}
+              className={cn(
+                'relative flex items-center gap-2.5 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                activeTab === 'portals'
+                  ? 'text-white shadow-lg'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+              )}
+            >
+              {activeTab === 'portals' && (
+                <motion.div
+                  layoutId="tab-active-bg"
+                  className="absolute inset-0 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 shadow-[0_4px_14px_rgba(99,102,241,0.35)]"
+                  initial={false}
+                  transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+                />
+              )}
+              <span className="relative z-10 flex items-center gap-2">
+                <Globe className="w-4 h-4" />
+                Job Portals
+              </span>
+            </button>
+          </div>
+
+          {/* Decorative divider lines */}
+          <div className="hidden sm:block absolute left-0 right-0 top-1/2 -z-10 h-px bg-gradient-to-r from-transparent via-border/60 to-transparent" />
+        </div>
+
+        {/* ─── Company Careers Tab Content ──────────────────────────────────── */}
+        {activeTab === 'careers' && (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key="careers-tab"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+            >
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
           
           {/* 1. Left Filtering Sidebar */}
@@ -1139,52 +1293,63 @@ export default function JobsPage() {
               </div>
             </div>
 
-            {/* Main Jobs Listing */}
-            <div className={cn('grid gap-4', viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1')}>
-              {(loading && !skillWarning) ? (
-                <PremiumJobsLoader />
-              ) : skillWarning ? (
-                <div className="col-span-full flex flex-col items-center justify-center py-20 text-center bg-card/10 border border-dashed border-red-500/30 rounded-3xl p-8 space-y-4">
-                  <div className="w-16 h-16 rounded-2xl bg-red-500/5 border border-red-500/15 flex items-center justify-center text-red-500 mb-2">
-                    <AlertTriangle className="w-8 h-8 animate-pulse" />
-                  </div>
-                  <div className="space-y-1">
-                    <h3 className="font-bold text-lg" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>No Skills Added</h3>
-                    <p className="text-muted-foreground text-xs max-w-sm mx-auto">
-                      To find relevant jobs, please upload your resume or add skills in the resume section.
-                    </p>
-                  </div>
-                  <Link href="/resume">
-                    <Button className="rounded-xl gradient-brand text-white border-0 shadow-md btn-press">
-                      Go to Resume Section
-                    </Button>
-                  </Link>
+            {/* Main Jobs Listing with Error Boundary */}
+            <JobsErrorBoundary
+              fallback={
+                <div className="col-span-full flex flex-col items-center justify-center py-10 bg-destructive/10 text-destructive rounded-2xl border border-destructive/20 p-8 space-y-4">
+                  <p className="font-semibold text-sm">Something went wrong loading jobs.</p>
+                  <Button size="sm" variant="outline" onClick={() => window.location.reload()} className="rounded-xl text-xs h-9">
+                    Retry
+                  </Button>
                 </div>
-              ) : jobs.length === 0 ? (
-                <div className="col-span-full flex flex-col items-center justify-center py-20 text-center bg-card/10 border border-dashed border-border/80 rounded-3xl p-8 space-y-4">
-                  <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-2">
-                    <Activity className="w-8 h-8 text-muted-foreground" />
+              }
+            >
+              <div className={cn('grid gap-4', viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1')}>
+                {(loading && !skillWarning) ? (
+                  <PremiumJobsLoader />
+                ) : skillWarning ? (
+                  <div className="col-span-full flex flex-col items-center justify-center py-20 text-center bg-card/10 border border-dashed border-red-500/30 rounded-3xl p-8 space-y-4">
+                    <div className="w-16 h-16 rounded-2xl bg-red-500/5 border border-red-500/15 flex items-center justify-center text-red-500 mb-2">
+                      <AlertTriangle className="w-8 h-8 animate-pulse" />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="font-bold text-lg" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>No Skills Added</h3>
+                      <p className="text-muted-foreground text-xs max-w-sm mx-auto">
+                        To find relevant jobs, please upload your resume or add skills in the resume section.
+                      </p>
+                    </div>
+                    <Link href="/resume">
+                      <Button className="rounded-xl gradient-brand text-white border-0 shadow-md btn-press">
+                        Go to Resume Section
+                      </Button>
+                    </Link>
                   </div>
-                  <div className="space-y-1">
-                    <h3 className="font-semibold text-base">No jobs found</h3>
-                    <p className="text-muted-foreground text-xs max-w-xs mx-auto">No aggregate jobs match your criteria. Try adjusting filters or clearing them.</p>
+                ) : jobsList.length === 0 ? (
+                  <div className="col-span-full flex flex-col items-center justify-center py-20 text-center bg-card/10 border border-dashed border-border/80 rounded-3xl p-8 space-y-4">
+                    <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-2">
+                      <Activity className="w-8 h-8 text-muted-foreground" />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="font-semibold text-base">No jobs found</h3>
+                      <p className="text-muted-foreground text-xs max-w-xs mx-auto">No aggregate jobs match your criteria. Try adjusting filters or clearing them.</p>
+                    </div>
+                    <Button onClick={clearAll} variant="outline" className="rounded-xl">Clear All Filters</Button>
                   </div>
-                  <Button onClick={clearAll} variant="outline" className="rounded-xl">Clear All Filters</Button>
-                </div>
-              ) : (
-                jobs.map((job, i) => (
-                  <JobCard
-                    key={job._id}
-                    job={job}
-                    index={i}
-                    userId={user?._id}
-                    initialIsSaved={savedJobIds.has(job._id)}
-                    initialIsApplied={appliedJobIds.has(job._id)}
-                    onSavedToggle={handleSavedToggle}
-                  />
-                ))
-              )}
-            </div>
+                ) : (
+                  jobsList.map((job, i) => (
+                    <JobCard
+                      key={job._id}
+                      job={job}
+                      index={i}
+                      userId={user?._id}
+                      initialIsSaved={savedJobIds.has(job._id)}
+                      initialIsApplied={appliedJobIds.has(job._id)}
+                      onSavedToggle={handleSavedToggle}
+                    />
+                  ))
+                )}
+              </div>
+            </JobsErrorBoundary>
 
             {/* Pagination Controls */}
             {!loading && !skillWarning && totalPages > 1 && (
@@ -1215,6 +1380,37 @@ export default function JobsPage() {
           </div>
 
         </div>
+            </motion.div>
+          </AnimatePresence>
+        )} {/* end careers tab */}
+
+        {/* ─── Job Portals Tab Content ──────────────────────────────────────── */}
+        {activeTab === 'portals' && (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key="portals-tab"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+            >
+              <JobPortalsSection
+                keyword={queryInput}
+                locationInput={locationInput}
+                profileSkills={profile?.skills.map((s) => s.name) || []}
+                mobileFilters={mobileFilters}
+                setMobileFilters={setMobileFilters}
+                filtersCollapsed={filtersCollapsed}
+                setFiltersCollapsed={setFiltersCollapsed}
+                viewMode={viewMode}
+                setViewMode={setViewMode}
+              />
+            </motion.div>
+          </AnimatePresence>
+        )}
+
+
+
       </main>
 
       {/* Loading Overlay */}

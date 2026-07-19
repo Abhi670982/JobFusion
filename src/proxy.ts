@@ -27,6 +27,7 @@ const isPublicRoute = createRouteMatcher([
   "/sso-callback(.*)",
   "/api/webhooks(.*)",
   "/api/jobs(.*)",
+  "/api/portal-jobs(.*)",
   "/api/parse-resume(.*)",
   "/api/upload-resume(.*)",
   "/api/cron(.*)",

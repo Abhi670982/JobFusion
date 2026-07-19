@@ -4,7 +4,6 @@ import { runSourceSync } from "./pipeline";
 import { JobSource } from "./adapters/types";
 
 const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
-const FETCH_KEYWORDS = (process.env.FETCH_KEYWORDS || "software engineer,frontend developer,backend developer").split(",");
 
 let redisClient: IORedis | null = null;
 let isRedisConnected = false;
@@ -89,7 +88,7 @@ export async function startScheduler() {
         queueName,
         async (job) => {
           console.log(`[Scheduler Worker] Processing queue job for: ${source}`);
-          await runSourceSync(source, FETCH_KEYWORDS);
+          await runSourceSync(source, []);
         },
         { connection: redisClient as any }
       );
@@ -159,14 +158,14 @@ export async function startScheduler() {
       activeIntervals.push(intervalId);
     };
 
-    setupInterval("wellfound", () => runSourceSync("wellfound", FETCH_KEYWORDS), intervals.wellfound);
+    setupInterval("wellfound", () => runSourceSync("wellfound", []), intervals.wellfound);
     // Careers scraper — offset by 15 mins, then every 6h
     setTimeout(() => {
-      setupInterval("careers", () => runSourceSync("careers", FETCH_KEYWORDS), 6 * 60 * 60 * 1000);
+      setupInterval("careers", () => runSourceSync("careers", []), 6 * 60 * 60 * 1000);
     }, 15 * 60 * 1000);
     // Aggregator scraper — offset by 45 mins, then every 4h
     setTimeout(() => {
-      setupInterval("aggregator", () => runSourceSync("aggregator", FETCH_KEYWORDS), intervals.aggregator);
+      setupInterval("aggregator", () => runSourceSync("aggregator", []), intervals.aggregator);
     }, 45 * 60 * 1000);
     setupInterval("cleanup", cleanupExpiredJobs, intervals.cleanup);
   }

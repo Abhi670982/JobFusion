@@ -1,7 +1,60 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { validateJobsQuery } from "@/lib/api-validators";
 
 export const dynamic = "force-dynamic";
+
+function mapJob(job: any) {
+  return {
+    _id: job.id,
+    title: job.title,
+    company: job.company,
+    companyLogo: job.companyLogo,
+    companyColor: job.companyColor,
+    location: job.location,
+    locationType: job.locationType,
+    salary: job.salary,
+    salaryMin: job.salaryMin,
+    salaryMax: job.salaryMax,
+    experience: job.experience,
+    experienceLevel: job.experienceLevel,
+    type:
+      job.type === "full_time"
+        ? "full-time"
+        : job.type === "part_time"
+          ? "part-time"
+          : job.type,
+    skills: job.skills,
+    matchScore: job.matchScore,
+    matchedSkill: job.matchedSkill,
+    postedAt: job.postedAt,
+    postedAtDate: job.postedAtDate,
+    description: job.description,
+    requirements: job.requirements,
+    responsibilities: job.responsibilities,
+    benefits: job.benefits,
+    applicants: job.applicants,
+    featured: job.featured,
+    category: job.category,
+    source: job.source,
+    applyUrl: job.applyUrl,
+    sourceId: job.sourceId,
+    sourceUrl: job.sourceUrl,
+    city: job.city,
+    country: job.country,
+    isRemote: job.isRemote,
+    jobType: job.jobType,
+    salaryCurrency: job.salaryCurrency,
+    salaryPeriod: job.salaryPeriod,
+    descriptionHtml: job.descriptionHtml,
+    expiresAt: job.expiresAt,
+    fetchedAt: job.fetchedAt,
+    dedupeHash: job.dedupeHash,
+    isActive: job.isActive,
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+  };
+}
 
 // 1. POST - Create a Job
 export async function POST(req: NextRequest) {
@@ -70,7 +123,7 @@ export async function GET(req: NextRequest) {
     // Get specific job
     if (id) {
       const job = await prisma.job.findUnique({
-        where: { id }
+        where: { id },
       });
       if (!job) {
         return NextResponse.json(
@@ -78,71 +131,48 @@ export async function GET(req: NextRequest) {
           { status: 404 }
         );
       }
-      
-      const mappedJob = {
-        _id: job.id,
-        title: job.title,
-        company: job.company,
-        companyLogo: job.companyLogo,
-        companyColor: job.companyColor,
-        location: job.location,
-        locationType: job.locationType,
-        salary: job.salary,
-        salaryMin: job.salaryMin,
-        salaryMax: job.salaryMax,
-        experience: job.experience,
-        experienceLevel: job.experienceLevel,
-        type: job.type === "full_time" ? "full-time" : (job.type === "part_time" ? "part-time" : job.type),
-        skills: job.skills,
-        matchScore: job.matchScore,
-        postedAt: job.postedAt,
-        postedAtDate: job.postedAtDate,
-        description: job.description,
-        requirements: job.requirements,
-        responsibilities: job.responsibilities,
-        benefits: job.benefits,
-        applicants: job.applicants,
-        featured: job.featured,
-        category: job.category,
-        source: job.source,
-        applyUrl: job.applyUrl,
-        sourceId: job.sourceId,
-        sourceUrl: job.sourceUrl,
-        city: job.city,
-        country: job.country,
-        isRemote: job.isRemote,
-        jobType: job.jobType,
-        salaryCurrency: job.salaryCurrency,
-        salaryPeriod: job.salaryPeriod,
-        descriptionHtml: job.descriptionHtml,
-        expiresAt: job.expiresAt,
-        fetchedAt: job.fetchedAt,
-        dedupeHash: job.dedupeHash,
-        isActive: job.isActive,
-        createdAt: job.createdAt,
-        updatedAt: job.updatedAt
-      };
 
-      return NextResponse.json({ success: true, data: mappedJob });
+      return NextResponse.json({ success: true, data: mapJob(job) });
     }
 
     // Get filtered jobs
-    const q = searchParams.get("q") || "";
+    let userSkills: string[] = [];
+    try {
+      const { getOrCreateMongoUser } = await import("@/lib/auth-sync");
+      const mongoUser = await getOrCreateMongoUser();
+      if (mongoUser) {
+        const profile = await prisma.profile.findUnique({
+          where: { userId: mongoUser._id.toString() },
+          include: { skills: true },
+        });
+        if (profile?.skills?.length) {
+          userSkills = profile.skills.map((s) => s.name.toLowerCase());
+        }
+      }
+    } catch (err: any) {
+      console.warn(
+        "[API Jobs] Failed to resolve user skills for search filtering:",
+        err.message
+      );
+    }
+
+    const validated = validateJobsQuery(searchParams);
+    const q = validated.q || searchParams.get("q") || "";
     const source = searchParams.get("source") || "";
-    const location = searchParams.get("location") || "";
+    const location = validated.location || searchParams.get("location") || "";
     const jobType = searchParams.get("jobType") || "";
     const experienceLevel = searchParams.get("experienceLevel") || "";
     const remote = searchParams.get("remote") || "";
     const salaryMin = searchParams.get("salaryMin") || "";
     const salaryMax = searchParams.get("salaryMax") || "";
-    const skills = searchParams.get("skills") || "";
+    const skills = validated.skills || searchParams.get("skills") || "";
     const postedAfter = searchParams.get("postedAfter") || "";
     const category = searchParams.get("category") || "";
-    
-    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "20", 10)));
-    const sortBy = searchParams.get("sortBy") || "postedAt";
-    const order = searchParams.get("order") || "desc";
+
+    const page = validated.page;
+    const limit = validated.limit;
+    const sortBy = validated.sortBy;
+    const order = validated.order;
 
     const andConditions: any[] = [];
 
@@ -153,7 +183,7 @@ export async function GET(req: NextRequest) {
           { title: { contains: q, mode: "insensitive" } },
           { company: { contains: q, mode: "insensitive" } },
           { description: { contains: q, mode: "insensitive" } },
-        ]
+        ],
       });
     }
 
@@ -161,7 +191,7 @@ export async function GET(req: NextRequest) {
     if (source) {
       const sources = source.split(",").map((s) => s.trim().toLowerCase());
       andConditions.push({
-        source: { in: sources }
+        source: { in: sources },
       });
     }
 
@@ -172,31 +202,30 @@ export async function GET(req: NextRequest) {
           { location: { contains: location, mode: "insensitive" } },
           { city: { contains: location, mode: "insensitive" } },
           { country: { contains: location, mode: "insensitive" } },
-        ]
+        ],
       });
     }
 
     // 4. Job type filter
     if (jobType) {
       const types = jobType.split(",").map((t) => t.trim().toLowerCase());
-      const mappedTypes = types.map(t => {
+      const mappedTypes = types.map((t) => {
         if (t === "full-time") return "full_time";
         if (t === "part-time") return "part_time";
         return t;
       });
       andConditions.push({
-        OR: [
-          { type: { in: mappedTypes as any } },
-          { jobType: { in: types } }
-        ]
+        OR: [{ type: { in: mappedTypes as any } }, { jobType: { in: types } }],
       });
     }
 
     // 5. Experience level filter
     if (experienceLevel) {
-      const levels = experienceLevel.split(",").map((l) => l.trim().toLowerCase());
+      const levels = experienceLevel
+        .split(",")
+        .map((l) => l.trim().toLowerCase());
       andConditions.push({
-        experienceLevel: { in: levels as any }
+        experienceLevel: { in: levels as any },
       });
     }
 
@@ -206,8 +235,8 @@ export async function GET(req: NextRequest) {
         OR: [
           { isRemote: true },
           { locationType: "remote" },
-          { location: { contains: "remote", mode: "insensitive" } }
-        ]
+          { location: { contains: "remote", mode: "insensitive" } },
+        ],
       });
     }
 
@@ -219,8 +248,8 @@ export async function GET(req: NextRequest) {
             { salaryMax: { gte: parseInt(salaryMin, 10) } },
             { salaryMin: { gte: parseInt(salaryMin, 10) } },
             { salaryMin: 0 },
-            { salaryMin: null }
-          ]
+            { salaryMin: null },
+          ],
         });
       }
       if (salaryMax) {
@@ -229,30 +258,40 @@ export async function GET(req: NextRequest) {
             { salaryMin: { lte: parseInt(salaryMax, 10) } },
             { salaryMax: { lte: parseInt(salaryMax, 10) } },
             { salaryMin: 0 },
-            { salaryMin: null }
-          ]
+            { salaryMin: null },
+          ],
         });
       }
     }
 
-    // 8. Skills filter
+    // 8. Skills filter (explicit) or Rule 2 user-skill default
     if (skills) {
-      const skillList = skills.split(",").map((s) => s.trim().toLowerCase());
+      const skillList = skills
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
       andConditions.push({
-        skills: { hasSome: skillList }
+        skills: { hasSome: skillList },
+      });
+    } else if (userSkills.length > 0) {
+      andConditions.push({
+        OR: [
+          { matchedSkill: { in: userSkills } },
+          { skills: { hasSome: userSkills } },
+        ],
       });
     }
 
-    // 9. Date posted filter
+    // 9. Date posted filter + Rule 1 (careers always 24h)
     const datePosted = searchParams.get("datePosted") || "";
     let dateLimit: Date | null = null;
     if (datePosted) {
-      const now = new Date();
-      if (datePosted === "24h") now.setHours(now.getHours() - 24);
-      else if (datePosted === "3d") now.setDate(now.getDate() - 3);
-      else if (datePosted === "7d") now.setDate(now.getDate() - 7);
-      else if (datePosted === "30d") now.setDate(now.getDate() - 30);
-      dateLimit = now;
+      const d = new Date();
+      if (datePosted === "24h") d.setHours(d.getHours() - 24);
+      else if (datePosted === "3d") d.setDate(d.getDate() - 3);
+      else if (datePosted === "7d") d.setDate(d.getDate() - 7);
+      else if (datePosted === "30d") d.setDate(d.getDate() - 30);
+      dateLimit = d;
     } else if (postedAfter) {
       const parsed = new Date(postedAfter);
       if (!isNaN(parsed.getTime())) {
@@ -260,44 +299,66 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+    const cutoff24h = new Date(Date.now() - TWENTY_FOUR_HOURS_MS);
+
     if (dateLimit) {
       andConditions.push({
         OR: [
-          { postedAtDate: { gte: dateLimit } },
-          { createdAt: { gte: dateLimit } }
-        ]
+          {
+            AND: [{ source: "careers" }, { postedAtDate: { gte: cutoff24h } }],
+          },
+          {
+            AND: [
+              { OR: [{ source: { not: "careers" } }, { source: null }] },
+              {
+                OR: [
+                  { postedAtDate: { gte: dateLimit } },
+                  { createdAt: { gte: dateLimit } },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+    } else {
+      andConditions.push({
+        OR: [
+          {
+            AND: [{ source: "careers" }, { postedAtDate: { gte: cutoff24h } }],
+          },
+          { OR: [{ source: { not: "careers" } }, { source: null }] },
+        ],
       });
     }
 
     // 10. Category filter
     if (category) {
       andConditions.push({
-        category: { contains: category, mode: "insensitive" }
+        category: { contains: category, mode: "insensitive" },
       });
     }
 
     // 11. Filter out closed jobs
     const now = new Date();
     andConditions.push({
-      OR: [
-        { expiresAt: { gt: now } },
-        { expiresAt: null }
-      ]
+      OR: [{ expiresAt: { gt: now } }, { expiresAt: null }],
     });
 
     // 12. Only show active jobs
     andConditions.push({
-      isActive: true
+      isActive: true,
     });
 
-    const queryConditions = andConditions.length > 0 ? { AND: andConditions } : {};
+    const queryConditions =
+      andConditions.length > 0 ? { AND: andConditions } : {};
 
     // Construct sorting
     const sortField = sortBy === "salaryMin" ? "salaryMin" : "postedAtDate";
     const sortDirection = order === "asc" ? "asc" : "desc";
     const orderBy = [
       { [sortField]: sortDirection },
-      { createdAt: "desc" as const }
+      { createdAt: "desc" as const },
     ];
 
     // Execute query with pagination
@@ -309,73 +370,30 @@ export async function GET(req: NextRequest) {
       where: queryConditions,
       orderBy,
       skip: offset,
-      take: limit
+      take: limit,
     });
 
-    // Map Postgres model to Mongo-like representation for frontend
-    const jobs = pgJobs.map(job => ({
-      _id: job.id,
-      title: job.title,
-      company: job.company,
-      companyLogo: job.companyLogo,
-      companyColor: job.companyColor,
-      location: job.location,
-      locationType: job.locationType,
-      salary: job.salary,
-      salaryMin: job.salaryMin,
-      salaryMax: job.salaryMax,
-      experience: job.experience,
-      experienceLevel: job.experienceLevel,
-      type: job.type === "full_time" ? "full-time" : (job.type === "part_time" ? "part-time" : job.type),
-      skills: job.skills,
-      matchScore: job.matchScore,
-      postedAt: job.postedAt,
-      postedAtDate: job.postedAtDate,
-      description: job.description,
-      requirements: job.requirements,
-      responsibilities: job.responsibilities,
-      benefits: job.benefits,
-      applicants: job.applicants,
-      featured: job.featured,
-      category: job.category,
-      source: job.source,
-      applyUrl: job.applyUrl,
-      sourceId: job.sourceId,
-      sourceUrl: job.sourceUrl,
-      city: job.city,
-      country: job.country,
-      isRemote: job.isRemote,
-      jobType: job.jobType,
-      salaryCurrency: job.salaryCurrency,
-      salaryPeriod: job.salaryPeriod,
-      descriptionHtml: job.descriptionHtml,
-      expiresAt: job.expiresAt,
-      fetchedAt: job.fetchedAt,
-      dedupeHash: job.dedupeHash,
-      isActive: job.isActive,
-      createdAt: job.createdAt,
-      updatedAt: job.updatedAt
-    }));
+    const jobs = pgJobs.map(mapJob);
 
     // Dynamic counts per source
     const getSourceCount = async (src: string) => {
-      const baseConditions = andConditions.filter(c => !c.source);
+      const baseConditions = andConditions.filter((c) => !c.source);
       baseConditions.push({ source: src });
       return prisma.job.count({
-        where: baseConditions.length > 0 ? { AND: baseConditions } : {}
+        where: baseConditions.length > 0 ? { AND: baseConditions } : {},
       });
     };
 
     const [wellfoundCount, careersCount, aggregatorCount] = await Promise.all([
       getSourceCount("wellfound"),
       getSourceCount("careers"),
-      getSourceCount("aggregator")
+      getSourceCount("aggregator"),
     ]);
 
     const sourceCounts = {
       wellfound: wellfoundCount,
       careers: careersCount,
-      aggregator: aggregatorCount
+      aggregator: aggregatorCount,
     };
 
     return NextResponse.json({
@@ -384,7 +402,13 @@ export async function GET(req: NextRequest) {
       total,
       page,
       totalPages,
-      sourceCounts
+      sourceCounts,
+      meta: {
+        filteredTo24h: true,
+        oldestJobAt: jobs[jobs.length - 1]?.postedAtDate ?? null,
+        newestJobAt: jobs[0]?.postedAtDate ?? null,
+        skillsUsed: userSkills,
+      },
     });
   } catch (error: any) {
     return NextResponse.json(

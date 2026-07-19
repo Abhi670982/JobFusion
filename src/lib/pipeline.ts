@@ -1,9 +1,9 @@
-import crypto from "crypto";
 import { prisma } from "./prisma";
 import { JobSource, UnifiedJob } from "./adapters/types";
 import { WellfoundAdapter } from "./adapters/wellfound";
 import { CareersAdapter } from "./adapters/careers";
 import { AggregatorAdapter } from "./adapters/aggregator";
+import { extractSkillsFromDB } from "./skills";
 
 // Helper to clean HTML from descriptions
 export function stripHtml(html: string | null | undefined): string {
@@ -38,15 +38,20 @@ export function toRelativeTimeString(date: Date | null | undefined): string {
   const diffDays = Math.floor(diffMs / 86400000);
 
   if (diffMins < 1) return "Just now";
-  if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
-  if (diffHrs < 24) return `${diffHrs} hour${diffHrs > 1 ? 's' : ''} ago`;
-  if (diffDays < 30) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? "s" : ""} ago`;
+  if (diffHrs < 24) return `${diffHrs} hour${diffHrs > 1 ? "s" : ""} ago`;
+  if (diffDays < 30) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
   const diffMonths = Math.floor(diffDays / 30);
-  return `${diffMonths} month${diffMonths > 1 ? 's' : ''} ago`;
+  return `${diffMonths} month${diffMonths > 1 ? "s" : ""} ago`;
 }
 
+const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+
 // Fetch and process jobs for a specific source
-export async function runSourceSync(source: JobSource, keywords: string[]): Promise<{ success: boolean; count: number; error?: string }> {
+export async function runSourceSync(
+  source: JobSource,
+  keywords: string[]
+): Promise<{ success: boolean; count: number; error?: string }> {
   try {
     console.log(`[Pipeline] Starting sync for source: ${source}`);
 
@@ -65,22 +70,55 @@ export async function runSourceSync(source: JobSource, keywords: string[]): Prom
         throw new Error(`Unknown source: ${source}`);
     }
 
-    // Filter and select top keywords to search
     const genericSkills = new Set([
-      "git", "github", "gitlab", "bitbucket", "html", "html5", "css", "css3",
-      "agile", "scrum", "kanban", "jira", "communication", "teamwork", "rest api",
-      "rest apis", "restful api", "restful apis", "websockets", "websocket",
-      "unit testing", "jest", "mocha", "chai", "cypress", "figma", "ui/ux design",
-      "user interface", "user experience", "product design"
+      "git",
+      "github",
+      "gitlab",
+      "bitbucket",
+      "html",
+      "html5",
+      "css",
+      "css3",
+      "agile",
+      "scrum",
+      "kanban",
+      "jira",
+      "communication",
+      "teamwork",
+      "rest api",
+      "rest apis",
+      "restful api",
+      "restful apis",
+      "websockets",
+      "websocket",
+      "unit testing",
+      "jest",
+      "mocha",
+      "chai",
+      "cypress",
+      "figma",
+      "ui/ux design",
+      "user interface",
+      "user experience",
+      "product design",
     ]);
 
-    const filteredKeywords = keywords
-      .map(k => k.trim())
-      .filter(k => k.length > 0 && !genericSkills.has(k.toLowerCase()));
+    // RULE 2: Skills from DB are preferred; fall back to provided keywords
+    const dbSkills = await extractSkillsFromDB().catch((err) => {
+      console.warn(`[Pipeline] extractSkillsFromDB failed:`, err.message);
+      return [] as string[];
+    });
 
-    const keywordsToSearch = filteredKeywords.length > 0 
-      ? filteredKeywords.slice(0, 5)
-      : keywords.slice(0, 5);
+    const activeKeywords = dbSkills.length > 0 ? dbSkills : keywords;
+
+    const filteredKeywords = activeKeywords
+      .map((k) => k.trim())
+      .filter((k) => k.length > 0 && !genericSkills.has(k.toLowerCase()));
+
+    const keywordsToSearch =
+      filteredKeywords.length > 0
+        ? filteredKeywords.slice(0, 10)
+        : activeKeywords.slice(0, 5);
 
     console.log(`[Pipeline] Keywords selected for ${source} sync:`, keywordsToSearch);
 
@@ -88,69 +126,115 @@ export async function runSourceSync(source: JobSource, keywords: string[]): Prom
     for (const keyword of keywordsToSearch) {
       try {
         console.log(`[Pipeline] Fetching jobs from ${source} for keyword: "${keyword}"`);
-        const rawJobs = await adapter.fetchJobs({ keywords: [keyword], location: "India", page: 1 });
-        console.log(`[Pipeline] Got ${rawJobs.length} raw jobs for "${keyword}" from ${source}`);
-        allRawJobs.push(...rawJobs);
+        const rawJobs = await adapter.fetchJobs({
+          keywords: [keyword],
+          location: "India",
+          page: 1,
+        });
+        console.log(
+          `[Pipeline] Got ${rawJobs.length} raw jobs for "${keyword}" from ${source}`
+        );
+
+        const taggedJobs = rawJobs.map((rj: any) => ({
+          ...rj,
+          _matchedSkill: keyword.toLowerCase(),
+        }));
+        allRawJobs.push(...taggedJobs);
       } catch (err: any) {
-        console.error(`[Pipeline] Fetch failed for ${source} keyword "${keyword}":`, err.message);
+        console.error(
+          `[Pipeline] Fetch failed for ${source} keyword "${keyword}":`,
+          err.message
+        );
       }
-      // Brief delay to prevent rate limiting / scraping blocks
-      await new Promise((resolve) => setTimeout(resolve, 800));
+      await new Promise((resolve) => setTimeout(resolve, 2500));
     }
 
-    console.log(`[Pipeline] Total aggregated raw jobs from ${source} for all keywords: ${allRawJobs.length}`);
+    console.log(
+      `[Pipeline] Total aggregated raw jobs from ${source} for all keywords: ${allRawJobs.length}`
+    );
 
     let successCount = 0;
+    let jobsAdded = 0;
+    let jobsUpdated = 0;
+    let rejectedNoDate = 0;
+    let rejectedTooOld = 0;
+    let rejectedNoSkill = 0;
 
     for (const raw of allRawJobs) {
       try {
-        // Map and normalize
         const unified = adapter.mapToUnified(raw);
+        const matchedSkill: string | null = raw._matchedSkill || null;
 
         if (!unified.dedupeHash) {
           throw new Error("Missing dedupeHash from adapter mapping");
         }
 
-        // Deduplication Logic - check Postgres
+        // RULE 1: Discard jobs missing posted date
+        if (!unified.postedAt) {
+          rejectedNoDate++;
+          continue;
+        }
+
+        const jobDate = new Date(unified.postedAt);
+        const ageMs = Date.now() - jobDate.getTime();
+        if (ageMs > TWENTY_FOUR_HOURS_MS) {
+          rejectedTooOld++;
+          continue;
+        }
+
+        // RULE 2: Matched skill verification
+        if (!matchedSkill) {
+          rejectedNoSkill++;
+          continue;
+        }
+
         const existingJob = await prisma.job.findUnique({
-          where: { dedupeHash: unified.dedupeHash }
+          where: { dedupeHash: unified.dedupeHash },
         });
 
         if (existingJob) {
-          // Update in Postgres
-          const updatedDate = unified.postedAt || existingJob.postedAtDate || new Date();
-          const updatedJob = await prisma.job.update({
+          await prisma.job.update({
             where: { id: existingJob.id },
             data: {
               fetchedAt: new Date(),
               applyUrl: unified.applyUrl || existingJob.applyUrl,
               sourceUrl: unified.sourceUrl || existingJob.sourceUrl,
-              postedAtDate: updatedDate,
-              postedAt: toRelativeTimeString(updatedDate instanceof Date ? updatedDate : new Date(updatedDate))
-            }
+              postedAtDate: jobDate,
+              postedAt: toRelativeTimeString(jobDate),
+              matchedSkill,
+              expiresAt: new Date(Date.now() + TWENTY_FOUR_HOURS_MS),
+              isActive: true,
+            },
           });
-
-          console.log(`[Pipeline] Updated existing job: ${unified.title} at ${unified.company} (${source})`);
+          jobsUpdated++;
+          console.log(
+            `[Pipeline] Updated existing job: ${unified.title} at ${unified.company} (${source})`
+          );
         } else {
-          // Format compatible fields
-          const experienceString = unified.experienceLevel === "entry" ? "Entry Level" :
-                                   unified.experienceLevel === "senior" ? "Senior (5+ yrs)" :
-                                   unified.experienceLevel === "lead" ? "Lead / Principal" : "Mid Level";
+          const experienceString =
+            unified.experienceLevel === "entry"
+              ? "Entry Level"
+              : unified.experienceLevel === "senior"
+                ? "Senior (5+ yrs)"
+                : unified.experienceLevel === "lead"
+                  ? "Lead / Principal"
+                  : "Mid Level";
 
-          const salaryString = unified.salaryMin && unified.salaryMax
-            ? `₹${Math.round(unified.salaryMin / 100000)}L – ₹${Math.round(unified.salaryMax / 100000)}L`
-            : "Not disclosed";
+          const salaryString =
+            unified.salaryMin && unified.salaryMax
+              ? `₹${Math.round(unified.salaryMin / 100000)}L – ₹${Math.round(unified.salaryMax / 100000)}L`
+              : "Not disclosed";
 
-          // Map enum JobType
           let pgType = "full_time";
           if (unified.jobType === "full-time") pgType = "full_time";
           else if (unified.jobType === "part-time") pgType = "part_time";
-          else if (["contract", "internship", "freelance"].includes(unified.jobType || "")) {
+          else if (
+            ["contract", "internship", "freelance"].includes(unified.jobType || "")
+          ) {
             pgType = unified.jobType || "full_time";
           }
 
-          // Create in Postgres
-          const createdJob = await prisma.job.create({
+          await prisma.job.create({
             data: {
               title: unified.title,
               company: unified.company,
@@ -166,9 +250,9 @@ export async function runSourceSync(source: JobSource, keywords: string[]): Prom
               type: pgType as any,
               jobType: unified.jobType,
               skills: unified.skills,
-              matchScore: 70 + Math.floor(Math.random() * 25), // Random Match Score for AI feature
-              postedAt: toRelativeTimeString(unified.postedAt),
-              postedAtDate: unified.postedAt || new Date(),
+              matchScore: 70 + Math.floor(Math.random() * 25),
+              postedAt: toRelativeTimeString(jobDate),
+              postedAtDate: jobDate,
               description: unified.description,
               descriptionHtml: unified.descriptionHtml,
               source: source,
@@ -180,29 +264,34 @@ export async function runSourceSync(source: JobSource, keywords: string[]): Prom
               isRemote: unified.isRemote,
               salaryCurrency: unified.salaryCurrency,
               salaryPeriod: unified.salaryPeriod,
-              expiresAt: unified.expiresAt,
-              fetchedAt: unified.fetchedAt,
+              expiresAt: new Date(Date.now() + TWENTY_FOUR_HOURS_MS),
+              fetchedAt: unified.fetchedAt || new Date(),
               dedupeHash: unified.dedupeHash,
               category: "Engineering",
-              featured: Math.random() > 0.85
-            }
+              featured: Math.random() > 0.85,
+              matchedSkill,
+              isActive: true,
+            },
           });
-
-          console.log(`[Pipeline] Inserted new job: ${unified.title} at ${unified.company} (${source})`);
+          jobsAdded++;
+          console.log(
+            `[Pipeline] Inserted new job: ${unified.title} at ${unified.company} (${source})`
+          );
         }
 
         successCount++;
       } catch (err: any) {
-        console.error(`[Pipeline] Job normalization failed for ${source}:`, err.message);
-        
-        // Log to FailedJob in Postgres
+        console.error(
+          `[Pipeline] Job normalization failed for ${source}:`,
+          err.message
+        );
         try {
           await prisma.failedJob.create({
             data: {
               source,
               rawPayload: raw || {},
               errorMsg: err.message || "Failed to normalize job payload",
-            }
+            },
           });
         } catch (pgErr) {
           console.error("Error creating FailedJob in PG:", pgErr);
@@ -210,43 +299,48 @@ export async function runSourceSync(source: JobSource, keywords: string[]): Prom
       }
     }
 
-    // Log success in Postgres
+    // Hard-expire jobs older than 24 hours for this source
+    const cutoff = new Date(Date.now() - TWENTY_FOUR_HOURS_MS);
+    try {
+      const expired = await prisma.job.updateMany({
+        where: {
+          source,
+          postedAtDate: { lt: cutoff },
+          isActive: true,
+        },
+        data: { isActive: false },
+      });
+      console.log(
+        `[Pipeline] Expired ${expired.count} jobs older than 24 hours for ${source}`
+      );
+    } catch (pgErr) {
+      console.error("Error marking inactive jobs in PG:", pgErr);
+    }
+
     try {
       await prisma.fetchLog.create({
         data: {
           source,
           status: "success",
-          jobsFetched: successCount
-        }
+          jobsFetched: successCount,
+          errorMsg: JSON.stringify({
+            jobsAdded,
+            jobsUpdated,
+            rejectedNoDate,
+            rejectedTooOld,
+            rejectedNoSkill,
+            skillsUsed: keywordsToSearch,
+          }),
+        },
       });
     } catch (pgErr) {
       console.error("Error logging success in PG:", pgErr);
     }
 
-    // Mark jobs from this source not seen in 12h as inactive in Postgres
-    if (source === "careers" || source === "aggregator") {
-      const cutoff = new Date(Date.now() - 12 * 60 * 60 * 1000);
-      try {
-        await prisma.job.updateMany({
-          where: {
-            source,
-            fetchedAt: { lt: cutoff },
-            isActive: true
-          },
-          data: {
-            isActive: false
-          }
-        });
-      } catch (pgErr) {
-        console.error("Error marking inactive jobs in PG:", pgErr);
-      }
-    }
-
     return { success: true, count: successCount };
   } catch (error: any) {
     console.error(`[Pipeline] Fatal error syncing ${source}:`, error.message);
-    
-    // Log failure in Postgres
+
     const fetchStatus = error.message?.includes("CAPTCHA") ? "captcha" : "failed";
     try {
       await prisma.fetchLog.create({
@@ -254,8 +348,8 @@ export async function runSourceSync(source: JobSource, keywords: string[]): Prom
           source,
           status: fetchStatus as any,
           jobsFetched: 0,
-          errorMsg: error.message || "Unknown pipeline error"
-        }
+          errorMsg: error.message || "Unknown pipeline error",
+        },
       });
     } catch (pgErr) {
       console.error("Error logging fetch failure in PG:", pgErr);

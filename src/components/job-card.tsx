@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { DbJob, saveJob, unsaveJob, logActivity } from '@/lib/api-helper';
 import { trackVisitedJob } from '@/lib/visited-jobs';
+import { openJob } from '@/lib/open-job';
 
 interface JobCardProps {
   job: DbJob;
@@ -59,7 +60,7 @@ export default function JobCard({
         .catch(() => {});
     }
     // Open apply URL directly (same as Apply button) — no internal page navigation
-    if (job.applyUrl) window.open(job.applyUrl, '_blank', 'noopener,noreferrer');
+    if (job.applyUrl) openJob(job.applyUrl);
     else router.push(`/jobs/${job._id}`);
   };
 
@@ -87,13 +88,22 @@ export default function JobCard({
     if (userId) {
       logActivity({ type: 'viewed', jobId: job._id, jobTitle: job.title, company: job.company }).catch(() => {});
     }
-    if (job.applyUrl) window.open(job.applyUrl, '_blank', 'noopener,noreferrer');
+    if (job.applyUrl) openJob(job.applyUrl);
     else router.push(`/jobs/${job._id}`);
   };
 
   const locType = locationTypeConfig[job.locationType] || locationTypeConfig.remote;
   const LocIcon = locType.icon;
   const source = getSourceStyle((job.source || '').toLowerCase());
+
+  const showTime = (() => {
+    const src = (job.source || '').toLowerCase();
+    const hasDate = job.postedAtDate && !isNaN(new Date(job.postedAtDate).getTime());
+    if ((src === 'indeed' || src === 'wellfound') && !hasDate) {
+      return false;
+    }
+    return true;
+  })();
 
   // Relative time
   const getTimeAgo = () => {
@@ -224,10 +234,12 @@ export default function JobCard({
 
         {/* Footer */}
         <div className="flex items-center justify-between pt-3 border-t border-border/50">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Clock className="w-3 h-3" />
-            <span>{getTimeAgo()}</span>
-          </div>
+          {showTime && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Clock className="w-3 h-3" />
+              <span>{getTimeAgo()}</span>
+            </div>
+          )}
 
           <div className="flex items-center gap-2">
             {job.matchScore && (

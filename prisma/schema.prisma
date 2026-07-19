@@ -36,6 +36,7 @@ model Settings {
   futureIntegrations   Json     @default("{}")
   allowedAdminEmails   String[] @default([])
   contactEmail         String   @default("akchauhan1172@gmail.com")
+  lastCrawlAt          DateTime?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
@@ -99,6 +100,7 @@ model Job {
   fetchedAt        DateTime        @default(now())
   dedupeHash       String?         @unique
   isActive         Boolean         @default(true)
+  matchedSkill     String?
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
   activities       Activity[]
@@ -116,6 +118,8 @@ model Job {
   @@index([postedAtDate(sort: Desc)])
   @@index([skills])
   @@index([city, country])
+  @@index([postedAtDate(sort: Desc), isActive, source])
+  @@index([matchedSkill, postedAtDate(sort: Desc)])
   @@map("jobs")
 }
 
