@@ -5,6 +5,7 @@ import { CareersAdapter } from "./adapters/careers";
 import { AggregatorAdapter } from "./adapters/aggregator";
 import { extractSkillsFromDB } from "./skills";
 
+
 // Helper to clean HTML from descriptions
 export function stripHtml(html: string | null | undefined): string {
   if (!html) return "";

@@ -99,6 +99,7 @@ export async function POST(req: NextRequest) {
       for (const source of sources) {
         try {
           console.log(`[Cron API Background] Syncing ${source}...`);
+          // Pass empty array or custom keywords
           await runSourceSync(source, keywords);
         } catch (err: any) {
           console.error(
@@ -129,6 +130,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
+// GET support for easy testing via browser/curl
 export async function GET(req: NextRequest) {
   return POST(req);
 }

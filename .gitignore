@@ -51,5 +51,6 @@ scratch/
 
 public/uploads/
 
-
 /src/generated/prisma
+# temporary prompt files
+temp/
