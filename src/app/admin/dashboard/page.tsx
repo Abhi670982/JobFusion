@@ -53,7 +53,7 @@ interface ServiceHealth {
 }
 
 interface SystemHealth {
-  mongodb: ServiceHealth;
+  postgres: ServiceHealth;
   clerk: ServiceHealth;
   gemini: ServiceHealth;
   cloudinary: ServiceHealth;
@@ -223,7 +223,7 @@ export default function AdminDashboard() {
           <div className="rounded-2xl border border-[#27272a] bg-[#18181b]/20 p-6 space-y-4">
             {health && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <HealthBadgeItem label="MongoDB Atlas" icon={Database} health={health.mongodb} />
+                <HealthBadgeItem label="PostgreSQL DB" icon={Database} health={health.postgres} />
                 <HealthBadgeItem label="Clerk Identity" icon={Users} health={health.clerk} />
                 <HealthBadgeItem label="Gemini AI API" icon={Zap} health={health.gemini} />
                 <HealthBadgeItem label="Cloudinary CDN" icon={ImageIcon} health={health.cloudinary} />
