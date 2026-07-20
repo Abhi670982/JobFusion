@@ -29,7 +29,7 @@ const GoogleIcon = () => (
 );
 
 export default function CustomSignUpPage() {
-  const { signUp, errors, fetchStatus } = useSignUp();
+  const { signUp, fetchStatus } = useSignUp();
   const { isLoaded: isUserLoaded, isSignedIn } = useUser();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -43,7 +43,7 @@ export default function CustomSignUpPage() {
       try {
         const { role, location } = JSON.parse(guestSearchStr);
         setDynamicRedirect(`/jobs?q=${encodeURIComponent(role || '')}&location=${encodeURIComponent(location || '')}`);
-      } catch(e) {}
+      } catch {}
     }
   }, []);
 
@@ -99,7 +99,7 @@ export default function CustomSignUpPage() {
 
       if (signUp.status === 'complete') {
         await signUp.finalize({
-          navigate: ({ session, decorateUrl }) => {
+          navigate: ({ decorateUrl }) => {
             const url = decorateUrl(dynamicRedirect);
             if (url.startsWith('http')) {
               window.location.href = url;
@@ -149,7 +149,7 @@ export default function CustomSignUpPage() {
 
       if (signUp.status === 'complete') {
         await signUp.finalize({
-          navigate: ({ session, decorateUrl }) => {
+          navigate: ({ decorateUrl }) => {
             const url = decorateUrl(dynamicRedirect);
             if (url.startsWith('http')) {
               window.location.href = url;

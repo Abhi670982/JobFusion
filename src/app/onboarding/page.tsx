@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import {
   Briefcase, MapPin, GraduationCap, Upload, Plus, X,
-  ChevronRight, ChevronLeft, Loader2, CheckCircle2, AlertCircle, FileText, Smile, Rocket
+  ChevronRight, ChevronLeft, Loader2, CheckCircle2, AlertCircle, Smile, Rocket
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,7 +26,7 @@ export default function OnboardingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [user, setUser] = useState<DbUser | null>(null);
-  const [profile, setProfile] = useState<DbProfile | null>(null);
+  const [, setProfile] = useState<DbProfile | null>(null);
 
   // Wizard state
   const [step, setStep] = useState(1);

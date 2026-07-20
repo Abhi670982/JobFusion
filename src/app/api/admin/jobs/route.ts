@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { Prisma, Job, JobType, LocationType } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
-function mapJob(job: any) {
+function mapJob(job: Job | null) {
   if (!job) return null;
   return {
     _id: job.id,
@@ -66,7 +67,7 @@ export async function GET(req: NextRequest) {
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "10", 10);
 
-    const andConditions: any[] = [];
+    const andConditions: Prisma.JobWhereInput[] = [];
 
     // Apply text search
     if (query) {
@@ -108,7 +109,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const queryConditions = andConditions.length > 0 ? { AND: andConditions } : {};
+    const queryConditions: Prisma.JobWhereInput = andConditions.length > 0 ? { AND: andConditions } : {};
     const skip = (page - 1) * limit;
 
     const [pgJobs, total] = await Promise.all([
@@ -135,9 +136,10 @@ export async function GET(req: NextRequest) {
         pages: Math.ceil(total / limit),
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to load jobs";
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to load jobs" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
@@ -172,8 +174,6 @@ export async function POST(req: NextRequest) {
       featured,
       isActive,
       companyWebsite,
-      industry,
-      companySize,
     } = body;
 
     // Field Validations
@@ -244,8 +244,6 @@ export async function POST(req: NextRequest) {
       });
     }
 
-
-
     // ── CREATE JOB POSTING IN POSTGRESQL ─────────────────────────────────────
     const crypto = await import("crypto");
     const dedupeHash = `manual-${company.trim().toLowerCase()}-${title.trim().toLowerCase()}-${(location || "").toLowerCase()}-${crypto.randomBytes(6).toString("hex")}`;
@@ -262,8 +260,8 @@ export async function POST(req: NextRequest) {
         requirements: requirementsArray,
         skills: skillsArray,
         experience: experience || "",
-        type: pgType as any,
-        locationType: finalMode as any,
+        type: pgType as JobType,
+        locationType: finalMode as LocationType,
         salary: salary || "",
         location: location || "Remote",
         applyUrl: applyUrl.trim(),
@@ -296,9 +294,10 @@ export async function POST(req: NextRequest) {
       message: "Job posting created successfully.",
       data: mapJob(newJob),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to create job posting";
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to create job posting" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

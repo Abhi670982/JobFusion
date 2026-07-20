@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import {
   Search,
-  Shield,
   ShieldAlert,
   ShieldCheck,
   UserX,
@@ -17,7 +16,6 @@ import {
   CheckCircle,
   Clock,
   Mail,
-  User,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -43,7 +41,6 @@ export default function AdminManagement() {
   const [admins, setAdmins] = useState<AdminItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [error, setError] = useState<string | null>(null);
 
   // Invite modal states
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -70,11 +67,9 @@ export default function AdminManagement() {
       const data = await res.json();
       if (data.success) {
         setAdmins(data.data);
-      } else {
-        setError(data.error || "Failed to load admins list.");
       }
-    } catch (err: any) {
-      setError(err.message || "Connection timeout.");
+    } catch (err) {
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -82,6 +77,7 @@ export default function AdminManagement() {
 
   useEffect(() => {
     fetchAdmins();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Debounced search
@@ -90,6 +86,7 @@ export default function AdminManagement() {
       fetchAdmins();
     }, 400);
     return () => clearTimeout(delay);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
   // Toast auto-clear

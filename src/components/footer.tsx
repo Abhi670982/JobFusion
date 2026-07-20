@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { MessageCircle, Link2, Code2, Play, Globe, Heart } from 'lucide-react';
+import { Globe, Heart } from 'lucide-react';
 import { useAuth } from '@clerk/nextjs';
 
 const footerLinks = {
@@ -48,17 +48,6 @@ export default function Footer() {
               Search once. Discover opportunities everywhere.<br />
               Find thousands of jobs from leading platforms—all in one place.
             </p>
-            {/* <div className="flex gap-3">
-              {[MessageCircle, Link2, Code2, Play].map((Icon, i) => (
-                <a
-                  key={i}
-                  href="#"
-                  className="w-9 h-9 rounded-xl border border-border flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-all duration-200"
-                >
-                  <Icon className="w-4 h-4" />
-                </a>
-              ))}
-            </div> */}
           </div>
 
           {/* Links */}

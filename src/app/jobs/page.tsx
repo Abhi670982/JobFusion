@@ -6,9 +6,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import {
   Search, SlidersHorizontal, X, MapPin,
-  Briefcase, LayoutGrid, List, Target,
-  Building2, Clock, AlertTriangle, Check,
-  Activity, ArrowRight, ArrowLeft, RefreshCw, Globe
+  LayoutGrid, List, Target,
+  Building2, AlertTriangle, Check,
+  Activity, ArrowRight, ArrowLeft, Globe
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,7 +17,6 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Skeleton } from '@/components/ui/skeleton';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,7 +27,6 @@ import JobCard from '@/components/job-card';
 import JobPortalsSection from '@/components/job-portals-section';
 import { JobsErrorBoundary } from '@/components/error-boundary';
 import { cn } from '@/lib/utils';
-import { PREDEFINED_SKILLS } from '@/lib/skills-extractor';
 import {
   fetchCurrentUser,
   fetchProfile,
@@ -92,7 +90,7 @@ function PremiumJobsLoader() {
       setMsgIndex((prev) => (prev + 1) % loadingMessages.length);
     }, 1500);
     return () => clearInterval(timer);
-  }, []);
+  }, [loadingMessages.length]);
 
   const currentMsg = loadingMessages[msgIndex];
   const activeSourceIdx = getActiveSourceIndex(currentMsg);
@@ -309,7 +307,7 @@ function PortalStatusText() {
       setIndex(prev => (prev + 1) % statuses.length);
     }, 700);
     return () => clearInterval(interval);
-  }, []);
+  }, [statuses.length]);
 
   return (
     <motion.span
@@ -359,21 +357,12 @@ export default function JobsPage() {
   const [remoteOnly, setRemoteOnly] = useState(false);
   const [salaryRange, setSalaryRange] = useState<number>(0); // Min salary in lakhs
 
-  // Health and Sync Stats (used by admin dashboard, not shown to users)
-  const [health, setHealth] = useState<any>({});
-
   // AI Matching States
   const [matching, setMatching] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [filtersCollapsed, setFiltersCollapsed] = useState(false);
   const [skillWarning, setSkillWarning] = useState(false);
-  const [sourceCounts, setSourceCounts] = useState<{ [key: string]: number }>({
-    wellfound: 0,
-    careers: 0,
-    aggregator: 0
-  });
-  const [meta, setMeta] = useState<any>(null);
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const initialDataLoaded = useRef(false);
@@ -383,21 +372,19 @@ export default function JobsPage() {
   const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes — skip re-fetch entirely if cache is fresh
  
   // 2. Fetch jobs — skips the API call completely if cache is fresh (< 5 min)
-  const fetchFilteredJobs = async (searchParamsString: string, showSkeleton = false) => {
+  const fetchFilteredJobs = async (searchParamsString: string) => {
     const cacheKey = JOBS_CACHE_PREFIX + searchParamsString;
     const cached = sessionStorage.getItem(cacheKey);
 
     if (cached) {
       try {
-        const { jobs: cachedJobs, total, totalPages: tp, sourceCounts: sc, meta: cachedMeta, cachedAt } = JSON.parse(cached);
+        const { jobs: cachedJobs, total, totalPages: tp, cachedAt } = JSON.parse(cached);
         const isFresh = cachedAt && (Date.now() - cachedAt) < CACHE_TTL_MS;
 
         // Restore cached data and turn off skeleton immediately
         setJobs(cachedJobs || []);
         setTotalJobsCount(total || 0);
         setTotalPages(tp || 1);
-        if (sc) setSourceCounts(sc);
-        if (cachedMeta) setMeta(cachedMeta);
         setLoading(false); // ← skeleton dismissed immediately when cache exists
 
         if (isFresh) {
@@ -405,7 +392,7 @@ export default function JobsPage() {
           return;
         }
         // Cache is stale — silently re-fetch in background (jobs already visible, no skeleton)
-      } catch (_) { /* ignore corrupt cache, fall through to fetch */ }
+      } catch { /* ignore corrupt cache, fall through to fetch */ }
     }
     // No cache — skeleton stays on (loading was true from mount) until API responds
 
@@ -417,15 +404,11 @@ export default function JobsPage() {
         setJobs(data.data || []);
         setTotalJobsCount(data.total || 0);
         setTotalPages(data.totalPages || 1);
-        if (data.sourceCounts) setSourceCounts(data.sourceCounts);
-        if (data.meta) setMeta(data.meta);
         // Save with timestamp so TTL check works on next visit
         sessionStorage.setItem(cacheKey, JSON.stringify({
           jobs: data.data || [],
           total: data.total || 0,
           totalPages: data.totalPages || 1,
-          sourceCounts: data.sourceCounts || {},
-          meta: data.meta || null,
           cachedAt: Date.now(),
         }));
       }
@@ -443,22 +426,8 @@ export default function JobsPage() {
     
     async function loadData() {
       try {
-        // [H-3] All 5 independent fetches run in parallel via Promise.allSettled.
-        // Total load time = slowest single fetch, not sum of all.
-        // Failures in any one fetch are isolated — the rest still succeed.
-        const [userRes, savedRes, appliedRes, profileRes, healthRes] =
-          await Promise.allSettled([
-            fetchCurrentUser(),
-            // savedJobs and appliedJobs need userId — fetch with placeholder then filter
-            fetchSavedJobs(undefined as any).catch(() => []),
-            fetchApplications(undefined as any).catch(() => []),
-            fetchProfile(undefined as any).catch(() => null),
-            fetch('/api/jobs/sources/health').then(r => r.json()).catch(() => null),
-          ]);
-
-        const currentUser = userRes.status === 'fulfilled' ? userRes.value : null;
-        const healthData  = healthRes.status  === 'fulfilled' ? healthRes.value  : null;
         let profVal: DbProfile | null = null;
+        const currentUser = await fetchCurrentUser();
 
         if (currentUser) {
           setUser(currentUser);
@@ -480,10 +449,6 @@ export default function JobsPage() {
             profVal = prof.value;
             setProfile(profVal);
           }
-        }
-
-        if (healthData?.success && healthData?.data) {
-          setHealth(healthData.data);
         }
 
         // Parse search params from URL on load
@@ -630,21 +595,21 @@ export default function JobsPage() {
 
             sessionStorage.setItem('jobfusion_filter_query', queryParams.toString());
             window.history.replaceState(null, '', '?' + queryParams.toString());
-            await fetchFilteredJobs(queryParams.toString(), true);
+            await fetchFilteredJobs(queryParams.toString());
 
           } else {
             // Profile exists but has no usable data — load all jobs with filters unselected
             setSkillWarning(false);
-            await fetchFilteredJobs('', true);
+            await fetchFilteredJobs('');
           }
 
         } else if (!hasExplicitFilters && !profVal) {
           // No profile at all
           setSkillWarning(false);
-          await fetchFilteredJobs('', true);
+          await fetchFilteredJobs('');
         } else {
           // Explicit filters present (URL/sessionStorage) — load normally
-          await fetchFilteredJobs(searchString ? searchString.replace(/^\?/, '') : '', true);
+          await fetchFilteredJobs(searchString ? searchString.replace(/^\?/, '') : '');
         }
         initialDataLoaded.current = true;
 
@@ -655,6 +620,7 @@ export default function JobsPage() {
       }
     }
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
 
@@ -719,6 +685,7 @@ export default function JobsPage() {
     return () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queryInput, locationInput]);
 
   // 5. Trigger filter update immediately when checkbox / dropdown filters change
@@ -726,6 +693,7 @@ export default function JobsPage() {
     if (!initialDataLoaded.current) return;
     setCurrentPage(1);
     handleFilterChange(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSources, selectedJobTypes, selectedExpLevels, selectedSkills, datePosted, remoteOnly, salaryRange, sortBy, order]);
 
   const handlePageChange = (newPage: number) => {
@@ -809,12 +777,6 @@ export default function JobsPage() {
     }
   };
 
-  const toggleSource = (src: string) => {
-    setSelectedSources(prev =>
-      prev.includes(src) ? prev.filter(s => s !== src) : [...prev, src]
-    );
-  };
-
   const toggleJobType = (type: string) => {
     setSelectedJobTypes(prev =>
       prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
@@ -868,23 +830,6 @@ export default function JobsPage() {
       else next.delete(jobId);
       return next;
     });
-  };
-
-  // Predefined skill search autocomplete results
-  const filteredSkillDefinitions = skillSearch
-    ? PREDEFINED_SKILLS.filter(def => 
-        def.name.toLowerCase().includes(skillSearch.toLowerCase()) || 
-        def.aliases.some(a => a.toLowerCase().includes(skillSearch.toLowerCase()))
-      ).slice(0, 5)
-    : [];
-
-  const getSourceDisplayName = (src: string) => {
-    if (src === 'linkedin') return 'LinkedIn';
-    if (src === 'indeed') return 'Indeed';
-    if (src === 'wellfound') return 'Wellfound';
-    if (src === 'internshala') return 'Internshala';
-    if (src === 'careers') return 'Company Careers';
-    return src;
   };
 
   // RULE 1: Defensive client-side 24h filter guard for careers source

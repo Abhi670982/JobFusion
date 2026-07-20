@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import { prisma } from "@/lib/prisma";
 

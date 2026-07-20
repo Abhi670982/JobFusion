@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { ApplicationStatus, Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
-function mapApplication(app: any) {
+type ApplicationWithUserAndJob = Prisma.ApplicationGetPayload<{
+  include: { user: true; job: true };
+}>;
+
+function mapApplication(app: ApplicationWithUserAndJob | null) {
   if (!app) return null;
   return {
     _id: app.id,
@@ -90,16 +95,16 @@ export async function POST(req: NextRequest) {
     }
 
     // Translate status for Postgres
-    let pgStatus = "Applied";
-    if (status === "Under Review") pgStatus = "Under_Review";
-    else if (status) pgStatus = status;
+    let pgStatus: ApplicationStatus = ApplicationStatus.Applied;
+    if (status === "Under Review") pgStatus = ApplicationStatus.Under_Review;
+    else if (status) pgStatus = status as ApplicationStatus;
 
     // Create in PostgreSQL
     const application = await prisma.application.create({
       data: {
         userId,
         jobId,
-        status: pgStatus as any,
+        status: pgStatus,
       },
       include: {
         user: true,
@@ -111,9 +116,10 @@ export async function POST(req: NextRequest) {
       { success: true, data: mapApplication(application) },
       { status: 201 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Something went wrong";
     return NextResponse.json(
-      { success: false, error: error.message || "Something went wrong" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
@@ -168,9 +174,10 @@ export async function GET(req: NextRequest) {
       orderBy: { appliedAt: "desc" }
     });
     return NextResponse.json({ success: true, data: applications.map(mapApplication) });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Something went wrong";
     return NextResponse.json(
-      { success: false, error: error.message || "Something went wrong" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
@@ -190,14 +197,17 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    const { _id, userId, jobId, status, ...updateData } = body;
+    const { status, ...updateData } = body;
+    delete updateData._id;
+    delete updateData.userId;
+    delete updateData.jobId;
 
     // Translate status for Postgres
-    let pgStatus = undefined;
-    if (status === "Under Review") pgStatus = "Under_Review";
-    else if (status) pgStatus = status;
+    let pgStatus: ApplicationStatus | undefined = undefined;
+    if (status === "Under Review") pgStatus = ApplicationStatus.Under_Review;
+    else if (status) pgStatus = status as ApplicationStatus;
 
-    const dataToUpdate: any = { ...updateData };
+    const dataToUpdate: Prisma.ApplicationUpdateInput = { ...updateData };
     if (pgStatus) dataToUpdate.status = pgStatus;
 
     // Update in Postgres
@@ -208,9 +218,10 @@ export async function PUT(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true, data: mapApplication(updatedApplication) });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Something went wrong";
     return NextResponse.json(
-      { success: false, error: error.message || "Something went wrong" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
@@ -247,9 +258,10 @@ export async function DELETE(req: NextRequest) {
       data: mappedDeleted,
       message: "Application deleted successfully",
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Something went wrong";
     return NextResponse.json(
-      { success: false, error: error.message || "Something went wrong" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

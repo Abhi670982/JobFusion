@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { Report, ReportStatus } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
-function mapReport(r: any) {
+function mapReport(r: Report | null) {
   if (!r) return null;
   return {
     _id: r.id,
@@ -49,7 +50,7 @@ export async function PATCH(
     // Update in Postgres
     const updatedReport = await prisma.report.update({
       where: { id: reportId },
-      data: { status: status as any }
+      data: { status: status as ReportStatus }
     });
 
     // Log admin action in Postgres
@@ -66,9 +67,10 @@ export async function PATCH(
       message: `Report status updated to ${status}`,
       data: mapReport(updatedReport),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to update report";
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to update report" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
@@ -113,9 +115,10 @@ export async function DELETE(
       success: true,
       message: "Report ticket deleted successfully",
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to delete report";
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to delete report" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

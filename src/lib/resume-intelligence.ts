@@ -131,17 +131,6 @@ function classifyCategory(text: string): CategorySignal {
 
 // ── Summary Generation ───────────────────────────────────────────────────────
 
-function extractName(text: string): string {
-  // Try to get the first non-empty line as candidate name
-  const lines = text.split(/\n/).map(l => l.trim()).filter(Boolean);
-  const nameLine = lines[0] || "";
-  // Keep if it looks like a name (short, mostly alphabetic)
-  if (nameLine.length <= 50 && /^[A-Za-z\s.'-]+$/.test(nameLine)) {
-    return nameLine;
-  }
-  return "";
-}
-
 function extractYearsOfExp(text: string): string {
   // Pattern: "5 years", "3+ years", "2 yrs"
   const match = text.match(/(\d+)\+?\s*(?:years?|yrs?)\s*(?:of)?\s*(?:experience|exp)/i);

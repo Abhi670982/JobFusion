@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 export default function ForgotPasswordPage() {
-  const { signIn, errors, fetchStatus } = useSignIn();
+  const { signIn, fetchStatus } = useSignIn();
   const router = useRouter();
 
   const [email, setEmail] = useState('');
@@ -107,7 +107,7 @@ export default function ForgotPasswordPage() {
       if (signIn.status === 'complete') {
         // Automatically sign the user in and activate the session
         await signIn.finalize({
-          navigate: ({ session, decorateUrl }) => {
+          navigate: ({ decorateUrl }) => {
             const url = decorateUrl('/dashboard');
             if (url.startsWith('http')) {
               window.location.href = url;

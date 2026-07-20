@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { Prisma, Company } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -71,7 +72,7 @@ export async function GET(req: NextRequest) {
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "10", 10);
 
-    const filter: any = {};
+    const filter: Prisma.CompanyWhereInput = {};
 
     if (query) {
       filter.name = { contains: query, mode: "insensitive" };
@@ -98,7 +99,7 @@ export async function GET(req: NextRequest) {
     ]);
 
     // Map database output to MongoDB-like payload
-    const companies = pgCompanies.map(c => ({
+    const companies = pgCompanies.map((c: Company) => ({
       _id: c.id,
       name: c.name,
       careerUrl: c.careerUrl,
@@ -120,9 +121,10 @@ export async function GET(req: NextRequest) {
         pages: Math.ceil(total / limit),
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to load companies";
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to load companies" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
@@ -172,8 +174,6 @@ export async function PATCH(req: NextRequest) {
       console.error("[Postgres Activity Log Error]", pgErr);
     }
 
-    // Log admin action in MongoDB
-
     const mappedCompany = {
       _id: updatedCompany.id,
       name: updatedCompany.name,
@@ -192,9 +192,10 @@ export async function PATCH(req: NextRequest) {
       message: "Company settings updated successfully",
       data: mappedCompany,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to update company";
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to update company" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

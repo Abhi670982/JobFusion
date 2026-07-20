@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { logAdminAction } from "@/lib/audit-logger";
+import { User } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
-function mapUser(u: any) {
+function mapUser(u: User | null) {
   if (!u) return null;
   return {
     _id: u.id,
@@ -87,9 +88,10 @@ export async function PATCH(
       message: `Admin account status updated to ${status}.`,
       data: mapUser(updatedAdmin),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to update admin status";
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to update admin status" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
@@ -141,7 +143,7 @@ export async function DELETE(
     });
 
     // Remove email from Settings allowedAdminEmails in Postgres
-    let globalSettings = await prisma.settings.findUnique({
+    const globalSettings = await prisma.settings.findUnique({
       where: { settingsId: "global" }
     });
 
@@ -171,7 +173,7 @@ export async function DELETE(
     });
 
     // Create Notification in Postgres
-    const notif = await prisma.adminNotification.create({
+    await prisma.adminNotification.create({
       data: {
         type: "system_warning",
         title: "Admin Removed",
@@ -185,9 +187,10 @@ export async function DELETE(
       success: true,
       message: `${targetAdmin.fullName} demoted to jobseeker successfully.`,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to remove admin";
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to remove admin" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

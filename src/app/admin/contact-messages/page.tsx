@@ -7,14 +7,11 @@ import {
   Eye,
   Trash2,
   X,
-  Calendar,
   AlertTriangle,
   Loader2,
   Mail,
   Check,
   Reply,
-  ArrowUpDown,
-  Filter,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -73,6 +70,7 @@ export default function AdminContactMessages() {
 
   useEffect(() => {
     fetchMessages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, statusFilter, sortOrder]);
 
   // Debounced search
@@ -82,6 +80,7 @@ export default function AdminContactMessages() {
       fetchMessages();
     }, 450);
     return () => clearTimeout(delay);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
   // Mark message status

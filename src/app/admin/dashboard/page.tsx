@@ -20,11 +20,8 @@ import {
   Server,
   ArrowRight,
   Database,
-  Key,
   Image as ImageIcon,
-  CheckCircle,
   Clock,
-  XCircle,
 } from "lucide-react";
 
 interface KPI {

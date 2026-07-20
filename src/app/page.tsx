@@ -1,18 +1,17 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { motion, useInView, useScroll, useTransform } from 'framer-motion';
+import { useState, useEffect } from 'react';
+import { motion, useScroll, useTransform } from 'framer-motion';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
 import {
   Search, MapPin, ArrowRight, CheckCircle2,
-  Zap, BarChart3, FileText, Brain, Target, History, Star
+  Zap, BarChart3, FileText, Brain, Target, History
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { AutocompleteInput } from '@/components/ui/autocomplete';
 import Navbar from '@/components/navbar';
 import { features } from '@/lib/data';
@@ -28,36 +27,10 @@ const iconMap: Record<string, React.ComponentType<any>> = {
   search: Search, history: History,
 };
 
-function AnimatedCounter({ end, suffix = '' }: { end: number; suffix?: string }) {
-  const [count, setCount] = useState(0);
-  const ref = useRef<HTMLSpanElement>(null);
-  const inView = useInView(ref, { once: true });
-  useEffect(() => {
-    if (!inView) return;
-    let start = 0;
-    const step = (end / 1200) * 16;
-    const timer = setInterval(() => {
-      start += step;
-      if (start >= end) { setCount(end); clearInterval(timer); }
-      else setCount(Math.floor(start));
-    }, 16);
-    return () => clearInterval(timer);
-  }, [inView, end]);
-  return <span ref={ref}>{count.toLocaleString()}{suffix}</span>;
-}
-
 const howItWorks = [
   { step: '01', title: 'Build Your Profile', description: 'Upload your resume — our AI extracts skills, detects your domain, and builds your career DNA automatically.', icon: FileText, color: 'from-blue-500 to-indigo-600' },
   { step: '02', title: 'AI Finds Matches', description: 'Our engine scans LinkedIn, Indeed, Wellfound, Internshala and company career pages, scoring each role against your profile.', icon: Brain, color: 'from-purple-500 to-violet-600' },
   { step: '03', title: 'Apply Smarter', description: 'One-click apply, save roles for later, track your pipeline, and get real-time insights — all in a unified command center.', icon: Zap, color: 'from-emerald-500 to-teal-600' },
-];
-
-const trustedBy = ['LinkedIn', 'Indeed', 'Wellfound', 'Internshala', 'Company Careers'];
-
-const testimonials = [
-  { quote: "JobFusion found me a senior role in 2 weeks. The AI matching is insane.", author: "Priya S.", role: "Senior Engineer", rating: 5 },
-  { quote: "This is what job searching should feel like. Clean, fast, intelligent.", author: "Arjun M.", role: "Product Designer", rating: 5 },
-  { quote: "Finally a platform that understands my resume without me explaining it.", author: "Sneha K.", role: "Data Scientist", rating: 5 },
 ];
 
 export default function LandingPage() {
@@ -65,7 +38,7 @@ export default function LandingPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [location, setLocation] = useState('');
-  const [stats, setStats] = useState({ totalJobs: 0, activeSources: 4, addedLast24h: 0, isLoaded: false });
+  const [, setStats] = useState({ totalJobs: 0, activeSources: 4, addedLast24h: 0, isLoaded: false });
   const { scrollY } = useScroll();
   const heroOpacity = useTransform(scrollY, [0, 400], [1, 0]);
   const heroY = useTransform(scrollY, [0, 400], [0, 80]);

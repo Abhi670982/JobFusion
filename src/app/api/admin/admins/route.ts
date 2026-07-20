@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { logAdminAction } from "@/lib/audit-logger";
+import { Prisma, User } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
-function mapUser(u: any) {
+function mapUser(u: User | null) {
   if (!u) return null;
   return {
     _id: u.id,
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const query = searchParams.get("q") || "";
 
-    const andConditions: any[] = [{ role: "admin" }];
+    const andConditions: Prisma.UserWhereInput[] = [{ role: "admin" }];
     if (query) {
       andConditions.push({
         OR: [
@@ -46,9 +47,10 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true, data: pgAdmins.map(mapUser) });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to load admins";
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to load admins" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
@@ -130,7 +132,7 @@ export async function POST(req: NextRequest) {
     });
 
     // Generate an Admin Notification in Postgres
-    const notif = await prisma.adminNotification.create({
+    await prisma.adminNotification.create({
       data: {
         type: "system_warning",
         title: "New Admin Added",
@@ -145,9 +147,10 @@ export async function POST(req: NextRequest) {
       message: `${targetUser.fullName} promoted to admin successfully.`,
       data: mapUser(updatedUser),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to promote admin";
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to promote admin" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

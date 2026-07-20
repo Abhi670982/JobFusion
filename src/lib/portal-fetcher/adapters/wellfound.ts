@@ -47,7 +47,7 @@ export class WellfoundPortalAdapter extends BasePortalAdapter {
             const rawUrl = ruParts[1].split("/RK=")[0];
             try {
               destinationUrl = decodeURIComponent(rawUrl);
-            } catch (e) {}
+            } catch {}
           }
         } else {
           destinationUrl = href;
@@ -105,8 +105,9 @@ export class WellfoundPortalAdapter extends BasePortalAdapter {
 
       console.log(`[Wellfound Portal Adapter] Scraped ${jobs.length} jobs successfully from Yahoo search.`);
       return jobs;
-    } catch (err: any) {
-      console.error("[Wellfound Portal Adapter] Yahoo crawl failed:", err.message);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Yahoo crawl failed";
+      console.error("[Wellfound Portal Adapter] Yahoo crawl failed:", errorMessage);
       return [];
     }
   }
@@ -166,8 +167,9 @@ export class WellfoundPortalAdapter extends BasePortalAdapter {
             rawListings = body.data?.jobListings || [];
           }
         }
-      } catch (error: any) {
-        console.warn(`[Wellfound Portal Adapter] GraphQL fetch failed (${error.message}). Trying fallback...`);
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : "GraphQL fetch failed";
+        console.warn(`[Wellfound Portal Adapter] GraphQL fetch failed (${errorMessage}). Trying fallback...`);
       }
     }
 
@@ -185,8 +187,9 @@ export class WellfoundPortalAdapter extends BasePortalAdapter {
         ]);
         const combined = [...himalayas, ...arbeitnow];
         return combined.map(j => ({ ...j, _isFallback: true }));
-      } catch (err: any) {
-        console.error("[Wellfound Portal Adapter] Fallback fetch failed:", err.message);
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : "Fallback fetch failed";
+        console.error("[Wellfound Portal Adapter] Fallback fetch failed:", errorMessage);
         return [];
       }
     }
@@ -293,8 +296,6 @@ export class WellfoundPortalAdapter extends BasePortalAdapter {
 
     let salaryMin: number | null = null;
     let salaryMax: number | null = null;
-    let salaryCurrency: "INR" | "USD" | "GBP" | null = "INR";
-    let salaryPeriod: "monthly" | "annual" | "hourly" | null = "annual";
 
     const comp = raw.compensation || "";
     if (comp && comp !== "Not disclosed") {
@@ -317,11 +318,9 @@ export class WellfoundPortalAdapter extends BasePortalAdapter {
         salaryMax = max;
 
         if (cleanComp.includes("$")) {
-          salaryCurrency = "USD";
           salaryMin = salaryMin * 83;
           salaryMax = salaryMax * 83;
         } else if (cleanComp.includes("£")) {
-          salaryCurrency = "GBP";
           salaryMin = salaryMin * 105;
           salaryMax = salaryMax * 105;
         }

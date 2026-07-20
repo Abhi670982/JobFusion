@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
-import Image from 'next/image';
 
 const companies = [
   { name: 'Accenture', domain: 'accenture.com', color: '#A100FF' },

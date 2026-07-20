@@ -30,19 +30,8 @@ const locationTypeConfig = {
   onsite: { icon: Users, label: 'On-site', className: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20' },
 };
 
-const getSourceStyle = (src: string) => {
-  switch (src) {
-    case 'linkedin':   return { label: 'LinkedIn',        cls: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' };
-    case 'indeed':     return { label: 'Indeed',          cls: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20' };
-    case 'wellfound':  return { label: 'Wellfound',       cls: 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20' };
-    case 'internshala':return { label: 'Internshala',     cls: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20' };
-    case 'careers':    return { label: 'Company Careers', cls: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' };
-    default: return null;
-  }
-};
-
 export default function JobCard({
-  job, index = 0, variant = 'default', userId,
+  job, index = 0, userId,
   initialIsSaved = false, initialIsApplied = false, onSavedToggle
 }: JobCardProps) {
   const [saved, setSaved] = useState(initialIsSaved);
@@ -94,7 +83,6 @@ export default function JobCard({
 
   const locType = locationTypeConfig[job.locationType] || locationTypeConfig.remote;
   const LocIcon = locType.icon;
-  const source = getSourceStyle((job.source || '').toLowerCase());
 
   const showTime = (() => {
     const src = (job.source || '').toLowerCase();

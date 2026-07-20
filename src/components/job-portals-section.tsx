@@ -3,14 +3,13 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  RefreshCw, AlertTriangle, Globe, ChevronLeft, ChevronRight,
-  Inbox, SlidersHorizontal, X, MapPin, Check,
-  Wifi, Briefcase, Star, LayoutGrid, List, Activity, Sparkles
+  RefreshCw, AlertTriangle, ChevronLeft, ChevronRight,
+  SlidersHorizontal, X, MapPin,
+  LayoutGrid, List, Activity, Sparkles
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
@@ -190,8 +189,6 @@ export default function JobPortalsSection({
 
   const lastFetchedKeys = useRef<Record<string, string>>({});
 
-  const activeTabConfig = PORTAL_TABS.find((t) => t.id === activePortal) ?? PORTAL_TABS[0];
-
   // Helper toggle functions
   const toggleJobType = (val: string) => {
     setSelectedJobTypes(prev =>
@@ -303,7 +300,7 @@ export default function JobPortalsSection({
       } else {
         setPortalErrors(prev => ({ ...prev, [portal]: data.error || 'Failed to fetch jobs' }));
       }
-    } catch (err: any) {
+    } catch {
       setPortalErrors(prev => ({ ...prev, [portal]: 'Network error' }));
     } finally {
       setPortalLoading(prev => ({ ...prev, [portal]: false }));
@@ -364,7 +361,7 @@ export default function JobPortalsSection({
   const portalErrorMessage = useMemo(() => {
     if (activePortal === 'all') {
       const activeErrors = Object.entries(portalErrors)
-        .filter(([_, err]) => err !== null)
+        .filter(([, err]) => err !== null)
         .map(([p, err]) => `${p}: ${err}`);
       return activeErrors.length > 0 ? activeErrors.join("; ") : null;
     }

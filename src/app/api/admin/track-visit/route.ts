@@ -29,9 +29,8 @@ export async function POST(req: NextRequest) {
       null;
 
     // Write to PostgreSQL
-    let newView: any;
     try {
-      newView = await prisma.pageView.create({
+      await prisma.pageView.create({
         data: {
           path,
           userId: userId || null,

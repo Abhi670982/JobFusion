@@ -5,10 +5,7 @@ import {
   Search,
   Building2,
   Globe,
-  Settings,
-  AlertTriangle,
   Loader2,
-  CheckCircle,
   ToggleLeft,
   ToggleRight,
   ExternalLink,
@@ -57,6 +54,7 @@ export default function AdminCompanies() {
 
   useEffect(() => {
     fetchCompanies();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, enabledFilter]);
 
   // Debounced search
@@ -66,6 +64,7 @@ export default function AdminCompanies() {
       fetchCompanies();
     }, 400);
     return () => clearTimeout(delay);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
   // Toggle company enabled/disabled state

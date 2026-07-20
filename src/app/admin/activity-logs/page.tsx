@@ -3,16 +3,8 @@
 import { useState, useEffect } from "react";
 import {
   Search,
-  Activity,
   User,
-  Shield,
-  Clock,
-  AlertTriangle,
   Loader2,
-  RefreshCw,
-  Send,
-  Star,
-  FileText,
 } from "lucide-react";
 
 interface ActivityLogItem {
@@ -60,6 +52,7 @@ export default function AdminActivityLogs() {
 
   useEffect(() => {
     fetchActivities();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, typeFilter]);
 
   // Debounced search
@@ -69,6 +62,7 @@ export default function AdminActivityLogs() {
       fetchActivities();
     }, 400);
     return () => clearTimeout(delay);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
   const getActivityTypeStyles = (type: string) => {

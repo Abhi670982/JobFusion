@@ -207,8 +207,6 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
 
     let salaryMin: number | null = null;
     let salaryMax: number | null = null;
-    let salaryCurrency: "INR" | "USD" | "GBP" | null = "INR";
-    let salaryPeriod: "monthly" | "annual" | "hourly" | null = "annual";
 
     const rawSalary = ext.salary || "";
     if (rawSalary) {
@@ -225,19 +223,11 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
         }
 
         if (cleanSalary.includes("$")) {
-          salaryCurrency = "USD";
           salaryMin = salaryMin * 83;
           if (salaryMax) salaryMax = salaryMax * 83;
         } else if (cleanSalary.includes("£")) {
-          salaryCurrency = "GBP";
           salaryMin = salaryMin * 105;
           if (salaryMax) salaryMax = salaryMax * 105;
-        }
-
-        if (cleanSalary.includes("month")) {
-          salaryPeriod = "monthly";
-        } else if (cleanSalary.includes("hour")) {
-          salaryPeriod = "hourly";
         }
       }
     }

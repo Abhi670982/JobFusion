@@ -21,7 +21,7 @@ const GoogleIcon = () => (
 );
 
 export default function CustomSignInPage() {
-  const { signIn, errors, fetchStatus } = useSignIn();
+  const { signIn, fetchStatus } = useSignIn();
   const { isLoaded: isUserLoaded, isSignedIn } = useUser();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -35,7 +35,7 @@ export default function CustomSignInPage() {
       try {
         const { role, location } = JSON.parse(guestSearchStr);
         setDynamicRedirect(`/jobs?q=${encodeURIComponent(role || '')}&location=${encodeURIComponent(location || '')}`);
-      } catch(e) {}
+      } catch {}
     }
   }, []);
 
@@ -211,7 +211,7 @@ export default function CustomSignInPage() {
       } else if (verificationMethod === 'email') {
         await signIn.mfa.sendEmailCode();
       }
-    } catch (err: any) {
+    } catch {
       setError('Failed to resend code. Please try again.');
     }
   };

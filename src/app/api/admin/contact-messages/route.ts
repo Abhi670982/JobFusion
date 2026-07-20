@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { Prisma, ContactMessage, ContactMessageStatus } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
-function mapMessage(m: any) {
+function mapMessage(m: ContactMessage | null) {
   if (!m) return null;
   return {
     _id: m.id,
@@ -34,10 +35,10 @@ export async function GET(req: NextRequest) {
     const sort = searchParams.get("sort") || "desc"; // desc = newest first
 
     const skip = (page - 1) * limit;
-    const andConditions: any[] = [];
+    const andConditions: Prisma.ContactMessageWhereInput[] = [];
 
     if (status) {
-      andConditions.push({ status: status as any });
+      andConditions.push({ status: status as ContactMessageStatus });
     }
 
     if (search) {
@@ -51,7 +52,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const queryConditions = andConditions.length > 0 ? { AND: andConditions } : {};
+    const queryConditions: Prisma.ContactMessageWhereInput = andConditions.length > 0 ? { AND: andConditions } : {};
 
     const [pgMessages, total] = await Promise.all([
       prisma.contactMessage.findMany({
@@ -76,10 +77,11 @@ export async function GET(req: NextRequest) {
         pages,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to retrieve contact messages";
     console.error("[Admin Contact Messages API GET] Error:", error);
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to retrieve contact messages" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
@@ -116,7 +118,7 @@ export async function PATCH(req: NextRequest) {
     // Update in Postgres
     const updatedMsg = await prisma.contactMessage.update({
       where: { id },
-      data: { status: status as any }
+      data: { status: status as ContactMessageStatus }
     });
 
     // Log admin action using structured audit logger
@@ -138,10 +140,11 @@ export async function PATCH(req: NextRequest) {
       success: true,
       data: mapMessage(updatedMsg),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to update contact message status";
     console.error("[Admin Contact Messages API PATCH] Error:", error);
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to update contact message status" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
@@ -194,10 +197,11 @@ export async function DELETE(req: NextRequest) {
       success: true,
       message: "Contact message deleted successfully",
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to delete contact message";
     console.error("[Admin Contact Messages API DELETE] Error:", error);
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to delete contact message" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

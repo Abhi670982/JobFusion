@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
-function mapSavedJob(sj: any) {
+type SavedJobWithUserAndJob = Prisma.SavedJobGetPayload<{
+  include: { user: true; job: true };
+}>;
+
+function mapSavedJob(sj: SavedJobWithUserAndJob | null) {
   if (!sj) return null;
   return {
     _id: sj.id,
@@ -104,9 +109,10 @@ export async function POST(req: NextRequest) {
       { success: true, data: mapSavedJob(savedJob) },
       { status: 201 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Something went wrong";
     return NextResponse.json(
-      { success: false, error: error.message || "Something went wrong" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
@@ -162,9 +168,10 @@ export async function GET(req: NextRequest) {
       orderBy: { savedAt: "desc" }
     });
     return NextResponse.json({ success: true, data: savedJobs.map(mapSavedJob) });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Something went wrong";
     return NextResponse.json(
-      { success: false, error: error.message || "Something went wrong" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
@@ -184,7 +191,10 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    const { _id, userId, jobId, ...updateData } = body;
+    const updateData = { ...body };
+    delete updateData._id;
+    delete updateData.userId;
+    delete updateData.jobId;
 
     // Update in Postgres
     const updatedSavedJob = await prisma.savedJob.update({
@@ -194,9 +204,10 @@ export async function PUT(req: NextRequest) {
     });
 
     return NextResponse.json({ success: true, data: mapSavedJob(updatedSavedJob) });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Something went wrong";
     return NextResponse.json(
-      { success: false, error: error.message || "Something went wrong" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
@@ -245,9 +256,10 @@ export async function DELETE(req: NextRequest) {
       { success: false, error: "Either id, or both userId and jobId query parameters are required to unsave a job" },
       { status: 400 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Something went wrong";
     return NextResponse.json(
-      { success: false, error: error.message || "Something went wrong" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   MapPin, Clock, Users, Bookmark, BookmarkCheck, Share2,
   CheckCircle2, XCircle, ArrowLeft, ExternalLink, Briefcase,
-  DollarSign, Wifi, Star, Zap, Building2, X
+  DollarSign, Wifi, Building2, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -99,18 +99,17 @@ export default function JobDetailPage() {
   const [user, setUser] = useState<DbUser | null>(null);
 
   const [saved, setSaved] = useState(false);
-  const [applied, setApplied] = useState(false);
+  const [, setApplied] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
   // Quick Apply missing details states
   const [profile, setProfile] = useState<DbProfile | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [missingFields, setMissingFields] = useState<string[]>([]);
+  const [missingFields] = useState<string[]>([]);
   const [formData, setFormData] = useState({ phone: '', location: '', portfolioUrl: '' });
   const [uploadingResume, setUploadingResume] = useState(false);
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
-  const [extractingDetails, setExtractingDetails] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 

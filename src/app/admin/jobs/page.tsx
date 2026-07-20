@@ -7,7 +7,6 @@ import {
   Trash2,
   AlertTriangle,
   Loader2,
-  Calendar,
   Building,
   Globe,
   MapPin,
@@ -71,6 +70,7 @@ export default function AdminJobs() {
 
   useEffect(() => {
     fetchJobs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, sourceFilter, statusFilter]);
 
   // Debounced search
@@ -80,6 +80,7 @@ export default function AdminJobs() {
       fetchJobs();
     }, 400);
     return () => clearTimeout(delay);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
   // Trigger scraper sync

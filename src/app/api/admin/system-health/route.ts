@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const admin = await verifyAdmin();
     if (!admin) {
@@ -15,14 +15,15 @@ export async function GET(req: NextRequest) {
 
     // 1. PostgreSQL Check
     try {
-      const result: any = await prisma.$queryRaw`SELECT 1 as connection_test`;
+      const result = await prisma.$queryRaw<Array<{ connection_test: number }>>`SELECT 1 as connection_test`;
       if (result && result.length > 0) {
         health.postgres = { status: "healthy", message: "Connected to PostgreSQL database" };
       } else {
         health.postgres = { status: "offline", message: "Query executed but returned empty response" };
       }
-    } catch (err: any) {
-      health.postgres = { status: "offline", message: err.message || "Connection failed" };
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Connection failed";
+      health.postgres = { status: "offline", message: errorMessage };
     }
 
     // 2. Clerk Auth Check
@@ -45,8 +46,9 @@ export async function GET(req: NextRequest) {
         } else {
           health.clerk = { status: "warning", message: `Clerk responded with status: ${clerkPing.status}` };
         }
-      } catch (err: any) {
-        health.clerk = { status: "warning", message: `Clerk check timed out: ${err.message}` };
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : "Timeout or error";
+        health.clerk = { status: "warning", message: `Clerk check timed out: ${errorMessage}` };
       }
     }
 
@@ -88,8 +90,9 @@ export async function GET(req: NextRequest) {
           message: `Last sync: ${new Date(lastSyncTime).toLocaleDateString()} ${new Date(lastSyncTime).toLocaleTimeString()} — ${lastLog.status}`,
         };
       }
-    } catch (err: any) {
-      health.jobSync = { status: "offline", message: err.message || "Failed to query sync logs" };
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to query sync logs";
+      health.jobSync = { status: "offline", message: errorMessage };
     }
 
     // 6. Average API Response Time (estimated from DB latency)
@@ -103,9 +106,10 @@ export async function GET(req: NextRequest) {
       success: true,
       data: health,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to query system health";
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to query system health" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

@@ -46,7 +46,7 @@ export class WellfoundAdapter implements SourceAdapter {
             const rawUrl = ruParts[1].split("/RK=")[0];
             try {
               destinationUrl = decodeURIComponent(rawUrl);
-            } catch (e) {}
+            } catch {}
           }
         } else {
           destinationUrl = href;
@@ -104,8 +104,9 @@ export class WellfoundAdapter implements SourceAdapter {
 
       console.log(`[Wellfound Adapter] Scraped ${jobs.length} jobs successfully from Yahoo search.`);
       return jobs;
-    } catch (err: any) {
-      console.error("[Wellfound Adapter] Yahoo crawl failed:", err.message);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Yahoo crawl failed";
+      console.error("[Wellfound Adapter] Yahoo crawl failed:", errorMessage);
       return [];
     }
   }
@@ -178,8 +179,9 @@ export class WellfoundAdapter implements SourceAdapter {
         return this.crawlYahoo(keyword, location);
       }
       return rawJobs;
-    } catch (error: any) {
-      console.warn(`[Wellfound Adapter] GraphQL fetch failed (${error.message}). Trying Yahoo crawl fallback...`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "GraphQL fetch failed";
+      console.warn(`[Wellfound Adapter] GraphQL fetch failed (${errorMessage}). Trying Yahoo crawl fallback...`);
       return this.crawlYahoo(keyword, location);
     }
   }
@@ -260,7 +262,7 @@ export class WellfoundAdapter implements SourceAdapter {
     let salaryMin: number | null = null;
     let salaryMax: number | null = null;
     let salaryCurrency: "INR" | "USD" | "GBP" | null = "INR";
-    let salaryPeriod: "monthly" | "annual" | "hourly" | null = "annual";
+    const salaryPeriod: "monthly" | "annual" | "hourly" | null = "annual";
 
     const comp = raw.compensation || "";
     if (comp && comp !== "Not disclosed") {

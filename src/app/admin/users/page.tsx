@@ -3,16 +3,11 @@
 import { useState, useEffect } from "react";
 import {
   Search,
-  Filter,
   Trash2,
   Lock,
   Unlock,
-  Eye,
   X,
   FileText,
-  Briefcase,
-  BookOpen,
-  Calendar,
   AlertTriangle,
   Loader2,
   UserCheck,
@@ -105,6 +100,7 @@ export default function AdminUsers() {
 
   useEffect(() => {
     fetchUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, statusFilter, roleFilter]);
 
   // Debounced search
@@ -114,6 +110,7 @@ export default function AdminUsers() {
       fetchUsers();
     }, 400);
     return () => clearTimeout(delay);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
   const loadUserDetails = async (user: UserItem) => {

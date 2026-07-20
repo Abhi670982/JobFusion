@@ -4,20 +4,18 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import {
-  TrendingUp, Briefcase, Bookmark, Eye, MessageSquare,
-  ArrowRight, CheckCircle2, XCircle,
+  TrendingUp, Briefcase, Bookmark, Eye,
+  CheckCircle2, XCircle,
   Calendar, Star, ChevronRight, Zap, Code2, Smile, FileText, User
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer
 } from 'recharts';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
-import { calculateCompletion } from '@/lib/profile-completion';
 import {
   fetchDashboardData, fetchDashboardActivity,
   fetchDashboardMatches, DbUser, DbProfile
@@ -150,7 +148,6 @@ export default function DashboardPage() {
     loadData();
   }, [router]);
 
-  const completion = calculateCompletion(profile, user);
   const firstName = user?.fullName.split(' ')[0] || 'User';
 
   const incompleteTasks = [];

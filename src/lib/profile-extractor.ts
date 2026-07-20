@@ -40,13 +40,6 @@ export interface ExtractedProfileDetails {
 }
 
 /**
- * Escapes regex special characters
- */
-function escapeRegExp(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/**
  * Robust regex-based fallback extractor for profile details.
  */
 export function extractProfileDetailsLocally(text: string): ExtractedProfileDetails {

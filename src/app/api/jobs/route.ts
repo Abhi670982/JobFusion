@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { validateJobsQuery } from "@/lib/api-validators";
+import { Prisma, Job, JobType, ExperienceLevel } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
-function mapJob(job: any) {
+function mapJob(job: Job | null) {
+  if (!job) return null;
   return {
     _id: job.id,
     title: job.title,
@@ -106,9 +108,10 @@ export async function POST(req: NextRequest) {
       { success: true, data: mappedJob },
       { status: 201 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Something went wrong";
     return NextResponse.json(
-      { success: false, error: error.message || "Something went wrong" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
@@ -149,10 +152,11 @@ export async function GET(req: NextRequest) {
           userSkills = profile.skills.map((s) => s.name.toLowerCase());
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Unknown error";
       console.warn(
         "[API Jobs] Failed to resolve user skills for search filtering:",
-        err.message
+        errorMessage
       );
     }
 
@@ -174,7 +178,7 @@ export async function GET(req: NextRequest) {
     const sortBy = validated.sortBy;
     const order = validated.order;
 
-    const andConditions: any[] = [];
+    const andConditions: Prisma.JobWhereInput[] = [];
 
     // 1. Full-text search
     if (q) {
@@ -215,7 +219,7 @@ export async function GET(req: NextRequest) {
         return t;
       });
       andConditions.push({
-        OR: [{ type: { in: mappedTypes as any } }, { jobType: { in: types } }],
+        OR: [{ type: { in: mappedTypes as JobType[] } }, { jobType: { in: types } }],
       });
     }
 
@@ -225,7 +229,7 @@ export async function GET(req: NextRequest) {
         .split(",")
         .map((l) => l.trim().toLowerCase());
       andConditions.push({
-        experienceLevel: { in: levels as any },
+        experienceLevel: { in: levels as ExperienceLevel[] },
       });
     }
 
@@ -248,7 +252,6 @@ export async function GET(req: NextRequest) {
             { salaryMax: { gte: parseInt(salaryMin, 10) } },
             { salaryMin: { gte: parseInt(salaryMin, 10) } },
             { salaryMin: 0 },
-            { salaryMin: null },
           ],
         });
       }
@@ -258,7 +261,6 @@ export async function GET(req: NextRequest) {
             { salaryMin: { lte: parseInt(salaryMax, 10) } },
             { salaryMax: { lte: parseInt(salaryMax, 10) } },
             { salaryMin: 0 },
-            { salaryMin: null },
           ],
         });
       }
@@ -350,15 +352,15 @@ export async function GET(req: NextRequest) {
       isActive: true,
     });
 
-    const queryConditions =
+    const queryConditions: Prisma.JobWhereInput =
       andConditions.length > 0 ? { AND: andConditions } : {};
 
     // Construct sorting
     const sortField = sortBy === "salaryMin" ? "salaryMin" : "postedAtDate";
     const sortDirection = order === "asc" ? "asc" : "desc";
-    const orderBy = [
+    const orderBy: Prisma.JobOrderByWithRelationInput[] = [
       { [sortField]: sortDirection },
-      { createdAt: "desc" as const },
+      { createdAt: "desc" },
     ];
 
     // Execute query with pagination
@@ -410,9 +412,10 @@ export async function GET(req: NextRequest) {
         skillsUsed: userSkills,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Something went wrong";
     return NextResponse.json(
-      { success: false, error: error.message || "Something went wrong" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
@@ -432,10 +435,11 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    const { _id, ...updateData } = body;
+    const updateData = { ...body };
+    delete updateData._id;
 
     // Map enums if present
-    const dataToUpdate: any = { ...updateData };
+    const dataToUpdate: Prisma.JobUpdateInput = { ...updateData };
     if (updateData.type === "full-time") dataToUpdate.type = "full_time";
     else if (updateData.type === "part-time") dataToUpdate.type = "part_time";
 
@@ -462,9 +466,10 @@ export async function PUT(req: NextRequest) {
     };
 
     return NextResponse.json({ success: true, data: mappedJob });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Something went wrong";
     return NextResponse.json(
-      { success: false, error: error.message || "Something went wrong" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
@@ -508,9 +513,10 @@ export async function DELETE(req: NextRequest) {
       data: mappedJob,
       message: "Job deleted successfully",
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Something went wrong";
     return NextResponse.json(
-      { success: false, error: error.message || "Something went wrong" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

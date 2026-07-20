@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { Prisma, User, UserStatus } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ export async function GET(req: NextRequest) {
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "10", 10);
 
-    const filter: any = {};
+    const filter: Prisma.UserWhereInput = {};
 
     // Apply Search
     if (query) {
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
 
     // Apply Filters
     if (status) {
-      filter.status = status === "suspended" ? "suspended" : "active";
+      filter.status = status === "suspended" ? UserStatus.suspended : UserStatus.active;
     }
     if (role) {
       filter.role = role;
@@ -51,7 +52,7 @@ export async function GET(req: NextRequest) {
     ]);
 
     // Map to MongoDB-like payload
-    const users = pgUsers.map(u => ({
+    const users = pgUsers.map((u: User) => ({
       _id: u.id,
       clerkId: u.clerkId,
       fullName: u.fullName,
@@ -72,9 +73,10 @@ export async function GET(req: NextRequest) {
         pages: Math.ceil(total / limit),
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to load users";
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to load users" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

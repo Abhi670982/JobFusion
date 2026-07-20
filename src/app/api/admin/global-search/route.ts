@@ -119,9 +119,10 @@ export async function GET(req: NextRequest) {
         companies,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Global search failed";
     return NextResponse.json(
-      { success: false, error: error.message || "Global search failed" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

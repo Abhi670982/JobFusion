@@ -2,15 +2,14 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
-  User, MapPin, Briefcase, GraduationCap, Award, Code2,
-  Plus, Edit3, Star, CheckCircle2,
+  User, MapPin, Briefcase, Code2,
+  Plus, Edit3, CheckCircle2,
   Mail, Camera,
-  Cloud, Smartphone, Palette, Save, Trash2, Upload, FileText, Loader2, AlertCircle, ArrowLeft, X
+  Save, Trash2, Upload, FileText, Loader2, AlertCircle, ArrowLeft
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
@@ -26,14 +25,7 @@ import {
   DbUser,
   DbProfile
 } from '@/lib/api-helper';
-import { cn } from '@/lib/utils';
 import { calculateCompletion } from '@/lib/profile-completion';
-
-const certIconMap: Record<string, React.ComponentType<any>> = {
-  cloud: Cloud,
-  smartphone: Smartphone,
-  palette: Palette,
-};
 
 function SectionCard({
   title,
@@ -83,27 +75,16 @@ export default function ProfilePage() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   // Toast notifications state
-  const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; title: string; message: string } | null>(null);
-
-  // Confirmation modal state
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [confirmAction, setConfirmAction] = useState<{ title: string; description: string; onConfirm: () => void } | null>(null);
+  const [, setToast] = useState<{ type: 'success' | 'error' | 'info'; title: string; message: string } | null>(null);
 
   const showToast = (type: 'success' | 'error' | 'info', title: string, message: string) => {
     setToast({ type, title, message });
     setTimeout(() => setToast(null), 4000);
   };
 
-  const triggerConfirm = (title: string, description: string, onConfirm: () => void) => {
-    setConfirmAction({ title, description, onConfirm });
-    setConfirmOpen(true);
-  };
-
   // Skill Modals State
   const [skillModalOpen, setSkillModalOpen] = useState(false);
   const [newSkillName, setNewSkillName] = useState('');
-  const [newSkillLevel, setNewSkillLevel] = useState(80);
-  const [editingSkill, setEditingSkill] = useState<{ index: number; name: string; level: number } | null>(null);
 
   useEffect(() => {
     async function loadProfile() {
@@ -227,7 +208,6 @@ export default function ProfilePage() {
       if (updated) {
         setProfile(updated);
         setNewSkillName('');
-        setNewSkillLevel(80);
         setSkillModalOpen(false);
       }
     } catch (err) {
@@ -580,7 +560,7 @@ export default function ProfilePage() {
                   {(!profile.skills || profile.skills.length === 0) ? (
                     <p className="text-xs text-muted-foreground italic">No skills added yet. Click Add Skill to add manually or upload a resume.</p>
                   ) : (
-                    profile.skills.map((skill, index) => (
+                    profile.skills.map((skill) => (
                       <div key={skill.name} className="flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-xl bg-muted/50 border border-border/80 text-xs hover:border-primary/30 transition-all group">
                         <span className="font-semibold">{skill.name}</span>
                         <button onClick={() => handleRemoveSkill(skill.name)} className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-destructive transition-colors ml-1 touch-auto">
@@ -664,77 +644,6 @@ export default function ProfilePage() {
       </Dialog>
 
       {/* Toast Notification */}
-      <AnimatePresence>
-        {toast && (
-          <motion.div
-            initial={{ opacity: 0, y: 50, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            className={`fixed bottom-6 right-6 z-50 max-w-sm w-full p-4 rounded-2xl glass border shadow-2xl flex items-start gap-3 bg-card/90 ${
-              toast.type === 'success'
-                ? 'border-emerald-500/20'
-                : toast.type === 'error'
-                ? 'border-rose-500/20'
-                : 'border-blue-500/20'
-            }`}
-          >
-            <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
-              toast.type === 'success'
-                ? 'bg-emerald-500/10 text-emerald-500'
-                : toast.type === 'error'
-                ? 'bg-rose-500/10 text-rose-500'
-                : 'bg-blue-500/10 text-blue-500'
-            }`}>
-              {toast.type === 'success' ? (
-                <CheckCircle2 className="w-4.5 h-4.5" />
-              ) : toast.type === 'error' ? (
-                <AlertCircle className="w-4.5 h-4.5" />
-              ) : (
-                <Loader2 className="w-4.5 h-4.5 animate-spin" />
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <h4 className={`text-xs font-bold uppercase tracking-wider ${
-                toast.type === 'success'
-                  ? 'text-emerald-600 dark:text-emerald-400'
-                  : toast.type === 'error'
-                  ? 'text-rose-600 dark:text-rose-400'
-                  : 'text-blue-600 dark:text-blue-400'
-              }`}>{toast.title}</h4>
-              <p className="text-sm font-semibold text-foreground mt-0.5">{toast.message}</p>
-            </div>
-            <button onClick={() => setToast(null)} className="text-muted-foreground hover:text-foreground touch-auto">
-              <X className="w-4 h-4" />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Confirmation Dialog */}
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent className="max-w-sm rounded-2xl p-6">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-bold">{confirmAction?.title}</DialogTitle>
-          </DialogHeader>
-          <div className="py-2">
-            <p className="text-sm text-muted-foreground">{confirmAction?.description}</p>
-          </div>
-          <DialogFooter className="gap-2 sm:gap-0 mt-4">
-            <Button variant="outline" onClick={() => setConfirmOpen(false)} className="rounded-xl flex-1 sm:flex-none">
-              Cancel
-            </Button>
-            <Button 
-              onClick={() => {
-                confirmAction?.onConfirm();
-                setConfirmOpen(false);
-              }} 
-              className="rounded-xl bg-destructive hover:bg-destructive/90 text-white flex-1 sm:flex-none btn-press touch-auto"
-            >
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </main>
   );
 }

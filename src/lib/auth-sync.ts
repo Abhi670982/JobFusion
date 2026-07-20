@@ -6,7 +6,7 @@ export async function getOrCreateMongoUser() {
   try {
     const authData = await auth();
     clerkId = authData?.userId || null;
-  } catch (error) {
+  } catch {
     console.warn("[Auth Sync] Clerk auth() failed or is not configured. Falling back to dev mode mock user.");
   }
 
@@ -52,7 +52,7 @@ export async function getOrCreateMongoUser() {
     }
 
     // Ensure profile exists in Postgres
-    let profile = await prisma.profile.findUnique({
+    const profile = await prisma.profile.findUnique({
       where: { userId: user.id },
     });
     if (!profile) {
@@ -117,7 +117,7 @@ export async function getOrCreateMongoUser() {
         });
         
         // Ensure profile exists for the user
-        let profile = await prisma.profile.findUnique({
+        const profile = await prisma.profile.findUnique({
           where: { userId: user.id }
         });
         if (!profile) {

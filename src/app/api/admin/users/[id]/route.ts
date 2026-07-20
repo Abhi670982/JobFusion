@@ -175,9 +175,10 @@ export async function GET(
         applications,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to load user details";
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to load user details" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
@@ -255,9 +256,10 @@ export async function PATCH(
       message: `User account updated to ${status || updatedUser.status}`,
       data: mappedUser,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to update user";
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to update user" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
@@ -315,9 +317,10 @@ export async function DELETE(
       success: true,
       message: "User and all associated profile data deleted successfully",
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to delete user";
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to delete user" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

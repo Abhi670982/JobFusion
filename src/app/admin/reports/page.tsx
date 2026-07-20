@@ -73,6 +73,7 @@ export default function AdminReports() {
 
   useEffect(() => {
     fetchReports();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, typeFilter, statusFilter]);
 
   // Debounced search
@@ -82,6 +83,7 @@ export default function AdminReports() {
       fetchReports();
     }, 400);
     return () => clearTimeout(delay);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
   // Toggle report status to resolved

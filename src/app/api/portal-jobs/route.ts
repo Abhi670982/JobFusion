@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
       "wellfound",
       "all",
     ];
-    if (!validPortals.includes(portal as any)) {
+    if (!validPortals.includes(portal as JobPortalSource | "all")) {
       return NextResponse.json(
         {
           success: false,
@@ -63,12 +63,13 @@ export async function GET(req: NextRequest) {
       data: result.jobs,
       errors: result.errors,
     });
-  } catch (error: any) {
-    console.error("[Portal Jobs API] Handler failed:", error.message);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed executing real-time crawl";
+    console.error("[Portal Jobs API] Handler failed:", errorMessage);
     return NextResponse.json(
       {
         success: false,
-        error: error.message || "Failed executing real-time crawl",
+        error: errorMessage,
       },
       { status: 500 }
     );

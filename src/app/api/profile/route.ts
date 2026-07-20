@@ -263,8 +263,7 @@ export async function PUT(req: NextRequest) {
       });
     }
 
-    // Exclude protected/immutable fields from profile update
-    const { _id, userId: uId, fullName, email, profileImage, role, ...profileUpdateData } = body;
+
 
     // Fetch existing profile in PostgreSQL to verify existence
     const pgProfile = await prisma.profile.findUnique({

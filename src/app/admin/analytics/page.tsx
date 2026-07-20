@@ -16,7 +16,7 @@ import {
   Tooltip,
   Legend,
 } from "recharts";
-import { Loader2, BarChart3, TrendingUp, HelpCircle } from "lucide-react";
+import { Loader2, HelpCircle } from "lucide-react";
 
 interface ChartData {
   date: string;

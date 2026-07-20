@@ -1,8 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { Prisma, ActivityType } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
+
+type ActivityWithUser = Prisma.ActivityGetPayload<{
+  include: {
+    user: {
+      select: {
+        id: true;
+        fullName: true;
+        email: true;
+        profileImage: true;
+      };
+    };
+  };
+}>;
 
 export async function GET(req: NextRequest) {
   try {
@@ -17,7 +31,7 @@ export async function GET(req: NextRequest) {
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "15", 10);
 
-    const andConditions: any[] = [];
+    const andConditions: Prisma.ActivityWhereInput[] = [];
 
     // Apply Search
     if (query) {
@@ -37,10 +51,10 @@ export async function GET(req: NextRequest) {
 
     // Apply Type Filter
     if (type) {
-      andConditions.push({ type: type as any });
+      andConditions.push({ type: type as ActivityType });
     }
 
-    const queryConditions = andConditions.length > 0 ? { AND: andConditions } : {};
+    const queryConditions: Prisma.ActivityWhereInput = andConditions.length > 0 ? { AND: andConditions } : {};
     const skip = (page - 1) * limit;
 
     const [pgActivities, total] = await Promise.all([
@@ -66,7 +80,7 @@ export async function GET(req: NextRequest) {
     ]);
 
     // Map to MongoDB populated payload structure
-    const activities = pgActivities.map(a => ({
+    const activities = pgActivities.map((a: ActivityWithUser) => ({
       _id: a.id,
       userId: a.user ? {
         _id: a.user.id,
@@ -97,9 +111,10 @@ export async function GET(req: NextRequest) {
         pages: Math.ceil(total / limit),
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to load activity logs";
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to load activity logs" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

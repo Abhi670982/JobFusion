@@ -1,4 +1,4 @@
-import { Queue, Worker, QueueEvents } from "bullmq";
+import { Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
 import { runSourceSync } from "./pipeline";
 import { JobSource } from "./adapters/types";
@@ -31,8 +31,9 @@ export async function initRedis(): Promise<boolean> {
         isRedisConnected = false;
         resolve(false);
       });
-    } catch (err: any) {
-      console.warn(`[Scheduler] Redis connection error: ${err.message}. Using in-memory fallback scheduler.`);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Redis connection error";
+      console.warn(`[Scheduler] Redis connection error: ${errorMessage}. Using in-memory fallback scheduler.`);
       isRedisConnected = false;
       resolve(false);
     }
@@ -63,8 +64,9 @@ export async function cleanupExpiredJobs() {
     console.log(`[Scheduler] Expired job cleanup completed in Postgres. Deleted ${res.count} jobs.`);
 
 
-  } catch (err: any) {
-    console.error(`[Scheduler] Expired job cleanup failed:`, err.message);
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : "Expired job cleanup failed";
+    console.error(`[Scheduler] Expired job cleanup failed:`, errorMessage);
   }
 }
 
@@ -86,7 +88,7 @@ export async function startScheduler() {
       // Worker to process the job
       const worker = new Worker(
         queueName,
-        async (job) => {
+        async () => {
           console.log(`[Scheduler Worker] Processing queue job for: ${source}`);
           await runSourceSync(source, []);
         },

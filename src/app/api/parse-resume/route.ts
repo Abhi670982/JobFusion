@@ -158,7 +158,8 @@ export async function POST(req: NextRequest) {
         lastAnalyzedAt: updatedPgProfile.lastAnalyzedAt,
       },
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : "Unexpected error";
     // Log failure in Postgres and MongoDB
     try {
       if (userId) {
@@ -167,8 +168,8 @@ export async function POST(req: NextRequest) {
           data: {
             userId,
             status: "failed",
-            step: currentStep as any,
-            errorMsg: err.message || "Unexpected error",
+            step: currentStep,
+            errorMsg: errorMessage,
             fileName,
             parsingTimeMs: Date.now() - startTime,
           }
@@ -179,8 +180,8 @@ export async function POST(req: NextRequest) {
           data: {
             type: "parsing_failed",
             title: "Resume Parsing Failed",
-            message: `Failed parsing resume during step '${currentStep}' for user: ${userId}. Error: ${err.message || "Unknown error"}`,
-            metadata: { userId, step: currentStep, error: err.message }
+            message: `Failed parsing resume during step '${currentStep}' for user: ${userId}. Error: ${errorMessage}`,
+            metadata: { userId, step: currentStep, error: errorMessage }
           }
         });
       }
@@ -188,6 +189,6 @@ export async function POST(req: NextRequest) {
       console.error("[Parse Resume Logger] Failed to record resume parsing failure log:", logErr);
     }
 
-    return NextResponse.json({ success: false, step: currentStep, error: err.message || "Unexpected error" }, { status: 500 });
+    return NextResponse.json({ success: false, step: currentStep, error: errorMessage }, { status: 500 });
   }
 }

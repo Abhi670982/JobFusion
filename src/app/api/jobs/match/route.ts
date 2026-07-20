@@ -20,21 +20,7 @@ const mockLocations = [
   "Hyderabad, Telangana"
 ];
 
-function escapeRegExp(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
 
-function cleanTitleForSearch(title: string): string {
-  let clean = title
-    .replace(/[\(\[][^\)\]]*[\)\]]/g, "") // remove parentheses/brackets
-    .replace(/\b(?:remote|india|us|usa|canada|uk|europe|london|germany|world|worldwide|timezone|utc|gmt|emea|latam|apac)\b/gi, "") // remove location/timezone keywords
-    .replace(/[-|/\\+,;:]+$/g, "") // remove trailing punctuation
-    .replace(/\s+/g, " ") // normalize whitespace
-    .trim();
-  
-  if (clean.length < 5) return title; // Fallback if too short
-  return clean;
-}
 
 function parseSalaryMin(salary: string, index: number): number {
   const matches = salary.match(/\b\d+(?:,\d+)*(?:\.\d+)?k?\b/gi);
@@ -103,7 +89,7 @@ function mapJob(j: any) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { userId, skills } = body;
+    const { skills } = body;
 
     if (!skills || !Array.isArray(skills) || skills.length === 0) {
       // If no skills are provided, return all jobs from DB

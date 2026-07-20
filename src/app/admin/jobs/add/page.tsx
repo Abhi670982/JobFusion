@@ -1,21 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Briefcase,
   Building2,
   Globe,
-  MapPin,
   DollarSign,
   Calendar,
-  Layers,
-  Plus,
   X,
   Loader2,
   CheckCircle,
   AlertTriangle,
   ArrowLeft,
-  Info,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 

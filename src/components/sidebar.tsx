@@ -6,8 +6,8 @@ import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  LayoutDashboard, Briefcase, User, FileText, Settings,
-  ChevronLeft, ChevronRight, Bookmark, Activity, HelpCircle
+  LayoutDashboard, Briefcase, FileText, Settings,
+  ChevronLeft, ChevronRight, Bookmark, HelpCircle
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -120,7 +120,7 @@ export default function Sidebar() {
       setSavedCount(saved.length);
       sessionStorage.setItem('jobfusion_saved_count', String(saved.length));
     }).catch(() => { });
-  }, [pathname, user?._id]);
+  }, [pathname, user]);
 
   const getInitials = () => {
     if (!user) return 'U';

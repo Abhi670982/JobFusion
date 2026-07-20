@@ -255,6 +255,9 @@ export const AutocompleteInput = React.forwardRef<HTMLInputElement, Autocomplete
             setActiveIndex(-1);
             if (onFocus) onFocus(e);
           }}
+          onBlur={(e) => {
+            if (onBlur) onBlur(e);
+          }}
           onKeyDown={handleKeyDown}
           autoComplete="off"
           role="combobox"

@@ -3,10 +3,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Upload, FileText, Trash2, Eye,
+  Upload, FileText, Trash2,
   CheckCircle2, Clock, Plus, RefreshCw, AlertCircle,
-  Lightbulb, Target, BookOpen, Briefcase, Award, Code2,
-  XCircle, Info, ChevronRight, X
+  Lightbulb, Target, Code2,
+  XCircle, Info
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -35,8 +35,6 @@ export default function ResumePage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [skillModalOpen, setSkillModalOpen] = useState(false);
   const [newSkillName, setNewSkillName]   = useState('');
-  const [newSkillLevel, setNewSkillLevel] = useState(80);
-  const [editingSkill, setEditingSkill]   = useState<{ index: number; name: string; level: number } | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -315,7 +313,7 @@ export default function ResumePage() {
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-2.5">
-                  {profile.skills.map((skill, index) => (
+                  {profile.skills.map((skill) => (
                     <div key={skill.name}
                       className="flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-xl bg-muted/50 border border-border/80 text-xs hover:border-primary/30 transition-all group">
                       <span className="font-semibold">{skill.name}</span>

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import cloudinary from "@/lib/cloudinary";
 import { parsePdf, parseDocx } from "@/lib/parser";
-import { extractSkills, extractSkillsWithAI } from "@/lib/skills-extractor";
+import { extractSkillsWithAI } from "@/lib/skills-extractor";
 import { analyzeResume } from "@/lib/resume-intelligence";
 import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import { extractProfileDetails } from "@/lib/profile-extractor";

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import { prisma } from "@/lib/prisma";
+import { Prisma, Activity, ActivityType } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
-function mapActivity(a: any) {
+function mapActivity(a: Activity | null) {
   if (!a) return null;
   return {
     _id: a.id,
@@ -39,7 +40,7 @@ export async function GET() {
 
     if (activities.length === 0) {
       // Retroactively seed from current state
-      const seedActivities: any[] = [];
+      const seedActivities: Prisma.ActivityCreateManyInput[] = [];
 
       // 1. Seed applications
       const apps = await prisma.application.findMany({
@@ -183,10 +184,11 @@ export async function GET() {
       recentActivities: mappedActivities,
       chartData,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to fetch activities";
     console.error("Error in GET /api/dashboard/activity:", error);
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to fetch activities" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
@@ -215,7 +217,7 @@ export async function POST(req: NextRequest) {
     const newActivity = await prisma.activity.create({
       data: {
         userId: user._id.toString(),
-        type: type as any,
+        type: type as ActivityType,
         jobId: jobId || null,
         jobTitle: jobTitle || null,
         company: company || null,
@@ -227,9 +229,10 @@ export async function POST(req: NextRequest) {
       success: true,
       data: mapActivity(newActivity),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to record activity";
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

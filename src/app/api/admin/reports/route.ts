@@ -1,10 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { Prisma, ReportType, ReportStatus } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
-function mapReport(r: any) {
+type ReportWithUserAndJob = Prisma.ReportGetPayload<{
+  include: {
+    user: {
+      select: {
+        id: true;
+        fullName: true;
+        email: true;
+      };
+    };
+    job: {
+      select: {
+        id: true;
+        title: true;
+        company: true;
+      };
+    };
+  };
+}>;
+
+function mapReport(r: ReportWithUserAndJob | null) {
   if (!r) return null;
   return {
     _id: r.id,
@@ -41,7 +61,7 @@ export async function GET(req: NextRequest) {
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "10", 10);
 
-    const andConditions: any[] = [];
+    const andConditions: Prisma.ReportWhereInput[] = [];
 
     if (query) {
       andConditions.push({
@@ -53,14 +73,14 @@ export async function GET(req: NextRequest) {
     }
 
     if (type) {
-      andConditions.push({ type: type as any });
+      andConditions.push({ type: type as ReportType });
     }
 
     if (status) {
-      andConditions.push({ status: status as any });
+      andConditions.push({ status: status as ReportStatus });
     }
 
-    const queryConditions = andConditions.length > 0 ? { AND: andConditions } : {};
+    const queryConditions: Prisma.ReportWhereInput = andConditions.length > 0 ? { AND: andConditions } : {};
     const skip = (page - 1) * limit;
 
     const [pgReports, total] = await Promise.all([
@@ -100,9 +120,10 @@ export async function GET(req: NextRequest) {
         pages: Math.ceil(total / limit),
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to load reports";
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to load reports" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }

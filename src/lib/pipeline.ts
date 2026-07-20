@@ -1,5 +1,5 @@
 import { prisma } from "./prisma";
-import { JobSource, UnifiedJob } from "./adapters/types";
+import { JobSource } from "./adapters/types";
 import { WellfoundAdapter } from "./adapters/wellfound";
 import { CareersAdapter } from "./adapters/careers";
 import { AggregatorAdapter } from "./adapters/aggregator";
@@ -105,8 +105,9 @@ export async function runSourceSync(
     ]);
 
     // RULE 2: Skills from DB are preferred; fall back to provided keywords
-    const dbSkills = await extractSkillsFromDB().catch((err) => {
-      console.warn(`[Pipeline] extractSkillsFromDB failed:`, err.message);
+    const dbSkills = await extractSkillsFromDB().catch((err: unknown) => {
+      const errorMessage = err instanceof Error ? err.message : "Extract skills failed";
+      console.warn(`[Pipeline] extractSkillsFromDB failed:`, errorMessage);
       return [] as string[];
     });
 
@@ -123,7 +124,7 @@ export async function runSourceSync(
 
     console.log(`[Pipeline] Keywords selected for ${source} sync:`, keywordsToSearch);
 
-    let allRawJobs: any[] = [];
+    const allRawJobs: any[] = [];
     for (const keyword of keywordsToSearch) {
       try {
         console.log(`[Pipeline] Fetching jobs from ${source} for keyword: "${keyword}"`);

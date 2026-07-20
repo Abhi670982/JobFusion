@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { Briefcase, Calendar, ChevronRight, Clock, Star, Eye } from 'lucide-react';
+import { Briefcase, Clock, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -45,7 +45,7 @@ function ApplicationSkeleton() {
 
 export default function ApplicationsPage() {
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<DbUser | null>(null);
+  const [, setUser] = useState<DbUser | null>(null);
   const [applications, setApplications] = useState<DbApplication[]>([]);
   const [activeTab, setActiveTab] = useState('All');
 

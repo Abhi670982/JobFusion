@@ -27,8 +27,9 @@ export class AggregatorAdapter implements SourceAdapter {
       const allJobs = [...himalayas, ...arbeitnow, ...jobicy, ...remotive];
       console.log(`[Aggregator Adapter] Aggregated ${allJobs.length} raw jobs (Himalayas: ${himalayas.length}, Arbeitnow: ${arbeitnow.length}, Jobicy: ${jobicy.length}, Remotive: ${remotive.length})`);
       return allJobs;
-    } catch (err: any) {
-      console.error("[Aggregator Adapter] Fetch failed:", err.message);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Fetch failed";
+      console.error("[Aggregator Adapter] Fetch failed:", errorMessage);
       return [];
     }
   }
@@ -47,7 +48,7 @@ export class AggregatorAdapter implements SourceAdapter {
 
     let salaryMin = raw.salaryMin || null;
     let salaryMax = raw.salaryMax || null;
-    let salaryCurrency = (raw.salaryCurrency || "INR") as "INR" | "USD" | "GBP";
+    const salaryCurrency = (raw.salaryCurrency || "INR") as "INR" | "USD" | "GBP";
     const salaryPeriod = (raw.salaryPeriod || "annual") as "monthly" | "annual" | "hourly";
 
     // Convert non-INR currencies to INR for consistent display

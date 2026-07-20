@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { AdminNotification } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
-function mapNotif(n: any) {
+function mapNotif(n: AdminNotification | null) {
   if (!n) return null;
   return {
     _id: n.id,
@@ -19,7 +20,7 @@ function mapNotif(n: any) {
   };
 }
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     const admin = await verifyAdmin();
     if (!admin) {
@@ -35,9 +36,10 @@ export async function GET(req: NextRequest) {
       success: true,
       data: pgNotifications.map(mapNotif),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to load notifications";
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to load notifications" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
@@ -89,9 +91,10 @@ export async function PATCH(req: NextRequest) {
       message: "Notification marked as read",
       data: mapNotif(updatedNotif),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to update notification";
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to update notification" },
+      { success: false, error: errorMessage },
       { status: 500 }
     );
   }
