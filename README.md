@@ -1,18 +1,32 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-## Getting Started
+## Environment Variables & Setup
 
-First, run the development server:
+To run JobFusion locally, follow these steps to configure environment variables:
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+1. **Copy the example environment file**:
+   ```bash
+   cp .env.example .env.local
+   # On Windows PowerShell:
+   # Copy-Item .env.example .env.local
+   ```
+
+2. **Fill in your credentials** in `.env.local` (Database URLs, Clerk authentication keys, Cloudinary credentials, Gemini AI API keys, etc.).
+
+> **SECURITY NOTICE**: Contributors must **NEVER** commit `.env` or `.env.local` files to Git. Real credentials, secret keys, and API tokens should only exist in `.env.local` or environment variable settings on your deployment platform (Vercel).
+
+3. **Install dependencies and generate Prisma client**:
+   ```bash
+   npm install
+   npx prisma generate
+   ```
+
+4. **Run the development server**:
+   ```bash
+   npm run dev
+   ```
+
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the application.
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
