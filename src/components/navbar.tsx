@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 const navLinks = [
   { href: '/jobs', label: 'Find Jobs' },
   { href: '/#features', label: 'Features' },
+  { href: '/pricing', label: 'Pricing' },
 ];
 
 export default function Navbar() {
@@ -155,6 +156,10 @@ export default function Navbar() {
                     </AvatarFallback>
                   </Avatar>
                   <span className="text-sm font-medium">{getDisplayName()}</span>
+                  {/* Plan badge — mocked Free; will update from API once Dodo is integrated */}
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/60 ml-0.5" aria-label="Current plan: Free">
+                    Free
+                  </span>
                 </Link>
 
                 {/* Mobile/Tablet: full dropdown menu */}

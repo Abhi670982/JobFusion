@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sun, Moon, ArrowLeft, User, Mail, Briefcase, MapPin,
-  Edit3, Save, Loader2, CheckCircle2, AlertCircle, X, LogOut
+  Edit3, Save, Loader2, CheckCircle2, AlertCircle, X, LogOut,
+  CreditCard, Sparkles, Lock, Receipt, Shield, ExternalLink
 } from 'lucide-react';
 import { useClerk } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
@@ -346,7 +347,126 @@ export default function SettingsPage() {
         </div>
       </motion.div>
 
-      {/* Danger Zone / Sign Out Section */}
+      {/* ── Billing & Subscription Section ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="card-premium p-6 sm:p-8 space-y-6"
+        aria-labelledby="billing-section-heading"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 id="billing-section-heading" className="text-lg font-bold" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Billing &amp; Subscription</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Manage your plan and billing information.</p>
+          </div>
+          <span className="text-[10px] font-semibold px-2.5 py-1 rounded-full bg-muted text-muted-foreground border border-border/60">
+            Free Plan
+          </span>
+        </div>
+
+        {/* Current Plan */}
+        <div className="p-4 rounded-xl bg-muted/40 border border-border/60 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <CreditCard className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
+              <span className="text-sm font-semibold">Current Plan</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-bold">Free</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold">Active</span>
+            </div>
+          </div>
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>Subscription Status</span>
+            <span className="font-medium text-foreground/80">Active (Free)</span>
+          </div>
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>Renewal Date</span>
+            {/* Filled in when Dodo subscription is active */}
+            <span className="font-medium text-foreground/80 italic">N/A — Free Plan</span>
+          </div>
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>AI Operations Used</span>
+            <span className="font-medium text-foreground/80">3 / 5 this month</span>
+          </div>
+        </div>
+
+        {/* AI Usage Bar */}
+        <div>
+          <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
+            <span className="font-medium">AI Usage This Month</span>
+            <span>3 of 5 operations</span>
+          </div>
+          <div
+            className="h-2 bg-muted rounded-full overflow-hidden"
+            role="progressbar"
+            aria-valuenow={3}
+            aria-valuemin={0}
+            aria-valuemax={5}
+            aria-label="AI usage: 3 of 5 monthly operations used"
+          >
+            <div className="h-full bg-primary rounded-full" style={{ width: '60%' }} />
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-1.5">
+            Resets on the 1st of every month. <a href="/pricing" className="text-primary hover:underline">Upgrade to Pro</a> for unlimited usage.
+          </p>
+        </div>
+
+        {/* Placeholder rows */}
+        <div className="space-y-2" aria-label="Billing details">
+          {[
+            { icon: Receipt, label: 'Invoices', value: 'No invoices yet', placeholder: true },
+            { icon: Shield, label: 'Payment Method', value: 'No card on file', placeholder: true },
+          ].map(({ icon: Icon, label, value }) => (
+            <div
+              key={label}
+              className="flex items-center justify-between p-3.5 rounded-xl border border-border/50 bg-muted/20"
+            >
+              <div className="flex items-center gap-2.5">
+                <Icon className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
+                <span className="text-sm font-medium">{label}</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="italic">{value}</span>
+                {/* Will show real data once Dodo Payments is integrated */}
+                <ExternalLink className="w-3 h-3 opacity-40" aria-hidden="true" />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Actions */}
+        <div className="flex flex-col sm:flex-row gap-3 pt-2">
+          <a href="/pricing" className="flex-1">
+            <button
+              id="settings-upgrade-btn"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white border-0 shadow-md hover:opacity-90 transition-all gradient-brand"
+              aria-label="View pricing plans and upgrade to Pro"
+            >
+              <Sparkles className="w-4 h-4" aria-hidden="true" />
+              View Plans &amp; Upgrade
+            </button>
+          </a>
+          <button
+            id="settings-manage-sub-btn"
+            disabled
+            aria-disabled="true"
+            title="Subscription management coming soon with Dodo Payments"
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-border/60 text-muted-foreground cursor-not-allowed opacity-60"
+            aria-label="Manage subscription — coming soon"
+          >
+            <Lock className="w-4 h-4" aria-hidden="true" />
+            Manage Subscription
+            {/* TODO (Dodo Integration): Connect to Dodo customer portal URL */}
+          </button>
+        </div>
+
+        <p className="text-xs text-muted-foreground/60 text-center">
+          Secure billing powered by Dodo Payments — coming soon.
+        </p>
+      </motion.div>
+
+      {/* ── Danger Zone / Sign Out Section ── */}
       <motion.div 
         initial={{ opacity: 0, y: 10 }} 
         animate={{ opacity: 1, y: 0 }} 
