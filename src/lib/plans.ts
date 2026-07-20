@@ -7,6 +7,9 @@
 
 import type { PricingPlan } from '@/types/subscription';
 
+// Re-export so components can import PricingPlan directly from lib/plans
+export type { PricingPlan };
+
 export const FREE_PLAN_FEATURES = [
   'Job Search & Discovery',
   'Resume Upload (1 resume)',
