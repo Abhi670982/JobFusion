@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import { Check, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { COMPARISON_ROWS, type ComparisonRow } from '@/lib/plans';
@@ -90,7 +91,7 @@ export function FeatureComparison({ className }: FeatureComparisonProps) {
 
         <tbody>
           {Array.from(groups.entries()).map(([category, rows]) => (
-            <>
+            <React.Fragment key={category}>
               {/* Category header */}
               <tr key={`cat-${category}`}>
                 <td
@@ -121,7 +122,7 @@ export function FeatureComparison({ className }: FeatureComparisonProps) {
                   </td>
                 </tr>
               ))}
-            </>
+            </React.Fragment>
           ))}
         </tbody>
       </table>
