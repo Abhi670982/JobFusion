@@ -22,6 +22,7 @@ import {
 import { cn } from '@/lib/utils';
 import PortalJobCard from '@/components/portal-job-card';
 import { PortalUnifiedJob } from '@/lib/portal-fetcher/adapters/base-adapter';
+import { parsePostedDate } from '@/lib/parse-posted-date';
 import { JobsErrorBoundary } from '@/components/error-boundary';
 
 // ─── Types & Config ───────────────────────────────────────────────────────────
@@ -96,7 +97,7 @@ const EXP_LEVELS = [
   { label: 'Entry Level', value: 'entry' },
   { label: 'Mid Level', value: 'mid' },
   { label: 'Senior Level', value: 'senior' },
-  { label: 'Lead / Principal', value: 'lead' }
+  { label: 'Lead', value: 'lead' }
 ];
 
 const JOBS_PER_PAGE = 8;
@@ -178,6 +179,16 @@ export default function JobPortalsSection({
   });
   const [currentPage, setCurrentPage] = useState(1);
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    document.documentElement.scrollTo({ top: 0, behavior: 'smooth' });
+    document.body.scrollTo({ top: 0, behavior: 'smooth' });
+    const mainEl = document.querySelector('main');
+    if (mainEl) {
+      mainEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [currentPage]);
+
   // Filters State matching company careers structure
   const [selectedJobTypes, setSelectedJobTypes] = useState<string[]>([]);
   const [selectedExpLevels, setSelectedExpLevels] = useState<string[]>([]);
@@ -188,6 +199,7 @@ export default function JobPortalsSection({
   const [optimizeWithSkills, setOptimizeWithSkills] = useState(true);
 
   const lastFetchedKeys = useRef<Record<string, string>>({});
+  const abortControllersRef = useRef<Record<string, AbortController | null>>({});
 
   // Helper toggle functions
   const toggleJobType = (val: string) => {
@@ -211,11 +223,27 @@ export default function JobPortalsSection({
   };
 
   // ── Client-side filter + sort logic ──────────────────────────────────────
+  // resolveTs: convert postedDate (any format) to a sortable ms timestamp.
+  // Returns 0 for dateless jobs — they sort to the very bottom on DESC order.
+  const resolveTs = (job: PortalUnifiedJob): number => {
+    if (!job.postedDate) return 0;
+    const parsed = parsePostedDate(String(job.postedDate));
+    if (parsed) return parsed.timestamp.getTime();
+    // Try native Date as last resort (works for ISO strings)
+    const d = new Date(job.postedDate as any);
+    return isNaN(d.getTime()) ? 0 : d.getTime();
+  };
+
   const rawJobs = useMemo(() => {
+    let jobs: PortalUnifiedJob[];
     if (activePortal === 'all') {
-      return Object.values(portalJobs).flat();
+      jobs = Object.values(portalJobs).flat();
+    } else {
+      jobs = portalJobs[activePortal] || [];
     }
-    return portalJobs[activePortal] || [];
+    // Pre-sort the merged list by resolved timestamp descending (newest first).
+    // Dateless jobs (ts = 0) float to the bottom.
+    return [...jobs].sort((a, b) => resolveTs(b) - resolveTs(a));
   }, [portalJobs, activePortal]);
 
   const filteredJobs = useMemo(() => {
@@ -242,13 +270,11 @@ export default function JobPortalsSection({
       jobs = jobs.filter((j) => (j.salaryMin ?? 0) >= minInUnits || (j.salaryMax ?? 0) >= minInUnits);
     }
 
-    // Sort
+    // Sort — uses pre-resolved timestamps for correctness
     if (sortBy === 'postedAt') {
-      jobs.sort((a, b) => {
-        const da = a.postedDate ? new Date(a.postedDate).getTime() : 0;
-        const db = b.postedDate ? new Date(b.postedDate).getTime() : 0;
-        return db - da;
-      });
+      // rawJobs is already sorted newest-first; only re-sort when user picks 'postedAt'
+      // No-op here since rawJobs pre-sort already did it, but re-run to handle filter changes
+      jobs.sort((a, b) => resolveTs(b) - resolveTs(a));
     } else if (sortBy === 'salaryMin') {
       jobs.sort((a, b) => (b.salaryMin ?? b.salaryMax ?? 0) - (a.salaryMin ?? a.salaryMax ?? 0));
     }
@@ -270,11 +296,51 @@ export default function JobPortalsSection({
   ) => {
     const skillsQuery = optSkills && profileSkills.length > 0 ? profileSkills.join(",") : "";
     const queryKey = `${kw}::${loc}::${skillsQuery}`;
+    const PORTAL_CACHE_PREFIX = 'jobfusion_portal_cache_';
+    const cacheKey = `${PORTAL_CACHE_PREFIX}${portal}_${kw}_${loc}_${skillsQuery}`;
     
-    if (!forceRefresh && lastFetchedKeys.current[portal] === queryKey) {
-      return;
+    if (!forceRefresh) {
+      // 1. Check client-side sessionStorage cache
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const { jobs, timestamp } = JSON.parse(cached);
+          const isFresh = (Date.now() - timestamp) < 5 * 60 * 1000; // 5 min TTL
+          
+          if (isFresh) {
+            setPortalJobs(prev => ({ ...prev, [portal]: jobs || [] }));
+            setPortalLoading(prev => ({ ...prev, [portal]: false }));
+            setPortalErrors(prev => ({ ...prev, [portal]: null }));
+            lastFetchedKeys.current[portal] = queryKey;
+            return;
+          } else {
+            // Stale cache: display immediately but refresh in background
+            setPortalJobs(prev => ({ ...prev, [portal]: jobs || [] }));
+          }
+        } catch (_) {
+          // ignore parsing errors
+        }
+      }
+
+      // 2. Prevent redundant in-flight duplicate triggers
+      if (lastFetchedKeys.current[portal] === queryKey) {
+        return;
+      }
+    } else {
+      // Manual refresh: invalidate cache
+      sessionStorage.removeItem(cacheKey);
+      delete lastFetchedKeys.current[portal];
     }
+    
     lastFetchedKeys.current[portal] = queryKey;
+
+    // Abort previous in-flight request for this portal if any
+    if (abortControllersRef.current[portal]) {
+      abortControllersRef.current[portal]?.abort();
+    }
+    if (typeof AbortController !== 'undefined') {
+      abortControllersRef.current[portal] = new AbortController();
+    }
 
     setPortalLoading(prev => ({ ...prev, [portal]: true }));
     setPortalErrors(prev => ({ ...prev, [portal]: null }));
@@ -289,18 +355,32 @@ export default function JobPortalsSection({
     if (skillsQuery) params.append('skills', skillsQuery);
 
     try {
-      const res = await fetch(`/api/portal-jobs?${params}`);
+      const res = await fetch(`/api/portal-jobs?${params}`, {
+        signal: abortControllersRef.current[portal]?.signal
+      });
       const data = await res.json();
 
       if (data.success) {
-        setPortalJobs(prev => ({ ...prev, [portal]: data.data || [] }));
+        const jobsList = data.data || [];
+        setPortalJobs(prev => ({ ...prev, [portal]: jobsList }));
+        
+        // Save to cache
+        sessionStorage.setItem(cacheKey, JSON.stringify({
+          jobs: jobsList,
+          timestamp: Date.now()
+        }));
+
         if (data.errors?.length) {
           setPortalErrors(prev => ({ ...prev, [portal]: data.errors.join(", ") }));
         }
       } else {
         setPortalErrors(prev => ({ ...prev, [portal]: data.error || 'Failed to fetch jobs' }));
       }
-    } catch {
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        console.log(`[JobPortalsSection] Fetch for ${portal} was aborted.`);
+        return;
+      }
       setPortalErrors(prev => ({ ...prev, [portal]: 'Network error' }));
     } finally {
       setPortalLoading(prev => ({ ...prev, [portal]: false }));
@@ -314,18 +394,18 @@ export default function JobPortalsSection({
     optSkills: boolean,
     forceRefresh = false
   ) => {
-    const portalsToFetch = targetPortal === 'all'
+    const portalsToCrawl = targetPortal === 'all'
       ? ['linkedin', 'internshala', 'wellfound', 'indeed']
       : [targetPortal];
 
     if (forceRefresh) {
-      portalsToFetch.forEach(p => {
+      portalsToCrawl.forEach(p => {
         setPortalJobs(prev => ({ ...prev, [p]: [] }));
         setPortalErrors(prev => ({ ...prev, [p]: null }));
       });
     }
 
-    portalsToFetch.forEach(p => {
+    portalsToCrawl.forEach(p => {
       fetchSinglePortal(p, kw, loc, optSkills, forceRefresh);
     });
   }, [fetchSinglePortal]);
@@ -341,6 +421,13 @@ export default function JobPortalsSection({
     setCurrentPage(1);
   }, [selectedJobTypes, selectedExpLevels, remoteOnly, salaryRange, locationOverride]);
 
+  // Clean up active abort controllers on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(abortControllersRef.current).forEach(ctrl => ctrl?.abort());
+    };
+  }, []);
+
   const handleTabChange = (portalId: string) => {
     if (portalId === activePortal) return;
     setActivePortal(portalId);
@@ -348,6 +435,24 @@ export default function JobPortalsSection({
   };
 
   const doRefresh = () => {
+    const PORTAL_CACHE_PREFIX = 'jobfusion_portal_cache_';
+    const portalsToFetch = activePortal === 'all'
+      ? ['linkedin', 'internshala', 'wellfound', 'indeed']
+      : [activePortal];
+
+    portalsToFetch.forEach(p => {
+      delete lastFetchedKeys.current[p];
+      
+      const skillsQuery = optimizeWithSkills && profileSkills.length > 0 ? profileSkills.join(",") : "";
+      const cacheKey = `${PORTAL_CACHE_PREFIX}${p}_${keyword}_${effectiveLocation}_${skillsQuery}`;
+      sessionStorage.removeItem(cacheKey);
+
+      if (abortControllersRef.current[p]) {
+        abortControllersRef.current[p]?.abort();
+        abortControllersRef.current[p] = null;
+      }
+    });
+
     triggerFetch(activePortal, keyword, effectiveLocation, optimizeWithSkills, true);
   };
 

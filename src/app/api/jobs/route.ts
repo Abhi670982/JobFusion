@@ -139,26 +139,6 @@ export async function GET(req: NextRequest) {
     }
 
     // Get filtered jobs
-    let userSkills: string[] = [];
-    try {
-      const { getOrCreateMongoUser } = await import("@/lib/auth-sync");
-      const mongoUser = await getOrCreateMongoUser();
-      if (mongoUser) {
-        const profile = await prisma.profile.findUnique({
-          where: { userId: mongoUser._id.toString() },
-          include: { skills: true },
-        });
-        if (profile?.skills?.length) {
-          userSkills = profile.skills.map((s) => s.name.toLowerCase());
-        }
-      }
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : "Unknown error";
-      console.warn(
-        "[API Jobs] Failed to resolve user skills for search filtering:",
-        errorMessage
-      );
-    }
 
     const validated = validateJobsQuery(searchParams);
     const q = validated.q || searchParams.get("q") || "";
@@ -266,22 +246,32 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 8. Skills filter (explicit) or Rule 2 user-skill default
+    // 8. Skills filter
     if (skills) {
       const skillList = skills
         .split(",")
-        .map((s) => s.trim().toLowerCase())
+        .map((s) => s.trim())
         .filter(Boolean);
-      andConditions.push({
-        skills: { hasSome: skillList },
-      });
-    } else if (userSkills.length > 0) {
-      andConditions.push({
-        OR: [
-          { matchedSkill: { in: userSkills } },
-          { skills: { hasSome: userSkills } },
-        ],
-      });
+      if (skillList.length > 0) {
+        const skillVariations = [];
+        for (const skill of skillList) {
+          skillVariations.push(skill);
+          skillVariations.push(skill.toLowerCase());
+          skillVariations.push(skill.toUpperCase());
+          const capitalized = skill.charAt(0).toUpperCase() + skill.slice(1).toLowerCase();
+          skillVariations.push(capitalized);
+        }
+        const uniqueVariations = Array.from(new Set(skillVariations));
+
+        andConditions.push({
+          OR: [
+            ...skillList.map((skill) => ({
+              matchedSkill: { equals: skill, mode: "insensitive" as const },
+            })),
+            { skills: { hasSome: uniqueVariations } },
+          ],
+        });
+      }
     }
 
     // 9. Date posted filter + Rule 1 (careers always 24h)
@@ -301,14 +291,16 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
-    const cutoff24h = new Date(Date.now() - TWENTY_FOUR_HOURS_MS);
+    const TEN_DAYS_MS = 10 * 24 * 60 * 60 * 1000;
+    const cutoffCareers = new Date(Date.now() - TEN_DAYS_MS);
 
     if (dateLimit) {
+      // User applied an explicit date filter — apply to all sources
+      const effectiveDateLimit = dateLimit > cutoffCareers ? dateLimit : cutoffCareers;
       andConditions.push({
         OR: [
           {
-            AND: [{ source: "careers" }, { postedAtDate: { gte: cutoff24h } }],
+            AND: [{ source: "careers" }, { postedAtDate: { gte: effectiveDateLimit } }],
           },
           {
             AND: [
@@ -324,10 +316,11 @@ export async function GET(req: NextRequest) {
         ],
       });
     } else {
+      // No user filter — careers: max 10 days; other sources: unrestricted
       andConditions.push({
         OR: [
           {
-            AND: [{ source: "careers" }, { postedAtDate: { gte: cutoff24h } }],
+            AND: [{ source: "careers" }, { postedAtDate: { gte: cutoffCareers } }],
           },
           { OR: [{ source: { not: "careers" } }, { source: null }] },
         ],
@@ -406,10 +399,10 @@ export async function GET(req: NextRequest) {
       totalPages,
       sourceCounts,
       meta: {
-        filteredTo24h: true,
+        careersFreshnessWindowHours: 240, // Hard 10-day window
         oldestJobAt: jobs[jobs.length - 1]?.postedAtDate ?? null,
         newestJobAt: jobs[0]?.postedAtDate ?? null,
-        skillsUsed: userSkills,
+        skillsUsed: skills ? skills.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean) : [],
       },
     });
   } catch (error: unknown) {

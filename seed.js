@@ -53,7 +53,7 @@ const jobsData = [
     applicants: 312,
     featured: true,
     category: "Engineering",
-    source: "Indeed",
+    source: "careers",
     applyUrl: "https://razorpay.com/jobs/",
   },
   {
@@ -99,7 +99,7 @@ const jobsData = [
     applicants: 204,
     featured: true,
     category: "Design",
-    source: "LinkedIn",
+    source: "careers",
     applyUrl: "https://careers.cred.club/",
   },
   {
@@ -143,7 +143,7 @@ const jobsData = [
     applicants: 489,
     featured: false,
     category: "Engineering",
-    source: "Google Jobs",
+    source: "careers",
     applyUrl: "https://www.flipkartcareers.com/",
   },
   {
@@ -187,7 +187,7 @@ const jobsData = [
     applicants: 147,
     featured: false,
     category: "Marketing",
-    source: "SimplyHired",
+    source: "careers",
     applyUrl: "https://www.zoho.com/careers/",
   },
   {
@@ -231,7 +231,7 @@ const jobsData = [
     applicants: 276,
     featured: false,
     category: "Engineering",
-    source: "Glassdoor",
+    source: "careers",
     applyUrl: "https://careers.swiggy.com/",
   },
   {
@@ -275,7 +275,7 @@ const jobsData = [
     applicants: 341,
     featured: false,
     category: "Data",
-    source: "Indeed",
+    source: "careers",
     applyUrl: "https://careers.paytm.com/",
   },
 ];

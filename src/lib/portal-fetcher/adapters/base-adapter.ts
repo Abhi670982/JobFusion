@@ -18,12 +18,13 @@ export interface PortalUnifiedJob {
   location: string | null;
   isRemote: boolean;
   employmentType: "full-time" | "part-time" | "contract" | "internship" | "freelance" | null;
-  experience: string | null; // e.g. "Entry Level", "Senior"
+  experience: "entry" | "mid" | "senior" | "lead" | null;
   salary: string | null;     // normalized text description of salary
   salaryMin: number | null;  // numeric representation for filter calculations
   salaryMax: number | null;
   description: string;
-  postedDate: Date | null;
+  postedDate: Date | string | null;
+  isDateless?: boolean;
   skills: string[];          // extracted skill tags
 }
 
