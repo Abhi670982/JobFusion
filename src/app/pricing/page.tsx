@@ -13,41 +13,16 @@ import { FeatureComparison } from '@/components/pricing/FeatureComparison';
 import { PricingFAQ } from '@/components/pricing/PricingFAQ';
 import { PricingCTA } from '@/components/pricing/PricingCTA';
 import { PricingSection } from '@/components/pricing/PricingSection';
-import { PLANS } from '@/lib/plans';
+import { PLANS, TRUST_BADGES, TESTIMONIALS, ENTERPRISE_HIGHLIGHTS } from '@/lib/plans';
 import { cn } from '@/lib/utils';
 
-// ── Trust logos ──────────────────────────────────────────────
-const TRUST_BADGES = [
-  { icon: Shield, label: 'Secure Payments', sub: 'PCI-DSS compliant' },
-  { icon: Zap,    label: 'Instant Access',  sub: 'Pro unlocks immediately' },
-  { icon: Users,  label: '10,000+ Users',   sub: 'Trusted by job seekers' },
-  { icon: Star,   label: '4.9/5 Rating',    sub: 'From verified users' },
-];
-
-// ── Social proof ─────────────────────────────────────────────
-const TESTIMONIALS = [
-  {
-    quote: "JobFusion Pro's AI resume builder helped me land 3x more interviews in just 2 weeks.",
-    name: 'Priya Sharma',
-    role: 'Software Engineer at Swiggy',
-    avatar: 'PS',
-    color: '#6366f1',
-  },
-  {
-    quote: "The ATS optimization alone is worth every rupee. My resume pass rate went from 20% to 80%.",
-    name: 'Rahul Verma',
-    role: 'Product Manager at Razorpay',
-    avatar: 'RV',
-    color: '#10b981',
-  },
-  {
-    quote: "Cover letter generation saves me hours. I can now apply to 10x more jobs every week.",
-    name: 'Anjali Singh',
-    role: 'Data Analyst at PhonePe',
-    avatar: 'AS',
-    color: '#f59e0b',
-  },
-];
+// Helper map to resolve Lucide Icon components dynamically based on iconName
+const ICON_MAP = {
+  Shield,
+  Zap,
+  Users,
+  Star,
+};
 
 export default function PricingPage() {
   const [interval, setInterval] = useState<'monthly' | 'yearly'>('monthly');
@@ -160,23 +135,26 @@ export default function PricingPage() {
       >
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {TRUST_BADGES.map(({ icon: Icon, label, sub }) => (
-              <motion.div
-                key={label}
-                initial={{ opacity: 0, y: 12 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                className="flex flex-col sm:flex-row items-center sm:items-start gap-3 text-center sm:text-left"
-              >
-                <div className="w-9 h-9 rounded-xl bg-primary/8 flex items-center justify-center flex-shrink-0">
-                  <Icon className="w-4 h-4 text-primary" aria-hidden="true" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold">{label}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
-                </div>
-              </motion.div>
-            ))}
+            {TRUST_BADGES.map(({ iconName, label, sub }) => {
+              const Icon = ICON_MAP[iconName];
+              return (
+                <motion.div
+                  key={label}
+                  initial={{ opacity: 0, y: 12 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  className="flex flex-col sm:flex-row items-center sm:items-start gap-3 text-center sm:text-left"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-primary/8 flex items-center justify-center flex-shrink-0">
+                    <Icon className="w-4 h-4 text-primary" aria-hidden="true" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">{label}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
+                  </div>
+                </motion.div>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -265,7 +243,7 @@ export default function PricingPage() {
                 and SLA-backed uptime. Let&apos;s talk.
               </p>
               <ul className="mt-4 space-y-1.5" aria-label="Enterprise features">
-                {['Dedicated account manager', 'API access & integrations', 'Custom SLA'].map((f) => (
+                {ENTERPRISE_HIGHLIGHTS.map((f) => (
                   <li key={f} className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Check className="w-3.5 h-3.5 text-purple-500" aria-hidden="true" />
                     {f}

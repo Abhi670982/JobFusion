@@ -169,6 +169,44 @@ export const FAQ_ITEMS = [
   },
 ];
 
+export const TRUST_BADGES = [
+  { iconName: 'Shield' as const, label: 'Secure Payments', sub: 'PCI-DSS compliant' },
+  { iconName: 'Zap' as const,    label: 'Instant Access',  sub: 'Pro unlocks immediately' },
+  { iconName: 'Users' as const,  label: '10,000+ Users',   sub: 'Trusted by job seekers' },
+  { iconName: 'Star' as const,   label: '4.9/5 Rating',    sub: 'From verified users' },
+];
+
+export const TESTIMONIALS = [
+  {
+    quote: "JobFusion Pro's AI resume builder helped me land 3x more interviews in just 2 weeks.",
+    name: 'Priya Sharma',
+    role: 'Software Engineer at Swiggy',
+    avatar: 'PS',
+    color: '#6366f1',
+  },
+  {
+    quote: "The ATS optimization alone is worth every rupee. My resume pass rate went from 20% to 80%.",
+    name: 'Rahul Verma',
+    role: 'Product Manager at Razorpay',
+    avatar: 'RV',
+    color: '#10b981',
+  },
+  {
+    quote: "Cover letter generation saves me hours. I can now apply to 10x more jobs every week.",
+    name: 'Anjali Singh',
+    role: 'Data Analyst at PhonePe',
+    avatar: 'AS',
+    color: '#f59e0b',
+  },
+];
+
+export const ENTERPRISE_HIGHLIGHTS = [
+  'Dedicated account manager',
+  'API access & integrations',
+  'Custom SLA',
+];
+
+
 /**
  * Get a plan by ID.
  */
