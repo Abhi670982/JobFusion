@@ -545,6 +545,15 @@ model Subscription {
   currentPeriodStart     DateTime           @default(now())
   currentPeriodEnd       DateTime?
   cancelAtPeriodEnd      Boolean            @default(false)
+  
+  // Extra fields requested for Phase 2 Subscription Management
+  clerkUserId            String?
+  email                  String?
+  checkoutSessionId      String?
+  dodoCustomerId         String?
+  dodoSubscriptionId     String?
+  billingCycle           String?            // "monthly" | "yearly"
+
   // Payment provider fields — filled in when Dodo is integrated
   paymentProvider        String?            // e.g. "dodo"
   customerId             String?            // Dodo customer ID
@@ -577,3 +586,18 @@ model Payment {
   @@index([subscriptionId, createdAt(sort: Desc)])
   @@map("payments")
 }
+
+model WebhookEvent {
+  id         String   @id @default(uuid())
+  eventId    String   @unique
+  provider   String   @default("dodo")
+  eventType  String
+  payload    Json
+  processed  Boolean  @default(false)
+  error      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("webhook_events")
+}
+

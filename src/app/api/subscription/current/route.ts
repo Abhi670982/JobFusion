@@ -1,53 +1,67 @@
-// ============================================================
-// /api/subscription/current — Get current user's subscription
-// ============================================================
-// PLACEHOLDER: Returns mocked data.
-// TODO (Dodo Integration): Fetch from DB using Clerk userId.
-// ============================================================
-
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { getOrCreateMongoUser } from '@/lib/auth-sync';
+import {
+  getCurrentPlan,
+  hasProAccess,
+  canUseResumeAI,
+  canGenerateCoverLetter,
+  canUseInterviewPrep,
+  canUseSmartMatch,
+  getAIUsage,
+  getPlanDisplayName
+} from '@/lib/subscription';
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const { userId } = await auth();
+    const { userId: clerkUserId } = await auth();
 
-    if (!userId) {
+    if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // MOCK RESPONSE — replace with real DB query when Dodo is integrated
-    // Example:
-    //   const sub = await prisma.subscription.findUnique({
-    //     where: { userId: dbUser.id },
-    //     include: { plan: true },
-    //   });
-    const mockSubscription = {
-      planId: 'free' as const,
-      planName: 'Free',
-      status: 'active' as const,
-      interval: null,
-      currentPeriodEnd: null,
-      cancelAtPeriodEnd: false,
-      // Payment provider fields — null until Dodo is integrated
-      paymentProvider: null,
-      customerId: null,
-      providerSubscriptionId: null,
-      // Feature gates
-      features: {
-        hasProAccess: false,
-        canUseResumeAI: false,
-        canGenerateCoverLetter: false,
-        canUseInterviewPrep: false,
-        canUseSmartMatch: false,
-      },
-      usage: {
-        aiOperations: { used: 3, limit: 5 },
-        savedJobs: { used: 0, limit: 20 },
-      },
-    };
+    const user = await getOrCreateMongoUser();
+    if (!user) {
+      return NextResponse.json({ error: 'User profile not found' }, { status: 404 });
+    }
 
-    return NextResponse.json({ subscription: mockSubscription });
+    const plan = await getCurrentPlan(user.id);
+    const proAccess = await hasProAccess(user.id);
+    const resumeAIGate = await canUseResumeAI(user.id);
+    const coverLetterGate = await canGenerateCoverLetter(user.id);
+    const interviewPrepGate = await canUseInterviewPrep(user.id);
+    const smartMatchGate = await canUseSmartMatch(user.id);
+    const aiUsage = await getAIUsage(user.id);
+
+    return NextResponse.json({
+      subscription: {
+        planId: plan.planId,
+        planName: getPlanDisplayName(plan.planId),
+        status: plan.status,
+        interval: plan.interval,
+        currentPeriodEnd: plan.currentPeriodEnd,
+        cancelAtPeriodEnd: plan.cancelAtPeriodEnd,
+        paymentProvider: plan.paymentProvider,
+        customerId: plan.customerId,
+        providerSubscriptionId: plan.providerSubscriptionId,
+        features: {
+          hasProAccess: proAccess,
+          canUseResumeAI: resumeAIGate.allowed,
+          canGenerateCoverLetter: coverLetterGate.allowed,
+          canUseInterviewPrep: interviewPrepGate.allowed,
+          canUseSmartMatch: smartMatchGate.allowed,
+        },
+        usage: {
+          aiOperations: {
+            used: aiUsage.used,
+            limit: aiUsage.limit,
+          },
+          savedJobs: { used: 0, limit: 20 }, // placeholder limit as per current template
+        },
+      }
+    });
   } catch (error) {
     console.error('[API /subscription/current]', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

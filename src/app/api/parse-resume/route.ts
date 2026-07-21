@@ -4,6 +4,7 @@ import { extractSkills } from "@/lib/skills-extractor";
 import { analyzeResume } from "@/lib/resume-intelligence";
 import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import { prisma } from "@/lib/prisma";
+import { canUseResumeAI } from "@/lib/subscription";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,16 @@ export async function POST(req: NextRequest) {
     }
     if (userId !== mongoUser._id.toString()) {
       return NextResponse.json({ success: false, step: "authorization", error: "Forbidden" }, { status: 403 });
+    }
+
+    // Gate the AI Resume Parsing/Analysis feature by checking active subscription / monthly limits
+    const gateResult = await canUseResumeAI(mongoUser.id);
+    if (!gateResult.allowed) {
+      return NextResponse.json({
+        success: false,
+        step: "authorization",
+        error: gateResult.reason || "Forbidden"
+      }, { status: 403 });
     }
 
     // Fetch profile from Postgres

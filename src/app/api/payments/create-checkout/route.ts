@@ -89,6 +89,9 @@ export async function POST(req: NextRequest) {
         email: user.email,
         name: user.fullName || 'User',
       },
+      metadata: {
+        clerkUserId: user.clerkId || "",
+      },
       return_url: returnUrl,
     };
 

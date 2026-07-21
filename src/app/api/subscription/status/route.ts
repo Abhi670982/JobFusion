@@ -1,34 +1,36 @@
-// ============================================================
-// /api/subscription/status — Get subscription status summary
-// ============================================================
-// PLACEHOLDER: Returns mocked status.
-// TODO (Dodo Integration): This route will also handle
-//   Dodo webhook events to update subscription status in DB.
-// ============================================================
-
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { getOrCreateMongoUser } from '@/lib/auth-sync';
+import { getCurrentPlan, hasProAccess, getPlanDisplayName } from '@/lib/subscription';
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const { userId } = await auth();
+    const { userId: clerkUserId } = await auth();
 
-    if (!userId) {
+    if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // MOCK STATUS — replace with real DB query when Dodo is integrated
-    const mockStatus = {
-      isActive: true,
-      isPro: false,
-      planId: 'free' as const,
-      planName: 'Free',
-      // Will be set by Dodo webhook when subscription is created
-      renewsAt: null,
-      cancelledAt: null,
-    };
+    const user = await getOrCreateMongoUser();
+    if (!user) {
+      return NextResponse.json({ error: 'User profile not found' }, { status: 404 });
+    }
 
-    return NextResponse.json({ status: mockStatus });
+    const plan = await getCurrentPlan(user.id);
+    const proAccess = await hasProAccess(user.id);
+
+    return NextResponse.json({
+      status: {
+        isActive: plan.status === 'active' || plan.status === 'trialing',
+        isPro: proAccess,
+        planId: plan.planId,
+        planName: getPlanDisplayName(plan.planId),
+        renewsAt: plan.currentPeriodEnd,
+        cancelledAt: plan.cancelAtPeriodEnd ? plan.currentPeriodEnd : null,
+      }
+    });
   } catch (error) {
     console.error('[API /subscription/status]', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

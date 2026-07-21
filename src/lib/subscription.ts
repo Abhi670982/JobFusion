@@ -1,17 +1,13 @@
 // ============================================================
 // lib/subscription.ts — Subscription Utility Functions
 // ============================================================
-// Currently returns mocked data.
-// When Dodo Payments is integrated, replace the mock returns
-// with real DB queries and Dodo API calls.
-// ============================================================
 
 import type { PlanId, SubscriptionInfo, FeatureGateResult, AIUsageInfo } from '@/types/subscription';
+import { prisma } from './prisma';
+import { getOrCreateMongoUser } from './auth-sync';
+import { startOfMonth } from 'date-fns';
 
-// ── Mock data ── ────────────────────────────────────────────
-// Replace this with a real DB query (prisma.subscription.findUnique)
-// once the Dodo integration is complete.
-const MOCK_SUBSCRIPTION: SubscriptionInfo = {
+const DEFAULT_FREE_SUBSCRIPTION: SubscriptionInfo = {
   planId: 'free',
   status: 'active',
   interval: null,
@@ -22,51 +18,115 @@ const MOCK_SUBSCRIPTION: SubscriptionInfo = {
   providerSubscriptionId: null,
 };
 
-// ────────────────────────────────────────────────────────────
-
 /**
  * Get the current user's active subscription and plan.
- * 
- * TODO (Dodo Integration): Replace mock with:
- *   const sub = await prisma.subscription.findUnique({ where: { userId }, include: { plan: true } });
- *   return sub ?? defaultFreeSubscription;
  */
-export async function getCurrentPlan(_userId?: string): Promise<SubscriptionInfo> {
-  // MOCK — always returns Free plan
-  return MOCK_SUBSCRIPTION;
+export async function getCurrentPlan(userId?: string): Promise<SubscriptionInfo> {
+  let targetUserId = userId;
+  if (!targetUserId) {
+    const user = await getOrCreateMongoUser();
+    if (!user) return DEFAULT_FREE_SUBSCRIPTION;
+    targetUserId = user.id;
+  }
+
+  try {
+    const sub = await prisma.subscription.findUnique({
+      where: { userId: targetUserId },
+      include: { plan: true },
+    });
+
+    if (!sub) {
+      return DEFAULT_FREE_SUBSCRIPTION;
+    }
+
+    return {
+      planId: sub.plan.planId as PlanId,
+      status: sub.status as any,
+      interval: sub.interval as any,
+      currentPeriodEnd: sub.currentPeriodEnd,
+      cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+      paymentProvider: sub.paymentProvider,
+      customerId: sub.customerId,
+      providerSubscriptionId: sub.providerSubscriptionId,
+    };
+  } catch (error) {
+    console.error("[getCurrentPlan] Error fetching plan from database:", error);
+    return DEFAULT_FREE_SUBSCRIPTION;
+  }
+}
+
+/**
+ * Get current subscription info
+ */
+export async function getCurrentSubscription(userId?: string) {
+  const planInfo = await getCurrentPlan(userId);
+  const isPro = planInfo.planId === 'pro_monthly' || planInfo.planId === 'pro_yearly';
+  const isActive = planInfo.status === 'active' || planInfo.status === 'trialing';
+
+  return {
+    plan: planInfo.planId,
+    status: planInfo.status,
+    expiry: planInfo.currentPeriodEnd,
+    billingCycle: planInfo.interval,
+    isPro: isPro && isActive,
+  };
 }
 
 /**
  * Check if the user has an active Pro (or higher) subscription.
- * 
- * TODO (Dodo Integration): Replace mock with a real DB check.
  */
-export async function hasProAccess(_userId?: string): Promise<boolean> {
-  // MOCK — always returns false (free tier)
-  return false;
+export async function hasProAccess(userId?: string): Promise<boolean> {
+  const sub = await getCurrentSubscription(userId);
+  return sub.isPro;
 }
 
 /**
  * Check if the user's subscription is currently active (not expired/cancelled).
- * 
- * TODO (Dodo Integration): Check subscription.status and currentPeriodEnd.
  */
-export async function isSubscriptionActive(_userId?: string): Promise<boolean> {
-  // MOCK — free plan is always "active"
-  return true;
+export async function isSubscriptionActive(userId?: string): Promise<boolean> {
+  const planInfo = await getCurrentPlan(userId);
+  return planInfo.status === 'active' || planInfo.status === 'trialing';
 }
 
 /**
  * Check if user can use the AI Resume Builder feature.
  * Free: 5/month limit. Pro: Unlimited.
- * 
- * TODO (Dodo Integration): Track usage in DB and check against plan limits.
  */
-export async function canUseResumeAI(_userId?: string): Promise<FeatureGateResult> {
-  // MOCK — always limited (free tier)
+export async function canUseResumeAI(userId?: string): Promise<FeatureGateResult> {
+  let targetUserId = userId;
+  if (!targetUserId) {
+    const user = await getOrCreateMongoUser();
+    if (!user) return { allowed: false, reason: 'Authentication required.', planRequired: 'pro_monthly' };
+    targetUserId = user.id;
+  }
+
+  const isPro = await hasProAccess(targetUserId);
+  if (isPro) {
+    return { allowed: true };
+  }
+
+  // Count parsing logs for the current month
+  try {
+    const count = await prisma.resumeParsingLog.count({
+      where: {
+        userId: targetUserId,
+        status: "success",
+        timestamp: {
+          gte: startOfMonth(new Date()),
+        },
+      },
+    });
+
+    if (count < 5) {
+      return { allowed: true };
+    }
+  } catch (error) {
+    console.error("[canUseResumeAI] Error counting parsing logs:", error);
+  }
+
   return {
     allowed: false,
-    reason: 'AI Resume Builder is a Pro feature.',
+    reason: 'AI Resume Builder monthly limit of 5 runs reached on the Free plan. Upgrade to Pro for unlimited access.',
     planRequired: 'pro_monthly',
   };
 }
@@ -74,11 +134,12 @@ export async function canUseResumeAI(_userId?: string): Promise<FeatureGateResul
 /**
  * Check if user can generate cover letters.
  * Free: Not available. Pro: Unlimited.
- * 
- * TODO (Dodo Integration): Check user's plan from DB.
  */
-export async function canGenerateCoverLetter(_userId?: string): Promise<FeatureGateResult> {
-  // MOCK — blocked for free tier
+export async function canGenerateCoverLetter(userId?: string): Promise<FeatureGateResult> {
+  const isPro = await hasProAccess(userId);
+  if (isPro) {
+    return { allowed: true };
+  }
   return {
     allowed: false,
     reason: 'Cover Letter Generation is a Pro feature.',
@@ -89,11 +150,12 @@ export async function canGenerateCoverLetter(_userId?: string): Promise<FeatureG
 /**
  * Check if user can access Interview Preparation.
  * Free: Not available. Pro: Available.
- * 
- * TODO (Dodo Integration): Check user's plan from DB.
  */
-export async function canUseInterviewPrep(_userId?: string): Promise<FeatureGateResult> {
-  // MOCK — blocked for free tier
+export async function canUseInterviewPrep(userId?: string): Promise<FeatureGateResult> {
+  const isPro = await hasProAccess(userId);
+  if (isPro) {
+    return { allowed: true };
+  }
   return {
     allowed: false,
     reason: 'Interview Preparation is a Pro feature.',
@@ -104,11 +166,12 @@ export async function canUseInterviewPrep(_userId?: string): Promise<FeatureGate
 /**
  * Check if user can use Smart Job Matching.
  * Free: Basic matching only. Pro: AI-powered smart matching.
- * 
- * TODO (Dodo Integration): Check user's plan from DB.
  */
-export async function canUseSmartMatch(_userId?: string): Promise<FeatureGateResult> {
-  // MOCK — blocked for free tier
+export async function canUseSmartMatch(userId?: string): Promise<FeatureGateResult> {
+  const isPro = await hasProAccess(userId);
+  if (isPro) {
+    return { allowed: true };
+  }
   return {
     allowed: false,
     reason: 'Smart Job Matching is a Pro feature.',
@@ -118,16 +181,44 @@ export async function canUseSmartMatch(_userId?: string): Promise<FeatureGateRes
 
 /**
  * Get current AI usage stats for the user.
- * 
- * TODO (Dodo Integration): Track real usage in DB.
  */
-export async function getAIUsage(_userId?: string): Promise<AIUsageInfo> {
-  // MOCK — shows 3/5 used on free plan
-  return {
-    used: 3,
-    limit: 5,
-    resetAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
-  };
+export async function getAIUsage(userId?: string): Promise<AIUsageInfo> {
+  let targetUserId = userId;
+  if (!targetUserId) {
+    const user = await getOrCreateMongoUser();
+    if (!user) return { used: 0, limit: 5, resetAt: null };
+    targetUserId = user.id;
+  }
+
+  const isPro = await hasProAccess(targetUserId);
+  if (isPro) {
+    return { used: 0, limit: null, resetAt: null };
+  }
+
+  try {
+    const count = await prisma.resumeParsingLog.count({
+      where: {
+        userId: targetUserId,
+        status: "success",
+        timestamp: {
+          gte: startOfMonth(new Date()),
+        },
+      },
+    });
+
+    // Reset date is the start of next month
+    const now = new Date();
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+    return {
+      used: count,
+      limit: 5,
+      resetAt: nextMonth,
+    };
+  } catch (error) {
+    console.error("[getAIUsage] Error calculating usage:", error);
+    return { used: 0, limit: 5, resetAt: null };
+  }
 }
 
 /**
@@ -157,14 +248,8 @@ export function getStatusLabel(status: SubscriptionInfo['status']): string {
 }
 
 /**
- * Placeholder upgrade handler.
- * 
- * TODO (Dodo Integration): Replace with Dodo checkout session creation.
- * Example: const session = await dodo.createCheckoutSession({ productId, customerId });
- *          window.location.href = session.url;
+ * Upgrade handler.
  */
 export function handleUpgrade(_planId?: PlanId, _interval?: 'monthly' | 'yearly'): void {
-  // PLACEHOLDER — Dodo Payments integration will be added here
-  // This function is intentionally empty.
-  // The UI components call this and show a toast notification.
+  // handoff is managed by routing directly to create-checkout endpoint on client side
 }
