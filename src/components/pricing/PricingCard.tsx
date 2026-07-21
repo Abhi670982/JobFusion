@@ -1,13 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Sparkles } from 'lucide-react';
+import { Check, Sparkles, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PricingBadge } from './PricingBadge';
 import { cn } from '@/lib/utils';
 import { formatPrice, type PricingPlan } from '@/lib/plans';
 import { toast } from 'sonner';
-import { handleUpgrade } from '@/lib/subscription';
 
 interface PricingCardProps {
   plan: PricingPlan;
@@ -17,12 +17,13 @@ interface PricingCardProps {
 }
 
 export function PricingCard({ plan, interval, index = 0, currentPlanId }: PricingCardProps) {
+  const [loading, setLoading] = useState(false);
   const price = interval === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
   const isCurrentPlan = currentPlanId === plan.id;
   const isContactSales = price === null;
 
-  const onUpgradeClick = () => {
-    if (isCurrentPlan) return;
+  const onUpgradeClick = async () => {
+    if (isCurrentPlan || loading) return;
 
     if (plan.id === 'recruiter') {
       // Contact Sales — redirect to contact page
@@ -30,13 +31,30 @@ export function PricingCard({ plan, interval, index = 0, currentPlanId }: Pricin
       return;
     }
 
-    // Placeholder — Dodo Payments integration will be added here
-    handleUpgrade(plan.id, interval);
-    toast.info('Dodo Payments integration will be added soon.', {
-      description: `You selected the ${plan.name} plan (${interval} billing).`,
-      duration: 4000,
-    });
+    setLoading(true);
+    try {
+      const response = await fetch('/api/payments/create-checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ plan: interval }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to initiate checkout.');
+      }
+
+      // Redirect to Dodo Checkout
+      window.location.href = data.checkout_url;
+    } catch (err: any) {
+      console.error('[Upgrade Error]:', err);
+      toast.error(err.message || 'Unable to start checkout. Please try again.');
+      setLoading(false);
+    }
   };
+
 
   return (
     <motion.div
@@ -115,17 +133,19 @@ export function PricingCard({ plan, interval, index = 0, currentPlanId }: Pricin
         id={`upgrade-${plan.id}`}
         variant={isCurrentPlan ? 'secondary' : plan.buttonVariant}
         onClick={onUpgradeClick}
-        disabled={isCurrentPlan}
+        disabled={isCurrentPlan || loading}
         aria-label={isCurrentPlan ? `You are on the ${plan.name} plan` : `${plan.buttonText} — ${plan.name} plan`}
         className={cn(
           'w-full rounded-xl font-semibold mb-7 transition-all',
           plan.recommended && !isCurrentPlan
             ? 'gradient-brand text-white border-0 shadow-md hover:opacity-90'
             : '',
-          isCurrentPlan ? 'cursor-default' : ''
+          (isCurrentPlan || loading) ? 'cursor-default' : ''
         )}
       >
-        {isCurrentPlan ? (
+        {loading ? (
+          <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Processing...</>
+        ) : isCurrentPlan ? (
           <><Check className="w-4 h-4 mr-1.5" /> Current Plan</>
         ) : plan.recommended ? (
           <><Sparkles className="w-4 h-4 mr-1.5" />{plan.buttonText}</>
