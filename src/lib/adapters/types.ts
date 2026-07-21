@@ -5,6 +5,8 @@ export interface FetchQuery {
   location?: string;
   page?: number;
   limit?: number;
+  crawlFrom?: Date;
+  crawlTo?: Date;
 }
 
 export interface UnifiedJob {

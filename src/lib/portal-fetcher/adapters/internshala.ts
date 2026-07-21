@@ -8,9 +8,12 @@ export class InternshalaPortalAdapter extends BasePortalAdapter {
 
   async fetchJobs(query: PortalFetchQuery): Promise<any[]> {
     const keyword = query.keywords[0] || "react developer";
-    const url = `https://internshala.com/jobs/keyword-${encodeURIComponent(keyword)}/`;
+    const page = query.page || 1;
+    const url = page > 1 
+      ? `https://internshala.com/jobs/keyword-${encodeURIComponent(keyword)}/page-${page}/`
+      : `https://internshala.com/jobs/keyword-${encodeURIComponent(keyword)}/`;
 
-    console.log(`[Internshala Portal Adapter] Starting scrape: ${url}`);
+    console.log(`[Internshala Portal Adapter] Starting scrape (page ${page}): ${url}`);
 
     // Standard Direct Cheerio Crawl
     try {
