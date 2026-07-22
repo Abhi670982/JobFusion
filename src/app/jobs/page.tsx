@@ -411,13 +411,17 @@ export default function JobsPage() {
         setJobs(data.data || []);
         setTotalJobsCount(data.total || 0);
         setTotalPages(data.totalPages || 1);
-        // Save with timestamp so TTL check works on next visit
-        sessionStorage.setItem(cacheKey, JSON.stringify({
-          jobs: data.data || [],
-          total: data.total || 0,
-          totalPages: data.totalPages || 1,
-          cachedAt: Date.now(),
-        }));
+        // Only cache if we actually got results back (don't cache empty pages in dev/sync states)
+        if (data.data && data.data.length > 0) {
+          sessionStorage.setItem(cacheKey, JSON.stringify({
+            jobs: data.data,
+            total: data.total || 0,
+            totalPages: data.totalPages || 1,
+            cachedAt: Date.now(),
+          }));
+        } else {
+          sessionStorage.removeItem(cacheKey);
+        }
       }
     } catch (err) {
       console.error("Failed to fetch jobs from API:", err);
@@ -433,13 +437,37 @@ export default function JobsPage() {
     
     async function loadData() {
       try {
+        // Parse search params from URL immediately (no async needed)
+        let searchString = window.location.search;
+        if (!searchString) {
+          const cachedQuery = sessionStorage.getItem('jobfusion_filter_query');
+          if (cachedQuery) {
+            searchString = '?' + cachedQuery;
+            window.history.replaceState(null, '', searchString);
+          }
+        }
+
+        const params = new URLSearchParams(searchString.replace(/^\?/, ''));
+
+        // ── OPTIMISTIC JOBS FETCH ──────────────────────────────────────────────
+        // Start fetching jobs immediately with URL params (or empty query = all jobs).
+        // This runs in parallel with auth+profile fetches, eliminating the waterfall.
+        // If the profile later resolves different filters, a second fetch will replace these results.
+        const hasExplicitFilters = params.get('q') || params.get('location') || params.get('remote') ||
+          params.get('source') || params.get('jobType') || params.get('experienceLevel') ||
+          params.get('skills') || params.get('salaryMin');
+        
+        const optimisticQuery = hasExplicitFilters ? params.toString() : 'source=careers&sortBy=postedAt&order=desc';
+        const optimisticFetchPromise = fetchFilteredJobs(optimisticQuery);
+
+        // ── PARALLEL AUTH + DATA FETCH ─────────────────────────────────────────
         let profVal: DbProfile | null = null;
         const currentUser = await fetchCurrentUser();
 
         if (currentUser) {
           setUser(currentUser);
 
-          // Now that we have the userId, fetch user-specific data
+          // Now that we have the userId, fetch user-specific data in parallel
           const [saved, apps, prof] = await Promise.allSettled([
             fetchSavedJobs(currentUser._id),
             fetchApplications(currentUser._id),
@@ -471,17 +499,7 @@ export default function JobsPage() {
           }
         }
 
-        // Parse search params from URL on load
-        let searchString = window.location.search;
-        if (!searchString) {
-          const cachedQuery = sessionStorage.getItem('jobfusion_filter_query');
-          if (cachedQuery) {
-            searchString = '?' + cachedQuery;
-            window.history.replaceState(null, '', searchString);
-          }
-        }
-
-        const params = new URLSearchParams(searchString);
+        // Restore filter UI state from URL params
         if (params.get('q')) setQueryInput(params.get('q') || '');
         if (params.get('location')) setLocationInput(params.get('location') || '');
         if (params.get('remote') === 'true') setRemoteOnly(true);
@@ -500,9 +518,8 @@ export default function JobsPage() {
           setSelectedSkills(loadedSkills);
         }
 
-        const hasExplicitFilters = params.get('q') || params.get('location') || params.get('remote') ||
-          params.get('source') || params.get('jobType') || params.get('experienceLevel') ||
-          params.get('skills') || params.get('salaryMin');
+        // Wait for the optimistic fetch to finish before proceeding
+        await optimisticFetchPromise;
 
         if (!hasExplicitFilters && profVal) {
 
@@ -606,7 +623,9 @@ export default function JobsPage() {
             if (inferredSalaryMin > 0) setSalaryRange(inferredSalaryMin);
 
             // Build query string for API + URL bar
+            // Always lock Company Careers tab to source=careers only.
             const queryParams = new URLSearchParams();
+            queryParams.set('source', 'careers');
             if (userSkills.length > 0)  queryParams.set('skills', userSkills.join(','));
             if (inferredExpLevel)        queryParams.set('experienceLevel', inferredExpLevel);
             if (inferredSalaryMin > 0)   queryParams.set('salaryMin', String(inferredSalaryMin * 100000));
@@ -618,18 +637,16 @@ export default function JobsPage() {
             await fetchFilteredJobs(queryParams.toString());
 
           } else {
-            // Profile exists but has no usable data — load all jobs with filters unselected
+            // Profile exists but has no usable data — load careers jobs with filters unselected
             setSkillWarning(false);
-            await fetchFilteredJobs('');
+            await fetchFilteredJobs('source=careers&sortBy=postedAt&order=desc');
           }
 
         } else if (!hasExplicitFilters && !profVal) {
-          // No profile at all
+          // No profile at all — optimistic fetch already covers this
           setSkillWarning(false);
-          await fetchFilteredJobs('');
         } else {
-          // Explicit filters present (URL/sessionStorage) — load normally
-          await fetchFilteredJobs(searchString ? searchString.replace(/^\?/, '') : '');
+          // Explicit filters present (URL/sessionStorage) — optimistic fetch already used URL params
         }
         initialDataLoaded.current = true;
 
@@ -655,7 +672,10 @@ export default function JobsPage() {
     if (sortBy) params.set('sortBy', sortBy);
     if (order) params.set('order', order);
     
-    if (selectedSources.length > 0) params.set('source', selectedSources.join(','));
+    // Company Careers tab always restricts to source=careers by default.
+    // If the user has manually selected sources via the source filter, honour that instead.
+    const effectiveSources = selectedSources.length > 0 ? selectedSources : ['careers'];
+    params.set('source', effectiveSources.join(','));
     if (selectedJobTypes.length > 0) params.set('jobType', selectedJobTypes.join(','));
     if (selectedExpLevels.length > 0) params.set('experienceLevel', selectedExpLevels.join(','));
     if (selectedSkills.length > 0) params.set('skills', selectedSkills.join(','));
@@ -720,6 +740,17 @@ export default function JobsPage() {
     setCurrentPage(newPage);
     handleFilterChange(newPage);
   };
+
+  // Scroll to top on any page change
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    document.documentElement.scrollTo({ top: 0, behavior: 'smooth' });
+    document.body.scrollTo({ top: 0, behavior: 'smooth' });
+    const mainEl = document.querySelector('main');
+    if (mainEl) {
+      mainEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [currentPage]);
 
   // AI Matching with Skills in Profile
   const handleAISearch = async () => {
@@ -827,6 +858,11 @@ export default function JobsPage() {
     setOrder('desc');
     
     sessionStorage.removeItem('jobfusion_filter_query');
+    Object.keys(sessionStorage).forEach((key) => {
+      if (key.startsWith('jobfusion_jobs_cache_')) {
+        sessionStorage.removeItem(key);
+      }
+    });
     window.history.pushState(null, '', window.location.pathname);
 
     if (profile && profile.skills && profile.skills.length > 0) {
@@ -845,12 +881,12 @@ export default function JobsPage() {
     });
   };
 
-  // RULE 1: Defensive client-side 24h filter guard for careers source
+  // RULE 1: Defensive client-side 10-day filter guard for careers source (matching backend)
   const jobsList = (Array.isArray(jobs) ? jobs : []).filter(job => {
     if (job.source !== 'careers') return true;
     if (!job.postedAtDate) return false; // no date = reject
     const age = Date.now() - new Date(job.postedAtDate).getTime();
-    return age <= 24 * 60 * 60 * 1000;
+    return age <= 10 * 24 * 60 * 60 * 1000;
   });
 
   // Warn if client-side filter discarded any stale careers jobs

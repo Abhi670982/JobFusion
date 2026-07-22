@@ -47,6 +47,7 @@ export function toRelativeTimeString(date: Date | null | undefined): string {
 }
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+const TEN_DAYS_MS = 10 * 24 * 60 * 60 * 1000;
 
 // Fetch and process jobs for a specific source
 export async function runSourceSync(
@@ -124,37 +125,6 @@ export async function runSourceSync(
 
     console.log(`[Pipeline] Keywords selected for ${source} sync:`, keywordsToSearch);
 
-    const allRawJobs: any[] = [];
-    for (const keyword of keywordsToSearch) {
-      try {
-        console.log(`[Pipeline] Fetching jobs from ${source} for keyword: "${keyword}"`);
-        const rawJobs = await adapter.fetchJobs({
-          keywords: [keyword],
-          location: "India",
-          page: 1,
-        });
-        console.log(
-          `[Pipeline] Got ${rawJobs.length} raw jobs for "${keyword}" from ${source}`
-        );
-
-        const taggedJobs = rawJobs.map((rj: any) => ({
-          ...rj,
-          _matchedSkill: keyword.toLowerCase(),
-        }));
-        allRawJobs.push(...taggedJobs);
-      } catch (err: any) {
-        console.error(
-          `[Pipeline] Fetch failed for ${source} keyword "${keyword}":`,
-          err.message
-        );
-      }
-      await new Promise((resolve) => setTimeout(resolve, 2500));
-    }
-
-    console.log(
-      `[Pipeline] Total aggregated raw jobs from ${source} for all keywords: ${allRawJobs.length}`
-    );
-
     let successCount = 0;
     let jobsAdded = 0;
     let jobsUpdated = 0;
@@ -163,148 +133,369 @@ export async function runSourceSync(
     let rejectedNoSkill = 0;
     const newJobsList: any[] = [];
 
-    for (const raw of allRawJobs) {
-      try {
-        const unified = adapter.mapToUnified(raw);
-        const matchedSkill: string | null = raw._matchedSkill || null;
-
-        if (!unified.dedupeHash) {
-          throw new Error("Missing dedupeHash from adapter mapping");
+    if (source === "careers") {
+      const allRawJobs: any[] = [];
+      for (const keyword of keywordsToSearch) {
+        try {
+          console.log(`[Pipeline] Fetching all jobs from ${source} for keyword: "${keyword}" (once)`);
+          const rawJobs = await adapter.fetchJobs({
+            keywords: [keyword],
+            location: "India",
+            page: 1,
+          });
+          const taggedJobs = rawJobs.map((rj: any) => ({
+            ...rj,
+            _matchedSkill: keyword.toLowerCase(),
+          }));
+          allRawJobs.push(...taggedJobs);
+        } catch (err: any) {
+          console.error(`[Pipeline] Fetch failed for ${source} keyword "${keyword}":`, err.message);
         }
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+      }
 
-        // RULE 1: Discard jobs missing posted date
-        if (!unified.postedAt) {
-          rejectedNoDate++;
-          continue;
+      console.log(`[Pipeline] Total raw careers jobs fetched: ${allRawJobs.length}`);
+
+      // Normalize all fetched jobs in memory
+      const mappedJobs = allRawJobs.map(raw => {
+        try {
+          const unified = adapter.mapToUnified(raw);
+          const matchedSkill = raw._matchedSkill || null;
+          return { raw, unified, matchedSkill };
+        } catch (err: any) {
+          console.error(`[Pipeline] Mapping failed for raw career job:`, err.message);
+          return null;
         }
+      }).filter(Boolean) as { raw: any; unified: any; matchedSkill: string | null }[];
 
-        const jobDate = new Date(unified.postedAt);
-        const ageMs = Date.now() - jobDate.getTime();
-        if (ageMs > TWENTY_FOUR_HOURS_MS) {
-          rejectedTooOld++;
-          continue;
-        }
+      // Progressive loop over 7 daily windows
+      const requestNow = new Date();
+      const MIN_RELEVANT_JOB_TARGET = process.env.MIN_RELEVANT_JOB_TARGET 
+        ? parseInt(process.env.MIN_RELEVANT_JOB_TARGET, 10) 
+        : 20;
 
-        // RULE 2: Matched skill verification
-        if (!matchedSkill) {
-          rejectedNoSkill++;
-          continue;
-        }
+      const relevantJobKeys = new Set<string>();
 
-        const existingJob = await prisma.job.findUnique({
-          where: { dedupeHash: unified.dedupeHash },
+      for (let day = 0; day < 7; day++) {
+        const crawlFrom = new Date(requestNow.getTime() - (day + 1) * 24 * 60 * 60 * 1000);
+        const crawlTo = new Date(requestNow.getTime() - day * 24 * 60 * 60 * 1000);
+
+        // Filter jobs belonging to this day's window
+        const dailyJobs = mappedJobs.filter(item => {
+          let jobDate = item.unified.postedAt ? new Date(item.unified.postedAt) : null;
+          if (!jobDate || isNaN(jobDate.getTime())) {
+            jobDate = new Date();
+          }
+          return jobDate >= crawlFrom && jobDate < crawlTo;
         });
 
-        if (existingJob) {
-          await prisma.job.update({
-            where: { id: existingJob.id },
-            data: {
-              fetchedAt: new Date(),
-              applyUrl: unified.applyUrl || existingJob.applyUrl,
-              sourceUrl: unified.sourceUrl || existingJob.sourceUrl,
-              postedAtDate: jobDate,
-              postedAt: toRelativeTimeString(jobDate),
-              matchedSkill,
-              expiresAt: new Date(Date.now() + TWENTY_FOUR_HOURS_MS),
-              isActive: true,
-            },
-          });
-          jobsUpdated++;
-          console.log(
-            `[Pipeline] Updated existing job: ${unified.title} at ${unified.company} (${source})`
-          );
-        } else {
-          const experienceString =
-            unified.experienceLevel === "entry"
-              ? "Entry Level"
-              : unified.experienceLevel === "senior"
-                ? "Senior (5+ yrs)"
-                : unified.experienceLevel === "lead"
-                  ? "Lead / Principal"
-                  : "Mid Level";
+        console.log(`[Pipeline] Careers progressive processing - Day ${day + 1}: ${crawlFrom.toISOString()} to ${crawlTo.toISOString()} -> found ${dailyJobs.length} jobs`);
 
-          const salaryString =
-            unified.salaryMin && unified.salaryMax
-              ? `₹${Math.round(unified.salaryMin / 100000)}L – ₹${Math.round(unified.salaryMax / 100000)}L`
-              : "Not disclosed";
+        for (const item of dailyJobs) {
+          try {
+            const { raw, unified, matchedSkill } = item;
 
-          let pgType = "full_time";
-          if (unified.jobType === "full-time") pgType = "full_time";
-          else if (unified.jobType === "part-time") pgType = "part_time";
-          else if (
-            ["contract", "internship", "freelance"].includes(unified.jobType || "")
-          ) {
-            pgType = unified.jobType || "full_time";
+            if (!unified.dedupeHash) {
+              throw new Error("Missing dedupeHash from adapter mapping");
+            }
+
+            let jobDate = unified.postedAt ? new Date(unified.postedAt) : null;
+            if (!jobDate || isNaN(jobDate.getTime())) {
+              jobDate = new Date();
+            }
+            const ageMs = Date.now() - jobDate.getTime();
+            if (ageMs > TEN_DAYS_MS) {
+              rejectedTooOld++;
+              continue;
+            }
+
+            if (!matchedSkill) {
+              rejectedNoSkill++;
+              continue;
+            }
+
+            const existingJob = await prisma.job.findUnique({
+              where: { dedupeHash: unified.dedupeHash },
+            });
+
+            if (existingJob) {
+              await prisma.job.update({
+                where: { id: existingJob.id },
+                data: {
+                  fetchedAt: new Date(),
+                  applyUrl: unified.applyUrl || existingJob.applyUrl,
+                  sourceUrl: unified.sourceUrl || existingJob.sourceUrl,
+                  postedAtDate: jobDate,
+                  postedAt: toRelativeTimeString(jobDate),
+                  matchedSkill,
+                  expiresAt: new Date(Date.now() + TEN_DAYS_MS),
+                  isActive: true,
+                },
+              });
+              jobsUpdated++;
+              console.log(
+                `[Pipeline] Updated existing job: ${unified.title} at ${unified.company} (${source})`
+              );
+            } else {
+              const experienceString =
+                unified.experienceLevel === "entry"
+                  ? "Entry Level"
+                  : unified.experienceLevel === "senior"
+                    ? "Senior (5+ yrs)"
+                    : unified.experienceLevel === "lead"
+                      ? "Lead / Principal"
+                      : "Mid Level";
+
+              const salaryString =
+                unified.salaryMin && unified.salaryMax
+                  ? `₹${Math.round(unified.salaryMin / 100000)}L – ₹${Math.round(unified.salaryMax / 100000)}L`
+                  : "Not disclosed";
+
+              let pgType = "full_time";
+              if (unified.jobType === "full-time") pgType = "full_time";
+              else if (unified.jobType === "part-time") pgType = "part_time";
+              else if (
+                ["contract", "internship", "freelance"].includes(unified.jobType || "")
+              ) {
+                pgType = unified.jobType || "full_time";
+              }
+
+              const newJob = await prisma.job.create({
+                data: {
+                  title: unified.title,
+                  company: unified.company,
+                  companyLogo: unified.companyLogoUrl || unified.company.charAt(0),
+                  companyColor: getCompanyColor(source),
+                  location: unified.location || "Remote, India",
+                  locationType: unified.isRemote ? "remote" : "onsite",
+                  salary: salaryString,
+                  salaryMin: unified.salaryMin || 0,
+                  salaryMax: unified.salaryMax || 0,
+                  experience: experienceString,
+                  experienceLevel: (unified.experienceLevel || "mid") as any,
+                  type: pgType as any,
+                  jobType: unified.jobType,
+                  skills: unified.skills,
+                  matchScore: 70 + Math.floor(Math.random() * 25),
+                  postedAt: toRelativeTimeString(jobDate),
+                  postedAtDate: jobDate,
+                  description: unified.description,
+                  descriptionHtml: unified.descriptionHtml,
+                  source: source,
+                  sourceId: unified.sourceId,
+                  sourceUrl: unified.sourceUrl,
+                  applyUrl: unified.applyUrl,
+                  city: unified.city,
+                  country: unified.country,
+                  isRemote: unified.isRemote,
+                  salaryCurrency: unified.salaryCurrency,
+                  salaryPeriod: unified.salaryPeriod,
+                  expiresAt: new Date(Date.now() + TEN_DAYS_MS),
+                  fetchedAt: unified.fetchedAt || new Date(),
+                  dedupeHash: unified.dedupeHash,
+                  category: "Engineering",
+                  featured: Math.random() > 0.85,
+                  matchedSkill,
+                  isActive: true,
+                },
+              });
+              newJobsList.push(newJob);
+              jobsAdded++;
+              console.log(
+                `[Pipeline] Inserted new job: ${unified.title} at ${unified.company} (${source})`
+              );
+            }
+
+            successCount++;
+            relevantJobKeys.add(unified.dedupeHash);
+          } catch (err: any) {
+            console.error(`[Pipeline] Job processing failed for careers in window:`, err.message);
           }
 
-          const newJob = await prisma.job.create({
-            data: {
-              title: unified.title,
-              company: unified.company,
-              companyLogo: unified.companyLogoUrl || unified.company.charAt(0),
-              companyColor: getCompanyColor(source),
-              location: unified.location || "Remote, India",
-              locationType: unified.isRemote ? "remote" : "onsite",
-              salary: salaryString,
-              salaryMin: unified.salaryMin || 0,
-              salaryMax: unified.salaryMax || 0,
-              experience: experienceString,
-              experienceLevel: (unified.experienceLevel || "mid") as any,
-              type: pgType as any,
-              jobType: unified.jobType,
-              skills: unified.skills,
-              matchScore: 70 + Math.floor(Math.random() * 25),
-              postedAt: toRelativeTimeString(jobDate),
-              postedAtDate: jobDate,
-              description: unified.description,
-              descriptionHtml: unified.descriptionHtml,
-              source: source,
-              sourceId: unified.sourceId,
-              sourceUrl: unified.sourceUrl,
-              applyUrl: unified.applyUrl,
-              city: unified.city,
-              country: unified.country,
-              isRemote: unified.isRemote,
-              salaryCurrency: unified.salaryCurrency,
-              salaryPeriod: unified.salaryPeriod,
-              expiresAt: new Date(Date.now() + TWENTY_FOUR_HOURS_MS),
-              fetchedAt: unified.fetchedAt || new Date(),
-              dedupeHash: unified.dedupeHash,
-              category: "Engineering",
-              featured: Math.random() > 0.85,
-              matchedSkill,
-              isActive: true,
-            },
-          });
-          newJobsList.push(newJob);
-          jobsAdded++;
-          console.log(
-            `[Pipeline] Inserted new job: ${unified.title} at ${unified.company} (${source})`
-          );
         }
 
-        successCount++;
-      } catch (err: any) {
-        console.error(
-          `[Pipeline] Job normalization failed for ${source}:`,
-          err.message
-        );
+        console.log(`[Pipeline] Day ${day + 1} progressive evaluation: processed ${dailyJobs.length} jobs. Unique relevant match set size: ${relevantJobKeys.size}/${MIN_RELEVANT_JOB_TARGET}`);
+
+        if (relevantJobKeys.size >= MIN_RELEVANT_JOB_TARGET) {
+          console.log(`[Pipeline] Reached target of ${MIN_RELEVANT_JOB_TARGET} unique relevant jobs. Stopping progressive expansion.`);
+          break;
+        }
+      }
+    } else {
+      const allRawJobs: any[] = [];
+      for (const keyword of keywordsToSearch) {
         try {
-          await prisma.failedJob.create({
-            data: {
-              source,
-              rawPayload: raw || {},
-              errorMsg: err.message || "Failed to normalize job payload",
-            },
+          console.log(`[Pipeline] Fetching jobs from ${source} for keyword: "${keyword}"`);
+          const rawJobs = await adapter.fetchJobs({
+            keywords: [keyword],
+            location: "India",
+            page: 1,
           });
-        } catch (pgErr) {
-          console.error("Error creating FailedJob in PG:", pgErr);
+          console.log(
+            `[Pipeline] Got ${rawJobs.length} raw jobs for "${keyword}" from ${source}`
+          );
+
+          const taggedJobs = rawJobs.map((rj: any) => ({
+            ...rj,
+            _matchedSkill: keyword.toLowerCase(),
+          }));
+          allRawJobs.push(...taggedJobs);
+        } catch (err: any) {
+          console.error(
+            `[Pipeline] Fetch failed for ${source} keyword "${keyword}":`,
+            err.message
+          );
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+      }
+
+      console.log(
+        `[Pipeline] Total aggregated raw jobs from ${source} for all keywords: ${allRawJobs.length}`
+      );
+
+      for (const raw of allRawJobs) {
+        try {
+          const unified = adapter.mapToUnified(raw);
+          const matchedSkill: string | null = raw._matchedSkill || null;
+
+          if (!unified.dedupeHash) {
+            throw new Error("Missing dedupeHash from adapter mapping");
+          }
+
+          // RULE 1: Parse the posted date; fall back to now if unparseable so the job still enters DB
+          let jobDate = unified.postedAt ? new Date(unified.postedAt) : null;
+          if (!jobDate || isNaN(jobDate.getTime())) {
+            // If we can't parse the date, use the current time as a conservative fallback
+            // (job will appear as "just now" which is better than being silently dropped)
+            jobDate = new Date();
+          }
+          const ageMs = Date.now() - jobDate.getTime();
+          if (ageMs > TEN_DAYS_MS) {
+            rejectedTooOld++;
+            continue;
+          }
+
+          // RULE 2: Matched skill verification
+          if (!matchedSkill) {
+            rejectedNoSkill++;
+            continue;
+          }
+
+          const existingJob = await prisma.job.findUnique({
+            where: { dedupeHash: unified.dedupeHash },
+          });
+
+          if (existingJob) {
+            await prisma.job.update({
+              where: { id: existingJob.id },
+              data: {
+                fetchedAt: new Date(),
+                applyUrl: unified.applyUrl || existingJob.applyUrl,
+                sourceUrl: unified.sourceUrl || existingJob.sourceUrl,
+                postedAtDate: jobDate,
+                postedAt: toRelativeTimeString(jobDate),
+                matchedSkill,
+                expiresAt: new Date(Date.now() + TEN_DAYS_MS),
+                isActive: true,
+              },
+            });
+            jobsUpdated++;
+            console.log(
+              `[Pipeline] Updated existing job: ${unified.title} at ${unified.company} (${source})`
+            );
+          } else {
+            const experienceString =
+              unified.experienceLevel === "entry"
+                ? "Entry Level"
+                : unified.experienceLevel === "senior"
+                  ? "Senior (5+ yrs)"
+                  : unified.experienceLevel === "lead"
+                    ? "Lead / Principal"
+                    : "Mid Level";
+
+            const salaryString =
+              unified.salaryMin && unified.salaryMax
+                ? `₹${Math.round(unified.salaryMin / 100000)}L – ₹${Math.round(unified.salaryMax / 100000)}L`
+                : "Not disclosed";
+
+            let pgType = "full_time";
+            if (unified.jobType === "full-time") pgType = "full_time";
+            else if (unified.jobType === "part-time") pgType = "part_time";
+            else if (
+              ["contract", "internship", "freelance"].includes(unified.jobType || "")
+            ) {
+              pgType = unified.jobType || "full_time";
+            }
+
+            const newJob = await prisma.job.create({
+              data: {
+                title: unified.title,
+                company: unified.company,
+                companyLogo: unified.companyLogoUrl || unified.company.charAt(0),
+                companyColor: getCompanyColor(source),
+                location: unified.location || "Remote, India",
+                locationType: unified.isRemote ? "remote" : "onsite",
+                salary: salaryString,
+                salaryMin: unified.salaryMin || 0,
+                salaryMax: unified.salaryMax || 0,
+                experience: experienceString,
+                experienceLevel: (unified.experienceLevel || "mid") as any,
+                type: pgType as any,
+                jobType: unified.jobType,
+                skills: unified.skills,
+                matchScore: 70 + Math.floor(Math.random() * 25),
+                postedAt: toRelativeTimeString(jobDate),
+                postedAtDate: jobDate,
+                description: unified.description,
+                descriptionHtml: unified.descriptionHtml,
+                source: source,
+                sourceId: unified.sourceId,
+                sourceUrl: unified.sourceUrl,
+                applyUrl: unified.applyUrl,
+                city: unified.city,
+                country: unified.country,
+                isRemote: unified.isRemote,
+                salaryCurrency: unified.salaryCurrency,
+                salaryPeriod: unified.salaryPeriod,
+                expiresAt: new Date(Date.now() + TEN_DAYS_MS),
+                fetchedAt: unified.fetchedAt || new Date(),
+                dedupeHash: unified.dedupeHash,
+                category: "Engineering",
+                featured: Math.random() > 0.85,
+                matchedSkill,
+                isActive: true,
+              },
+            });
+            newJobsList.push(newJob);
+            jobsAdded++;
+            console.log(
+              `[Pipeline] Inserted new job: ${unified.title} at ${unified.company} (${source})`
+            );
+          }
+
+          successCount++;
+        } catch (err: any) {
+          console.error(
+            `[Pipeline] Job normalization failed for ${source}:`,
+            err.message
+          );
+          try {
+            await prisma.failedJob.create({
+              data: {
+                source,
+                rawPayload: raw || {},
+                errorMsg: err.message || "Failed to normalize job payload",
+              },
+            });
+          } catch (pgErr) {
+            console.error("Error creating FailedJob in PG:", pgErr);
+          }
         }
       }
     }
 
-    // Hard-expire jobs older than 24 hours for this source
-    const cutoff = new Date(Date.now() - TWENTY_FOUR_HOURS_MS);
+    // Hard-expire jobs older than 10 days for this source
+    const cutoff = new Date(Date.now() - TEN_DAYS_MS);
     try {
       const expired = await prisma.job.updateMany({
         where: {

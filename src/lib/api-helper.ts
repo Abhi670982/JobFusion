@@ -192,8 +192,14 @@ export async function fetchCurrentUser(forceRefresh = false): Promise<DbUser | n
         lastUserFetchTime = Date.now();
         return data.user;
       }
-    } catch (error) {
-      console.error("[Frontend API] Error fetching current user:", error);
+    } catch (error: any) {
+      // "TypeError: Failed to fetch" is a transient network error (e.g. during Clerk hydration).
+      // Downgrade to warn so it doesn't pollute the error console on normal page loads.
+      if (error?.name === 'TypeError') {
+        console.warn("[Frontend API] fetchCurrentUser() - Transient network error:", error.message);
+      } else {
+        console.error("[Frontend API] Error fetching current user:", error);
+      }
     } finally {
       cachedUserPromise = null;
     }

@@ -164,12 +164,10 @@ export default function PortalJobCard({ job, index = 0 }: PortalJobCardProps) {
             <DollarSign className="w-3.5 h-3.5 text-primary" />
             <span>{job.salary || "Not disclosed"}</span>
           </span>
-          {postedStr && (
-            <span className="flex items-center gap-1 text-[10px] text-muted-foreground font-semibold">
-              <Clock className="w-3.5 h-3.5" />
-              {postedStr}
-            </span>
-          )}
+          <span className="flex items-center gap-1 text-[10px] text-muted-foreground font-semibold">
+            <Clock className="w-3.5 h-3.5" />
+            {job.isDateless || !postedStr ? "Date unknown" : postedStr}
+          </span>
         </div>
 
         <Button

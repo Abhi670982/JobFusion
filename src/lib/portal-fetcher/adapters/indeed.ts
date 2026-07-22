@@ -16,6 +16,7 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
   async fetchJobs(query: PortalFetchQuery): Promise<any[]> {
     const keyword = query.keywords[0] || "react developer";
     const location = query.location || "India";
+    const page = query.page || 1;
 
     if (!this.apiKey) {
       console.warn("[Indeed Portal Adapter] SERPAPI_KEY is not set. Checking environment compatibility for Puppeteer crawl...");
@@ -38,7 +39,7 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
 
       // Local/dev environment: Run Puppeteer to crawl Indeed directly
       try {
-        return await this.scrapeWithPuppeteer(keyword, location);
+        return await this.scrapeWithPuppeteer(keyword, location, page);
       } catch (err: any) {
         console.error("[Indeed Portal Adapter] Puppeteer crawl failed:", err.message);
         console.log("[Indeed Portal Adapter] Falling back to Jobicy + Remotive...");
@@ -56,9 +57,10 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
       }
     }
 
-    const url = `https://serpapi.com/search?engine=google_jobs&q=${encodeURIComponent(keyword)}&location=${encodeURIComponent(location)}&api_key=${this.apiKey}`;
+    const start = (page - 1) * 10;
+    const url = `https://serpapi.com/search?engine=google_jobs&q=${encodeURIComponent(keyword)}&location=${encodeURIComponent(location)}&start=${start}&api_key=${this.apiKey}`;
 
-    console.log(`[Indeed Portal Adapter] Fetching Indeed jobs via SerpAPI: ${url}`);
+    console.log(`[Indeed Portal Adapter] Fetching Indeed jobs via SerpAPI (page ${page}, start ${start}): ${url}`);
 
     try {
       const response = await fetch(url);
@@ -273,11 +275,12 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
     };
   }
 
-  private async scrapeWithPuppeteer(keyword: string, location: string): Promise<any[]> {
+  private async scrapeWithPuppeteer(keyword: string, location: string, pageNum: number): Promise<any[]> {
     const { withPage } = await import("@/lib/browser-pool");
-    const url = `https://in.indeed.com/jobs?q=${encodeURIComponent(keyword)}&l=${encodeURIComponent(location)}&f_TPR=r86400&fromage=1&sort=date`;
+    const start = (pageNum - 1) * 10;
+    const url = `https://in.indeed.com/jobs?q=${encodeURIComponent(keyword)}&l=${encodeURIComponent(location)}&start=${start}&f_TPR=r604800&fromage=7&sort=date`;
 
-    console.log(`[Indeed Portal Adapter] Launching Puppeteer to scrape Indeed: ${url}`);
+    console.log(`[Indeed Portal Adapter] Launching Puppeteer to scrape Indeed (page ${pageNum}, start ${start}): ${url}`);
 
     return withPage(async (page) => {
       await page.setUserAgent(

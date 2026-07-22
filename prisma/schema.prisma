@@ -25,6 +25,8 @@ model User {
   subscription Subscription?
   usages       UserUsage[]
   apiKeys      UserApiKey?
+  userJobs     UserJob[]
+  crawlState   UserCrawlState?
 
   @@map("users")
 }
@@ -110,6 +112,7 @@ model Job {
   applications     Application[]
   reports          Report[]
   savedJobs        SavedJob[]
+  userJobs         UserJob[]
 
   @@index([source])
   @@index([title])
@@ -499,6 +502,7 @@ enum ParsingStatus {
   failed
 }
 
+
 // ============================================================
 // SUBSCRIPTION & BILLING MODELS
 // (Placeholder — payment logic will be added later via Dodo)
@@ -631,5 +635,40 @@ model UserApiKey {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_api_keys")
+}
+
+
+model UserJob {
+  id            String   @id @default(uuid())
+  userId        String
+  jobId         String
+  matchedSkills String[] @default([])
+  matchScore    Int      @default(0)
+  discoveredAt  DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  job  Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jobId])
+  @@index([userId])
+  @@index([jobId])
+  @@map("user_jobs")
+}
+
+model UserCrawlState {
+  id                    String    @id @default(uuid())
+  userId                String    @unique
+  lastSuccessfulCrawlAt DateTime?
+  crawlStatus           String    @default("idle")
+  crawlStartedAt        DateTime?
+  skillsHash            String    @default("")
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_crawl_states")
 }
 
