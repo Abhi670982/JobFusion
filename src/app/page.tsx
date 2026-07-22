@@ -20,6 +20,7 @@ import { features } from '@/lib/data';
 // so they don't need to be in the initial JS bundle.
 const Footer = dynamic(() => import('@/components/footer'), { ssr: true });
 const HeroBackground = dynamic(() => import('@/components/hero-background'), { ssr: false });
+import { CompanyMarquee } from '@/components/company-marquee';
 
 const iconMap: Record<string, React.ComponentType<any>> = {
   brain: Brain, zap: Zap, target: Target,
@@ -76,12 +77,6 @@ export default function LandingPage() {
             One Search.{' '}
             <span className="relative">
               <span className="gradient-brand-text">Every Opportunity.</span>
-              <motion.div
-                initial={{ scaleX: 0 }} animate={{ scaleX: 1 }}
-                transition={{ delay: 0.7, duration: 0.6, ease: 'easeOut' }}
-                className="absolute -bottom-1 left-0 right-0 h-0.5 rounded-full"
-                style={{ background: 'linear-gradient(90deg, oklch(0.53 0.24 258), oklch(0.5 0.25 272))' }}
-              />
             </span>
           </h1>
 
@@ -164,6 +159,13 @@ export default function LandingPage() {
 
         </motion.div>
 
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+        >
+          <CompanyMarquee />
+        </motion.div>
 
       </section>
 

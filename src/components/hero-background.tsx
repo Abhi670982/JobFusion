@@ -177,65 +177,6 @@ export default function HeroBackground() {
         </>
       )}
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-10">
-        <style dangerouslySetInnerHTML={{
-          __html: `
-        @keyframes floatComplex {
-          0%   { transform: translate3d(0, 0, 0) rotate(0deg); }
-          33%  { transform: translate3d(var(--fx1), var(--fy1), 0) rotate(var(--rot)); }
-          66%  { transform: translate3d(var(--fx2), var(--fy2), 0) rotate(calc(var(--rot) * -1)); }
-          100% { transform: translate3d(0, 0, 0) rotate(0deg); }
-        }
-      ` }} />
-
-        {/* 5. Floating company logos with inline SVG */}
-        {logoItems.map((item, i) => (
-          <div
-            key={i}
-            className="absolute flex items-center justify-center rounded-full backdrop-blur-sm"
-            style={{
-              left: `calc(${item.x}% - ${item.size / 2}px)`,
-              top: `calc(${item.y}% - ${item.size / 2}px)`,
-              width: `${item.size}px`,
-              height: `${item.size}px`,
-              background: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
-              border: `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'}`,
-              boxShadow: resolvedTheme === 'dark'
-                ? `0 0 18px rgba(56,189,248,0.18), inset 0 0 12px rgba(255,255,255,0.03)`
-                : `0 4px 20px rgba(0,0,0,0.08), inset 0 0 12px rgba(0,0,0,0.02)`,
-              animation: `floatComplex ${item.duration}s ease-in-out infinite`,
-              animationDelay: `${item.delay}s`,
-              '--fx1': `${item.floatX1}px`,
-              '--fy1': `${item.floatY1}px`,
-              '--fx2': `${item.floatX2}px`,
-              '--fy2': `${item.floatY2}px`,
-              '--rot': `${item.rotate}deg`,
-            } as React.CSSProperties}
-          >
-            <div
-              style={{
-                position: 'relative',
-                width: '52%',
-                height: '52%',
-                opacity: 0.85,
-                filter: `drop-shadow(0 0 6px ${item.color}80)`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <img 
-                src={`https://www.google.com/s2/favicons?domain=${item.domain}&sz=128`} 
-                alt={item.name} 
-                style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
-                onError={(e) => { 
-                  e.currentTarget.onerror = null; 
-                  e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(item.name)}&background=${item.color.replace('#', '')}&color=fff&size=128`;
-                }} 
-              />
-            </div>
-          </div>
-        ))}
-
       </div>
 
       {/* Bottom Fade to Page Background */}
