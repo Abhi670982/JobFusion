@@ -1,26 +1,32 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Sparkles, Check } from 'lucide-react';
-import Link from 'next/link';
+import { X, Sparkles, Check, Key } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useEffect } from 'react';
-import { toast } from 'sonner';
 import type { PlanId } from '@/types/subscription';
 import { PRO_PLAN_FEATURES } from '@/lib/plans';
 
 interface UpgradeModalProps {
   open: boolean;
   onClose: () => void;
+  title?: string;
+  subtitle?: string;
   featureName?: string;
   requiredPlan?: PlanId;
+  showBYOKOption?: boolean;
+  onBYOKClick?: () => void;
 }
 
 export function UpgradeModal({
   open,
   onClose,
+  title,
+  subtitle,
   featureName = 'this feature',
+  showBYOKOption = false,
+  onBYOKClick,
 }: UpgradeModalProps) {
   // Close on Escape key
   useEffect(() => {
@@ -39,14 +45,13 @@ export function UpgradeModal({
 
   const onUpgrade = () => {
     onClose();
-    // Placeholder — Dodo Payments integration will be added here
-    toast.info('Dodo Payments integration will be added soon.', {
-      description: 'Pro plan checkout coming next.',
-      duration: 4000,
-    });
+    window.location.href = '/pricing';
   };
 
   const highlightedFeatures = PRO_PLAN_FEATURES.slice(1, 6); // skip "Everything in Free"
+
+  const displayTitle = title || `Unlock ${featureName}`;
+  const displaySubtitle = subtitle || "This is a Pro feature. Upgrade to access it.";
 
   return (
     <AnimatePresence>
@@ -84,10 +89,10 @@ export function UpgradeModal({
                     <Sparkles className="w-6 h-6" aria-hidden="true" />
                   </div>
                   <h2 id="upgrade-modal-title" className="text-xl font-bold mb-1">
-                    Unlock {featureName}
+                    {displayTitle}
                   </h2>
-                  <p className="text-white/70 text-sm">
-                    This is a Pro feature. Upgrade to access it.
+                  <p className="text-white/80 text-sm">
+                    {displaySubtitle}
                   </p>
                 </div>
               </div>
@@ -103,53 +108,63 @@ export function UpgradeModal({
 
               {/* Body */}
               <div className="p-6">
-                {/* Price */}
-                <div className="text-center mb-6">
-                  <div className="flex items-end justify-center gap-1">
-                    <span className="text-4xl font-extrabold">₹299</span>
-                    <span className="text-muted-foreground mb-1.5">/month</span>
+                {!showBYOKOption && (
+                  <div className="text-center mb-6">
+                    <div className="flex items-end justify-center gap-1">
+                      <span className="text-4xl font-extrabold">₹299</span>
+                      <span className="text-muted-foreground mb-1.5">/month</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">or ₹2,999/year · Save 17%</p>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">or ₹2,999/year · Save 17%</p>
-                </div>
+                )}
 
                 {/* Features */}
-                <ul className="space-y-2.5 mb-6" aria-label="Pro plan features">
-                  {highlightedFeatures.map((feature) => (
-                    <li key={feature} className="flex items-center gap-2.5 text-sm">
-                      <span className="w-4 h-4 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                        <Check className="w-2.5 h-2.5 text-primary" aria-hidden="true" />
-                      </span>
-                      <span className="text-muted-foreground">{feature}</span>
-                    </li>
-                  ))}
-                  <li className="text-xs text-muted-foreground pl-6">+ more features</li>
-                </ul>
+                {!showBYOKOption && (
+                  <ul className="space-y-2.5 mb-6" aria-label="Pro plan features">
+                    {highlightedFeatures.map((feature) => (
+                      <li key={feature} className="flex items-center gap-2.5 text-sm">
+                        <span className="w-4 h-4 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                          <Check className="w-2.5 h-2.5 text-primary" aria-hidden="true" />
+                        </span>
+                        <span className="text-muted-foreground">{feature}</span>
+                      </li>
+                    ))}
+                    <li className="text-xs text-muted-foreground pl-6">+ more features</li>
+                  </ul>
+                )}
 
                 {/* CTA Buttons */}
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <Button
-                    id="upgrade-modal-cta"
                     onClick={onUpgrade}
                     className="w-full rounded-xl gradient-brand text-white border-0 font-semibold shadow-md hover:opacity-90"
-                    aria-label="Upgrade to Pro — ₹299 per month"
                   >
                     <Sparkles className="w-4 h-4 mr-2" aria-hidden="true" />
-                    Upgrade to Pro — ₹299/mo
+                    Upgrade to Pro
                   </Button>
-                  <Link href="/pricing" onClick={onClose}>
+                  
+                  {showBYOKOption && (
                     <Button
-                      variant="ghost"
-                      className="w-full rounded-xl text-muted-foreground text-sm"
-                      aria-label="View all pricing plans"
+                      variant="outline"
+                      onClick={() => {
+                        onClose();
+                        if (onBYOKClick) onBYOKClick();
+                      }}
+                      className="w-full rounded-xl"
                     >
-                      View all plans
+                      <Key className="w-4 h-4 mr-2" />
+                      Use Your Own AI API Key
                     </Button>
-                  </Link>
-                </div>
+                  )}
 
-                <p className="text-center text-xs text-muted-foreground/60 mt-4">
-                  Secure payment · Cancel anytime
-                </p>
+                  <Button
+                    variant="ghost"
+                    onClick={onClose}
+                    className="w-full rounded-xl text-muted-foreground text-sm"
+                  >
+                    Maybe Later
+                  </Button>
+                </div>
               </div>
             </motion.div>
           </div>

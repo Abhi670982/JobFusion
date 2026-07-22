@@ -25,8 +25,12 @@ export function PricingCard({ plan, interval, index = 0, currentPlanId }: Pricin
   const onUpgradeClick = async () => {
     if (isCurrentPlan || loading) return;
 
+    if (plan.id === 'free') {
+      window.location.href = '/dashboard';
+      return;
+    }
+
     if (plan.id === 'recruiter') {
-      // Contact Sales — redirect to contact page
       window.location.href = '/contact';
       return;
     }

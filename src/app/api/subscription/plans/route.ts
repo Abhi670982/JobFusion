@@ -12,6 +12,7 @@ export async function GET() {
   try {
     // Return the config-driven plans (from lib/plans.ts)
     // Strip out internal Dodo product IDs before sending to client
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const publicPlans = PLANS.map(({ dodoMonthlyProductId: _m, dodoYearlyProductId: _y, ...rest }) => rest);
 
     return NextResponse.json({

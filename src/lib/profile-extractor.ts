@@ -162,21 +162,22 @@ export function extractProfileDetailsLocally(text: string): ExtractedProfileDeta
   return result;
 }
 
+import { AIProviderConfig } from "./ai-provider";
+import { generateAIJson } from "./ai-client";
+
 /**
- * Call Gemini AI to semantically extract profile details from the resume text.
+ * Call Universal AI Client to semantically extract profile details from the resume text.
  * Falls back to the local regex parser if the API fails or is not configured.
  */
-export async function extractProfileDetails(text: string): Promise<ExtractedProfileDetails> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey.includes("AIzaSyCt4XyZ8aB_C9dEfG_HiJkLmNoPqRsTuVw")) {
-    console.warn("[Profile Extractor] GEMINI_API_KEY is not set or is placeholder. Using local regex extraction fallback.");
+export async function extractProfileDetails(text: string, config?: AIProviderConfig): Promise<ExtractedProfileDetails> {
+  if (!config || !config.key) {
+    console.warn("[Profile Extractor] AI config or key missing. Using local regex extraction fallback.");
     return extractProfileDetailsLocally(text);
   }
 
   try {
-    console.log("[Profile Extractor] Sending request to Google Gemini API...");
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-
+    console.log(`[Profile Extractor] Sending request to AI Client (${config.provider})...`);
+    
     const prompt = `
 You are an expert resume parsing assistant. Analyze the following resume text.
 Extract the contact details, career intelligence, and profile sections:
@@ -257,39 +258,7 @@ ${text}
 ---
 `;
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                text: prompt
-              }
-            ]
-          }
-        ],
-        generationConfig: {
-          responseMimeType: "application/json"
-        }
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Gemini API error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (!responseText) {
-      throw new Error("Empty response from Gemini API");
-    }
-
-    const parsedResult = JSON.parse(responseText.trim());
+    const parsedResult = await generateAIJson<any>(prompt, config);
 
     return {
       phone: parsedResult.phone || "",
@@ -307,7 +276,7 @@ ${text}
       projects: parsedResult.projects || []
     };
   } catch (error) {
-    console.error("[Profile Extractor] Failed to extract details using Gemini. Falling back to local parser:", error);
+    console.error(`[Profile Extractor] Failed to extract details using AI Client (${config.provider}). Falling back to local parser:`, error);
     return extractProfileDetailsLocally(text);
   }
 }

@@ -13,7 +13,7 @@ export type { PricingPlan };
 export const FREE_PLAN_FEATURES = [
   'Job Search & Discovery',
   'Resume Upload (1 resume)',
-  'Basic ATS Score Check',
+  '2 Match My Skills refreshes/day',
   'Limited AI Usage (5/month)',
   'Save up to 20 Jobs',
   'Email Notifications',
@@ -21,14 +21,13 @@ export const FREE_PLAN_FEATURES = [
 
 export const PRO_PLAN_FEATURES = [
   'Everything in Free',
-  'Unlimited AI Resume Builder',
+  'Unlimited Match My Skills refreshes',
+  'Unlimited AI Features',
+  'Future AI Tools',
+  'Priority Processing',
   'Unlimited ATS Optimization',
-  'Unlimited Resume Analysis',
   'Unlimited Cover Letter Generation',
   'Unlimited Saved Jobs',
-  'AI Skill Gap Analysis',
-  'Interview Preparation',
-  'Resume Version History',
   'Smart Job Matching',
   'Priority Notifications',
   'Priority Support',

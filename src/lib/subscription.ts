@@ -5,7 +5,7 @@
 import type { PlanId, SubscriptionInfo, FeatureGateResult, AIUsageInfo } from '@/types/subscription';
 import { prisma } from './prisma';
 import { getOrCreateMongoUser } from './auth-sync';
-import { startOfMonth } from 'date-fns';
+import { usageService } from './usageService';
 
 const DEFAULT_FREE_SUBSCRIPTION: SubscriptionInfo = {
   planId: 'free',
@@ -90,7 +90,7 @@ export async function isSubscriptionActive(userId?: string): Promise<boolean> {
 
 /**
  * Check if user can use the AI Resume Builder feature.
- * Free: 5/month limit. Pro: Unlimited.
+ * Free: 2/day limit. Pro: Unlimited.
  */
 export async function canUseResumeAI(userId?: string): Promise<FeatureGateResult> {
   let targetUserId = userId;
@@ -100,81 +100,86 @@ export async function canUseResumeAI(userId?: string): Promise<FeatureGateResult
     targetUserId = user.id;
   }
 
-  const isPro = await hasProAccess(targetUserId);
-  if (isPro) {
+  const check = await usageService.canUseAI(targetUserId, 'resume-review');
+  if (check.allowed) {
     return { allowed: true };
-  }
-
-  // Count parsing logs for the current month
-  try {
-    const count = await prisma.resumeParsingLog.count({
-      where: {
-        userId: targetUserId,
-        status: "success",
-        timestamp: {
-          gte: startOfMonth(new Date()),
-        },
-      },
-    });
-
-    if (count < 5) {
-      return { allowed: true };
-    }
-  } catch (error) {
-    console.error("[canUseResumeAI] Error counting parsing logs:", error);
   }
 
   return {
     allowed: false,
-    reason: 'AI Resume Builder monthly limit of 5 runs reached on the Free plan. Upgrade to Pro for unlimited access.',
+    reason: 'Daily AI limit reached for Resume Review. Upgrade to Pro for unlimited access.',
     planRequired: 'pro_monthly',
   };
 }
 
 /**
  * Check if user can generate cover letters.
- * Free: Not available. Pro: Unlimited.
+ * Free: 2/day limit. Pro: Unlimited.
  */
 export async function canGenerateCoverLetter(userId?: string): Promise<FeatureGateResult> {
-  const isPro = await hasProAccess(userId);
-  if (isPro) {
+  let targetUserId = userId;
+  if (!targetUserId) {
+    const user = await getOrCreateMongoUser();
+    if (!user) return { allowed: false, reason: 'Authentication required.', planRequired: 'pro_monthly' };
+    targetUserId = user.id;
+  }
+
+  const check = await usageService.canUseAI(targetUserId, 'cover-letter');
+  if (check.allowed) {
     return { allowed: true };
   }
+
   return {
     allowed: false,
-    reason: 'Cover Letter Generation is a Pro feature.',
+    reason: 'Daily AI limit reached for Cover Letter. Upgrade to Pro for unlimited access.',
     planRequired: 'pro_monthly',
   };
 }
 
 /**
  * Check if user can access Interview Preparation.
- * Free: Not available. Pro: Available.
+ * Free: 2/day limit. Pro: Available.
  */
 export async function canUseInterviewPrep(userId?: string): Promise<FeatureGateResult> {
-  const isPro = await hasProAccess(userId);
-  if (isPro) {
+  let targetUserId = userId;
+  if (!targetUserId) {
+    const user = await getOrCreateMongoUser();
+    if (!user) return { allowed: false, reason: 'Authentication required.', planRequired: 'pro_monthly' };
+    targetUserId = user.id;
+  }
+
+  const check = await usageService.canUseAI(targetUserId, 'interview-prep');
+  if (check.allowed) {
     return { allowed: true };
   }
+
   return {
     allowed: false,
-    reason: 'Interview Preparation is a Pro feature.',
+    reason: 'Daily AI limit reached for Interview Prep. Upgrade to Pro for unlimited access.',
     planRequired: 'pro_monthly',
   };
 }
 
 /**
  * Check if user can use Smart Job Matching.
- * Free: Basic matching only. Pro: AI-powered smart matching.
+ * Free: 2/day limit. Pro: AI-powered smart matching.
  */
 export async function canUseSmartMatch(userId?: string): Promise<FeatureGateResult> {
-  const isPro = await hasProAccess(userId);
-  if (isPro) {
+  let targetUserId = userId;
+  if (!targetUserId) {
+    const user = await getOrCreateMongoUser();
+    if (!user) return { allowed: false, reason: 'Authentication required.', planRequired: 'pro_monthly' };
+    targetUserId = user.id;
+  }
+
+  const check = await usageService.canUseAI(targetUserId, 'job-match');
+  if (check.allowed) {
     return { allowed: true };
   }
+
   return {
     allowed: false,
-    reason: 'Smart Job Matching is a Pro feature.',
+    reason: 'Daily AI limit reached for Smart Job Matching. Upgrade to Pro for unlimited access.',
     planRequired: 'pro_monthly',
   };
 }
@@ -186,7 +191,7 @@ export async function getAIUsage(userId?: string): Promise<AIUsageInfo> {
   let targetUserId = userId;
   if (!targetUserId) {
     const user = await getOrCreateMongoUser();
-    if (!user) return { used: 0, limit: 5, resetAt: null };
+    if (!user) return { used: 0, limit: 2, resetAt: null };
     targetUserId = user.id;
   }
 
@@ -196,28 +201,21 @@ export async function getAIUsage(userId?: string): Promise<AIUsageInfo> {
   }
 
   try {
-    const count = await prisma.resumeParsingLog.count({
-      where: {
-        userId: targetUserId,
-        status: "success",
-        timestamp: {
-          gte: startOfMonth(new Date()),
-        },
-      },
-    });
-
-    // Reset date is the start of next month
-    const now = new Date();
-    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    // Get the maximum usage across the main AI features or the primary one (resume-review)
+    const used = await usageService.getTodayUsage(targetUserId, 'resume-review');
+    
+    // Reset date is tomorrow at 00:00:00 local time
+    const resetAt = new Date();
+    resetAt.setHours(23, 59, 59, 999);
 
     return {
-      used: count,
-      limit: 5,
-      resetAt: nextMonth,
+      used,
+      limit: 2,
+      resetAt,
     };
   } catch (error) {
     console.error("[getAIUsage] Error calculating usage:", error);
-    return { used: 0, limit: 5, resetAt: null };
+    return { used: 0, limit: 2, resetAt: null };
   }
 }
 
@@ -250,6 +248,7 @@ export function getStatusLabel(status: SubscriptionInfo['status']): string {
 /**
  * Upgrade handler.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function handleUpgrade(_planId?: PlanId, _interval?: 'monthly' | 'yearly'): void {
   // handoff is managed by routing directly to create-checkout endpoint on client side
 }

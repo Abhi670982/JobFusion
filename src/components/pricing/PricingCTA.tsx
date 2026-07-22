@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
+
 
 interface PricingCTAProps {
   className?: string;
@@ -14,11 +14,12 @@ interface PricingCTAProps {
 
 export function PricingCTA({ className, variant = 'default' }: PricingCTAProps) {
   const onUpgrade = () => {
-    // Placeholder — Dodo Payments integration will be added here
-    toast.info('Dodo Payments integration will be added soon.', {
-      description: 'Pro plan checkout coming next.',
-      duration: 4000,
-    });
+    const plansSection = document.getElementById('plans');
+    if (plansSection) {
+      plansSection.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      window.location.href = '#plans';
+    }
   };
 
   if (variant === 'minimal') {

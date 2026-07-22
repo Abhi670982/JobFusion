@@ -23,6 +23,8 @@ model User {
   parsingLogs  ResumeParsingLog[]
   savedJobs    SavedJob[]
   subscription Subscription?
+  usages       UserUsage[]
+  apiKeys      UserApiKey?
 
   @@map("users")
 }
@@ -599,5 +601,35 @@ model WebhookEvent {
   updatedAt  DateTime @updatedAt
 
   @@map("webhook_events")
+}
+
+model UserUsage {
+  id          String   @id @default(uuid())
+  userId      String
+  clerkUserId String?
+  featureName String
+  usageCount  Int      @default(0)
+  usageDate   String   // Format: YYYY-MM-DD
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, featureName, usageDate])
+  @@map("user_usages")
+}
+
+model UserApiKey {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  openaiKey String?  // Encrypted
+  geminiKey String?  // Encrypted
+  claudeKey String?  // Encrypted
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_api_keys")
 }
 

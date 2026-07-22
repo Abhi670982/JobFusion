@@ -7,7 +7,7 @@ import {
   TrendingUp, Briefcase, Bookmark, Eye,
   CheckCircle2, XCircle,
   Calendar, Star, ChevronRight, Zap, Code2, Smile, FileText, User,
-  CreditCard, Sparkles, Lock
+  CreditCard, Sparkles
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -121,6 +121,7 @@ export default function DashboardPage() {
   const [activities, setActivities] = useState<any[]>([]);
   const [chartData, setChartData] = useState<any[]>([]);
   const [matchesCount, setMatchesCount] = useState(0);
+  const [subscription, setSubscription] = useState<any>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -132,11 +133,14 @@ export default function DashboardPage() {
           setProfile(dash.profile);
           setStats(dash.stats);
 
-          const [actRes, matchRes] = await Promise.all([
-            fetchDashboardActivity(), fetchDashboardMatches()
+          const [actRes, matchRes, subRes] = await Promise.all([
+            fetchDashboardActivity(), 
+            fetchDashboardMatches(),
+            fetch('/api/subscription/current').then(r => r.json())
           ]);
           if (actRes) { setActivities(actRes.recentActivities || []); setChartData(actRes.chartData || []); }
           if (matchRes) setMatchesCount(matchRes.totalMatches || 0);
+          if (subRes && subRes.subscription) setSubscription(subRes.subscription);
         } else {
           router.push('/sign-in');
         }
@@ -300,13 +304,15 @@ export default function DashboardPage() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-sm font-bold">Free Plan</span>
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/60">
-                  Active
+                <span className="text-sm font-bold">{subscription?.planName || 'Free Plan'}</span>
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  {subscription?.status || 'Active'}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                5 AI operations/month · 20 saved jobs · Basic ATS
+                {subscription?.features?.hasProAccess 
+                  ? 'Unlimited AI Resume Builder · Smart Matching · Priority Support' 
+                  : '5 AI operations/month · 20 saved jobs · Basic ATS'}
               </p>
             </div>
           </div>
@@ -315,39 +321,50 @@ export default function DashboardPage() {
           <div className="hidden sm:block flex-1 max-w-[200px]">
             <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
               <span>AI Usage</span>
-              <span>3 / 5 used</span>
+              <span>
+                {subscription?.usage?.aiOperations?.limit === null 
+                  ? 'Unlimited' 
+                  : `${subscription?.usage?.aiOperations?.used || 0} / ${subscription?.usage?.aiOperations?.limit || 5} used`}
+              </span>
             </div>
-            <div className="h-1.5 bg-muted rounded-full overflow-hidden" role="progressbar" aria-valuenow={3} aria-valuemin={0} aria-valuemax={5} aria-label="AI usage: 3 of 5 operations used">
-              <div className="h-full bg-primary rounded-full transition-all" style={{ width: '60%' }} />
+            <div className="h-1.5 bg-muted rounded-full overflow-hidden" role="progressbar" aria-label="AI usage status">
+              <div 
+                className="h-full bg-primary rounded-full transition-all" 
+                style={{ 
+                  width: `${subscription?.usage?.aiOperations?.limit === null 
+                    ? 100 
+                    : Math.min(100, Math.round(((subscription?.usage?.aiOperations?.used || 0) / (subscription?.usage?.aiOperations?.limit || 5)) * 100))}%` 
+                }} 
+              />
             </div>
           </div>
 
           {/* Actions */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            <Link href="/pricing">
+            {!subscription?.features?.hasProAccess && (
+              <Link href="/pricing">
+                <Button
+                  id="dashboard-upgrade-btn"
+                  size="sm"
+                  className="rounded-xl gradient-brand text-white border-0 font-semibold text-xs hover:opacity-90 shadow-sm h-8"
+                  aria-label="Upgrade to Pro plan"
+                >
+                  <Sparkles className="w-3 h-3 mr-1.5" aria-hidden="true" />
+                  Upgrade to Pro
+                </Button>
+              </Link>
+            )}
+            <Link href="/settings/billing">
               <Button
-                id="dashboard-upgrade-btn"
+                id="dashboard-manage-sub-btn"
                 size="sm"
-                className="rounded-xl gradient-brand text-white border-0 font-semibold text-xs hover:opacity-90 shadow-sm"
-                aria-label="Upgrade to Pro plan"
+                variant="outline"
+                className="rounded-xl text-xs h-8"
+                aria-label="Manage subscription"
               >
-                <Sparkles className="w-3 h-3 mr-1.5" aria-hidden="true" />
-                Upgrade to Pro
+                Manage Billing
               </Button>
             </Link>
-            <Button
-              id="dashboard-manage-sub-btn"
-              size="sm"
-              variant="outline"
-              disabled
-              className="rounded-xl text-xs cursor-not-allowed opacity-60"
-              title="Payment management coming soon"
-              aria-label="Manage subscription — coming soon"
-              aria-disabled="true"
-            >
-              <Lock className="w-3 h-3 mr-1.5" aria-hidden="true" />
-              Manage
-            </Button>
           </div>
         </div>
 

@@ -10,7 +10,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   const { isSignedIn, isLoaded } = useUser();
 
   // Check if current route is a landing/auth page (no sidebar/navbar wrapper)
-  const isPortalRoute = !['/sign-in', '/sign-up', '/onboarding', '/auth', '/test-upload', '/', '/admin'].some(
+  const isPortalRoute = !['/sign-in', '/sign-up', '/onboarding', '/auth', '/test-upload', '/', '/admin', '/pricing'].some(
     (path) => pathname === path || (path !== '/' && pathname.startsWith(path + '/'))
   );
 
@@ -31,9 +31,9 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   }
 
   return (
-    <div className="flex min-h-screen lg:h-screen lg:overflow-hidden bg-background">
+    <div className="flex min-h-screen bg-background">
       <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0 lg:h-screen lg:overflow-y-auto mobile-header-offset page-content scrollbar-thin">
+      <div className="flex-1 flex flex-col min-w-0 mobile-header-offset page-content">
         <Navbar />
         <main className="flex-1 flex flex-col">
           {children}
