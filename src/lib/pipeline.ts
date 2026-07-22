@@ -53,7 +53,7 @@ const TEN_DAYS_MS = 10 * 24 * 60 * 60 * 1000;
 export async function runSourceSync(
   source: JobSource,
   keywords: string[]
-): Promise<{ success: boolean; count: number; error?: string }> {
+): Promise<{ success: boolean; count: number; addedJobs?: number; updatedJobs?: number; skippedJobs?: number; newJobs?: any[]; error?: string }> {
   try {
     console.log(`[Pipeline] Starting sync for source: ${source}`);
 
@@ -131,6 +131,7 @@ export async function runSourceSync(
     let rejectedNoDate = 0;
     let rejectedTooOld = 0;
     let rejectedNoSkill = 0;
+    const newJobsList: any[] = [];
 
     if (source === "careers") {
       const allRawJobs: any[] = [];
@@ -259,7 +260,7 @@ export async function runSourceSync(
                 pgType = unified.jobType || "full_time";
               }
 
-              await prisma.job.create({
+              const newJob = await prisma.job.create({
                 data: {
                   title: unified.title,
                   company: unified.company,
@@ -298,6 +299,7 @@ export async function runSourceSync(
                   isActive: true,
                 },
               });
+              newJobsList.push(newJob);
               jobsAdded++;
               console.log(
                 `[Pipeline] Inserted new job: ${unified.title} at ${unified.company} (${source})`
@@ -309,6 +311,7 @@ export async function runSourceSync(
           } catch (err: any) {
             console.error(`[Pipeline] Job processing failed for careers in window:`, err.message);
           }
+
         }
 
         console.log(`[Pipeline] Day ${day + 1} progressive evaluation: processed ${dailyJobs.length} jobs. Unique relevant match set size: ${relevantJobKeys.size}/${MIN_RELEVANT_JOB_TARGET}`);
@@ -424,7 +427,7 @@ export async function runSourceSync(
               pgType = unified.jobType || "full_time";
             }
 
-            await prisma.job.create({
+            const newJob = await prisma.job.create({
               data: {
                 title: unified.title,
                 company: unified.company,
@@ -463,6 +466,7 @@ export async function runSourceSync(
                 isActive: true,
               },
             });
+            newJobsList.push(newJob);
             jobsAdded++;
             console.log(
               `[Pipeline] Inserted new job: ${unified.title} at ${unified.company} (${source})`
@@ -528,7 +532,14 @@ export async function runSourceSync(
       console.error("Error logging success in PG:", pgErr);
     }
 
-    return { success: true, count: successCount };
+    return { 
+      success: true, 
+      count: successCount,
+      addedJobs: jobsAdded,
+      updatedJobs: jobsUpdated,
+      skippedJobs: rejectedNoDate + rejectedTooOld + rejectedNoSkill,
+      newJobs: newJobsList
+    };
   } catch (error: any) {
     console.error(`[Pipeline] Fatal error syncing ${source}:`, error.message);
 
@@ -546,6 +557,6 @@ export async function runSourceSync(
       console.error("Error logging fetch failure in PG:", pgErr);
     }
 
-    return { success: false, count: 0, error: error.message };
+    return { success: false, count: 0, addedJobs: 0, updatedJobs: 0, skippedJobs: 0, newJobs: [], error: error.message };
   }
 }

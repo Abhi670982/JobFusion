@@ -6,7 +6,8 @@ import Link from 'next/link';
 import {
   TrendingUp, Briefcase, Bookmark, Eye,
   CheckCircle2, XCircle,
-  Calendar, Star, ChevronRight, Zap, Code2, Smile, FileText, User
+  Calendar, Star, ChevronRight, Zap, Code2, Smile, FileText, User,
+  CreditCard, Sparkles
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -120,6 +121,7 @@ export default function DashboardPage() {
   const [activities, setActivities] = useState<any[]>([]);
   const [chartData, setChartData] = useState<any[]>([]);
   const [matchesCount, setMatchesCount] = useState(0);
+  const [subscription, setSubscription] = useState<any>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -131,11 +133,14 @@ export default function DashboardPage() {
           setProfile(dash.profile);
           setStats(dash.stats);
 
-          const [actRes, matchRes] = await Promise.all([
-            fetchDashboardActivity(), fetchDashboardMatches()
+          const [actRes, matchRes, subRes] = await Promise.all([
+            fetchDashboardActivity(), 
+            fetchDashboardMatches(),
+            fetch('/api/subscription/current').then(r => r.json())
           ]);
           if (actRes) { setActivities(actRes.recentActivities || []); setChartData(actRes.chartData || []); }
           if (matchRes) setMatchesCount(matchRes.totalMatches || 0);
+          if (subRes && subRes.subscription) setSubscription(subRes.subscription);
         } else {
           router.push('/sign-in');
         }
@@ -283,8 +288,108 @@ export default function DashboardPage() {
       </motion.div>
 
 
+      {/* ── Subscription Status Card ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15 }}
+        className="card-premium p-5"
+        aria-label="Subscription and billing information"
+      >
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          {/* Plan info */}
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/8 flex items-center justify-center flex-shrink-0">
+              <CreditCard className="w-5 h-5 text-primary" aria-hidden="true" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold">{subscription?.planName || 'Free Plan'}</span>
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  {subscription?.status || 'Active'}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {subscription?.features?.hasProAccess 
+                  ? 'Unlimited AI Resume Builder · Smart Matching · Priority Support' 
+                  : '5 AI operations/month · 20 saved jobs · Basic ATS'}
+              </p>
+            </div>
+          </div>
 
-      {/* ── Empty State ── */}
+          {/* AI usage bar */}
+          <div className="hidden sm:block flex-1 max-w-[200px]">
+            <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+              <span>AI Usage</span>
+              <span>
+                {subscription?.usage?.aiOperations?.limit === null 
+                  ? 'Unlimited' 
+                  : `${subscription?.usage?.aiOperations?.used || 0} / ${subscription?.usage?.aiOperations?.limit || 5} used`}
+              </span>
+            </div>
+            <div className="h-1.5 bg-muted rounded-full overflow-hidden" role="progressbar" aria-label="AI usage status">
+              <div 
+                className="h-full bg-primary rounded-full transition-all" 
+                style={{ 
+                  width: `${subscription?.usage?.aiOperations?.limit === null 
+                    ? 100 
+                    : Math.min(100, Math.round(((subscription?.usage?.aiOperations?.used || 0) / (subscription?.usage?.aiOperations?.limit || 5)) * 100))}%` 
+                }} 
+              />
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {!subscription?.features?.hasProAccess && (
+              <Link href="/pricing">
+                <Button
+                  id="dashboard-upgrade-btn"
+                  size="sm"
+                  className="rounded-xl gradient-brand text-white border-0 font-semibold text-xs hover:opacity-90 shadow-sm h-8"
+                  aria-label="Upgrade to Pro plan"
+                >
+                  <Sparkles className="w-3 h-3 mr-1.5" aria-hidden="true" />
+                  Upgrade to Pro
+                </Button>
+              </Link>
+            )}
+            <Link href="/settings/billing">
+              <Button
+                id="dashboard-manage-sub-btn"
+                size="sm"
+                variant="outline"
+                className="rounded-xl text-xs h-8"
+                aria-label="Manage subscription"
+              >
+                Manage Billing
+              </Button>
+            </Link>
+          </div>
+        </div>
+
+        {/* Pro features teaser */}
+        <div className="mt-4 pt-4 border-t border-border/60">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2.5">Unlock with Pro</p>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { icon: Sparkles, label: 'AI Resume Builder' },
+              { icon: FileText, label: 'Cover Letters' },
+              { icon: User,     label: 'Interview Prep' },
+              { icon: Zap,      label: 'Smart Matching' },
+            ].map(({ icon: Icon, label }) => (
+              <Link key={label} href="/pricing" className="touch-auto">
+                <span className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-muted/60 text-muted-foreground hover:bg-primary/8 hover:text-primary transition-colors border border-border/40 cursor-pointer">
+                  <Icon className="w-3 h-3" aria-hidden="true" />
+                  {label}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </motion.div>
+
+
       {!loading && !profile?.resumeUrl && (!profile?.skills || profile.skills.length === 0) && (
         <motion.div
           initial={{ opacity: 0, scale: 0.97 }}

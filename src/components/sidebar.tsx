@@ -100,6 +100,7 @@ export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [user, setUser] = useState<DbUser | null>(null);
   const [savedCount, setSavedCount] = useState<number>(0);
+  const [isPro, setIsPro] = useState<boolean>(false);
 
   useEffect(() => {
     // Safely read client-only storage after mount to avoid hydration mismatch
@@ -112,7 +113,16 @@ export default function Sidebar() {
     fetchCurrentUser().then(u => {
       if (u) { setUser(u); sessionStorage.setItem('jobfusion_user', JSON.stringify(u)); }
     }).catch(() => { });
-  }, []);
+
+    fetch('/api/subscription/status')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.status) {
+          setIsPro(data.status.isPro);
+        }
+      })
+      .catch(() => {});
+  }, [pathname]);
 
   useEffect(() => {
     if (!user) return;
@@ -197,8 +207,14 @@ export default function Sidebar() {
                       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                       className="flex-1 min-w-0"
                     >
-                      <p className="text-xs font-semibold truncate leading-tight">{user.fullName}</p>
-                      <p className="text-[10px] text-muted-foreground truncate">{user.email}</p>
+                      <p className="text-xs font-bold truncate leading-tight flex items-center gap-1">
+                        {user.fullName}
+                        {isPro && <span className="text-[10px] text-amber-500 font-extrabold" title="Pro Member">★</span>}
+                      </p>
+                      <p className="text-[9px] text-muted-foreground truncate flex items-center gap-1.5">
+                        {isPro ? <span className="text-[8px] font-bold text-amber-500 bg-amber-500/10 px-1 rounded">PRO</span> : null}
+                        {user.email}
+                      </p>
                     </motion.div>
                   )}
                 </AnimatePresence>

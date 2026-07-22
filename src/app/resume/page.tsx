@@ -23,6 +23,7 @@ import {
   DbProfile,
 } from '@/lib/api-helper';
 import { cn } from '@/lib/utils';
+import { UpgradeModal } from '@/components/pricing/UpgradeModal';
 
 export default function ResumePage() {
   const [loading, setLoading]             = useState(true);
@@ -36,6 +37,7 @@ export default function ResumePage() {
   const [skillModalOpen, setSkillModalOpen] = useState(false);
   const [newSkillName, setNewSkillName]   = useState('');
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Post-upload workflow states
@@ -134,8 +136,21 @@ export default function ResumePage() {
       if (result.success) {
         setSuccessMessage(`Re-parsed! ${result.data.skillsExtractedCount} skills. Category: ${result.data.resumeCategory}`);
         setProfile(await fetchProfile(user._id, true));
-      } else { setError(result.error || 'Failed to parse resume.'); }
-    } catch (err: any) { setError(err.message || 'Parsing error.'); }
+      } else { 
+        if (result.error?.includes('limit') || result.error?.includes('Pro') || result.error?.includes('Upgrade')) {
+          setUpgradeModalOpen(true);
+        } else {
+          setError(result.error || 'Failed to parse resume.'); 
+        }
+      }
+    } catch (err: any) { 
+      const msg = err.message || '';
+      if (msg.includes('limit') || msg.includes('Pro') || msg.includes('403') || msg.includes('Upgrade')) {
+        setUpgradeModalOpen(true);
+      } else {
+        setError(msg || 'Parsing error.'); 
+      }
+    }
     finally { setParsing(false); }
   };
 
@@ -554,6 +569,12 @@ export default function ResumePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <UpgradeModal 
+        open={upgradeModalOpen} 
+        onClose={() => setUpgradeModalOpen(false)} 
+        featureName="AI Resume Builder" 
+      />
     </main>
   );
 }

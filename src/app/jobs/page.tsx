@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import {
   Search, SlidersHorizontal, X, MapPin,
-  LayoutGrid, List, Target,
+  LayoutGrid, List, Target, Sparkles,
   Building2, AlertTriangle, Check,
   Activity, ArrowRight, ArrowLeft, Globe
 } from 'lucide-react';
@@ -26,6 +26,8 @@ import {
 import JobCard from '@/components/job-card';
 import JobPortalsSection from '@/components/job-portals-section';
 import { JobsErrorBoundary } from '@/components/error-boundary';
+import { UpgradeModal } from '@/components/pricing/UpgradeModal';
+import { BYOKModal } from '@/components/pricing/BYOKModal';
 import { cn } from '@/lib/utils';
 import {
   fetchCurrentUser,
@@ -364,6 +366,11 @@ export default function JobsPage() {
   const [filtersCollapsed, setFiltersCollapsed] = useState(false);
   const [skillWarning, setSkillWarning] = useState(false);
 
+  // Usage tracking and Modals
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [showBYOKModal, setShowBYOKModal] = useState(false);
+  const [usageStats, setUsageStats] = useState<any>(null);
+
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const initialDataLoaded = useRef(false);
   
@@ -476,6 +483,19 @@ export default function JobsPage() {
           if (prof.status === 'fulfilled' && prof.value) {
             profVal = prof.value;
             setProfile(profVal);
+          }
+
+          // Fetch usage stats
+          try {
+            const usageRes = await fetch(`/api/user/usage?userId=${currentUser._id}`);
+            if (usageRes.ok) {
+              const usageData = await usageRes.json();
+              if (usageData.success) {
+                setUsageStats(usageData.data);
+              }
+            }
+          } catch (e) {
+            console.error("Failed to fetch usage stats:", e);
           }
         }
 
@@ -746,64 +766,57 @@ export default function JobsPage() {
     setMatching(true);
     
     try {
-      // Trigger background sync for user's profile skills
-      await fetch('/api/cron/crawl', {
+      // Select the skills in UI to filter the feed immediately
+      setSelectedSkills(userSkills);
+      
+      const res = await fetch('/api/jobs/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ keywords: userSkills })
       });
       
-      // Select the skills in UI to filter the feed immediately
-      setSelectedSkills(userSkills);
+      const data = await res.json();
       
-      setToastMessage(`Matching jobs for your ${userSkills.slice(0, 3).join(', ')}${userSkills.length > 3 ? '...' : ''} stack...`);
-      setShowSuccessToast(true);
+      if (res.ok && data.success) {
+        if (usageStats && !usageStats.isPro) {
+          setUsageStats((prev: any) => ({
+            ...prev,
+            featureUsage: {
+              ...prev.featureUsage,
+              'match-my-skills': (prev.featureUsage?.['match-my-skills'] || 0) + 1
+            }
+          }));
+        }
 
-      // Poll for new results every 5s, up to 3 attempts (15s max wait)
-      let attempts = 0;
-      const pollInterval = setInterval(async () => {
-        attempts++;
-        try {
-          // Re-fetch jobs with the updated skill filters
-          const params = new URLSearchParams();
-          if (queryInput) params.set('q', queryInput);
-          if (locationInput) params.set('location', locationInput);
-          if (remoteOnly) params.set('remote', 'true');
-          if (sortBy) params.set('sortBy', sortBy);
-          if (order) params.set('order', order);
-          if (selectedSources.length > 0) params.set('source', selectedSources.join(','));
-          if (selectedJobTypes.length > 0) params.set('jobType', selectedJobTypes.join(','));
-          if (selectedExpLevels.length > 0) params.set('experienceLevel', selectedExpLevels.join(','));
-          params.set('skills', userSkills.join(','));
-          if (salaryRange > 0) params.set('salaryMin', String(salaryRange * 100000));
-          if (datePosted) {
-            const date = new Date();
-            if (datePosted === '24h') date.setHours(date.getHours() - 24);
-            else if (datePosted === '3d') date.setDate(date.getDate() - 3);
-            else if (datePosted === '7d') date.setDate(date.getDate() - 7);
-            else if (datePosted === '30d') date.setDate(date.getDate() - 30);
-            params.set('postedAfter', date.toISOString());
-            params.set('datePosted', datePosted);
+        if (data.addedJobs > 0) {
+          setToastMessage(`✅ Added ${data.addedJobs} new jobs. (Skipped ${data.skippedJobs} duplicates)`);
+          
+          if (data.newJobs && data.newJobs.length > 0) {
+            setJobs(prev => {
+              // Append new jobs avoiding existing dedupeHashes
+              const prevHashes = new Set(prev.map(j => j.dedupeHash));
+              const trulyNew = data.newJobs.filter((j: any) => !prevHashes.has(j.dedupeHash));
+              return [...trulyNew, ...prev];
+            });
+            setTotalJobsCount(prev => prev + data.addedJobs);
           }
-          params.set('page', '1');
-
-          await fetchFilteredJobs(params.toString());
-        } catch (pollErr) {
-          console.error("Error during polling fetch:", pollErr);
+        } else {
+          setToastMessage("No new jobs found.");
         }
-
-        if (attempts >= 3) {
-          clearInterval(pollInterval);
-          setToastMessage(`Done! Found matches for your skills.`);
-          setShowSuccessToast(true);
-          setMatching(false);
-        }
-      }, 5000);
-
+      } else if (res.status === 403 && data.code === 'AI_LIMIT_REACHED') {
+         setMatching(false);
+         setShowUpgradeModal(true);
+         return;
+      } else {
+         setToastMessage("Unable to refresh jobs. Please try again.");
+      }
+      
+      setShowSuccessToast(true);
     } catch (error) {
       console.error("Error AI matching jobs:", error);
-      setToastMessage("Failed to initiate live job match. Please try again.");
+      setToastMessage("Unable to refresh jobs. Please try again.");
       setShowSuccessToast(true);
+    } finally {
       setMatching(false);
     }
   };
@@ -915,6 +928,39 @@ export default function JobsPage() {
           </div>
           
           <div className="flex flex-col items-end gap-1.5">
+            {usageStats && (
+              <div className="flex items-center gap-2 mb-1">
+                {usageStats.isPro ? (
+                  <span className="text-[11px] font-semibold text-primary flex items-center gap-1 bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    ⭐ JobFusion Pro
+                  </span>
+                ) : (
+                  <div className="flex flex-col items-end bg-card px-3 py-1.5 rounded-xl border border-border shadow-sm">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-1">
+                      AI Usage Today
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div 
+                          className={cn("h-full rounded-full transition-all duration-500", 
+                            (usageStats.featureUsage?.['match-my-skills'] || 0) >= usageStats.limit 
+                              ? "bg-red-500" 
+                              : "bg-primary"
+                          )}
+                          style={{ width: `${Math.min(100, ((usageStats.featureUsage?.['match-my-skills'] || 0) / usageStats.limit) * 100)}%` }}
+                        />
+                      </div>
+                      <span className={cn("text-[11px] font-bold", 
+                        (usageStats.featureUsage?.['match-my-skills'] || 0) >= usageStats.limit ? "text-red-500" : "text-foreground"
+                      )}>
+                        {(usageStats.featureUsage?.['match-my-skills'] || 0)} / {usageStats.limit} Used
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             <Button 
               onClick={handleAISearch}
               disabled={loading || matching || !user}
@@ -1532,6 +1578,22 @@ export default function JobsPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Modals */}
+      <UpgradeModal 
+        open={showUpgradeModal} 
+        onClose={() => setShowUpgradeModal(false)}
+        title="🚀 Daily Free Limit Reached"
+        subtitle="You've already used your 2 free Match My Skills refreshes today. Choose how you'd like to continue."
+        featureName="Match My Skills"
+        showBYOKOption={true}
+        onBYOKClick={() => setShowBYOKModal(true)}
+      />
+      
+      <BYOKModal
+        open={showBYOKModal}
+        onClose={() => setShowBYOKModal(false)}
+      />
     </>
   );
 }

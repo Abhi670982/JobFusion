@@ -454,22 +454,25 @@ ${skillsSection}
 Remember: Only extract what is clearly listed here as a skill. Return JSON only.
 `;
 
+import { AIProviderConfig } from "./ai-provider";
+import { generateAIJson } from "./ai-client";
+
 /**
- * AI-powered skill extractor using Google Gemini 1.5 Flash (free tier).
+ * AI-powered skill extractor using Universal AI Client (Gemini, OpenAI, or Claude).
  *
  * Optimized flow:
  *  1. Extract the "Skills" section from the resume (stops before Experience/Projects/Education)
- *  2. Send ONLY that section to Gemini — prevents picking up skills from job descriptions
+ *  2. Send ONLY that section to the AI — prevents picking up skills from job descriptions
  *  3. Cross-verify each result against the skills section text (not full resume)
- *  4. Falls back to regex-based extractSkills() if GEMINI_API_KEY is missing or API fails
+ *  4. Falls back to regex-based extractSkills() if AI fails
  */
 export async function extractSkillsWithAI(
   resumeText: string,
+  config?: AIProviderConfig
 ): Promise<{ name: string; level: number }[]> {
-  const apiKey = process.env.GEMINI_API_KEY;
-
-  if (!apiKey || apiKey.includes("AIzaSyCt4XyZ8aB_C9dEfG_HiJkLmNoPqRsTuVw")) {
-    console.warn("[Skills Extractor] GEMINI_API_KEY not set — using regex fallback.");
+  // If no config provided or no key available, fallback to regex
+  if (!config || !config.key) {
+    console.warn("[Skills Extractor] No AI config provided or key missing — using regex fallback.");
     return extractSkills(resumeText);
   }
 
@@ -480,35 +483,16 @@ export async function extractSkillsWithAI(
   );
 
   try {
-    console.log("[Skills Extractor] Calling Gemini 1.5 Flash for skill extraction...");
+    console.log(`[Skills Extractor] Calling AI Client (${config.provider}) for skill extraction...`);
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const prompt = extractSkillsPrompt(skillsSection, isSectionFound);
+    
+    // Call the universal AI client
+    const parsed = await generateAIJson<any>(prompt, config);
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [{ text: extractSkillsPrompt(skillsSection, isSectionFound) }],
-          },
-        ],
-        generationConfig: {
-          responseMimeType: "application/json", // Forces clean JSON — no markdown fences
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Gemini API error: ${response.status} ${response.statusText}`);
+    if (!parsed || !parsed.skills) {
+      throw new Error("Invalid format returned from AI Client");
     }
-
-    const data = await response.json();
-    const raw: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-
-    if (!raw) throw new Error("Empty response from Gemini API");
-
-    const parsed = JSON.parse(raw.trim());
 
     // Flatten all skill categories into one array
     const allSkills: string[] = Object.values(
@@ -535,11 +519,11 @@ export async function extractSkillsWithAI(
     );
 
     console.log(
-      `[Skills Extractor] Gemini extracted ${allSkills.length} skills, ${verified.length} verified against ${isSectionFound ? "skills section" : "full resume"}.`,
+      `[Skills Extractor] ${config.provider} extracted ${allSkills.length} skills, ${verified.length} verified against ${isSectionFound ? "skills section" : "full resume"}.`,
     );
 
     if (parsed.warning) {
-      console.warn("[Skills Extractor] Gemini warning:", parsed.warning);
+      console.warn("[Skills Extractor] AI warning:", parsed.warning);
     }
 
     // Deduplicate and return in the standard format
@@ -547,7 +531,7 @@ export async function extractSkillsWithAI(
     return unique.map((name) => ({ name, level: 80 }));
   } catch (err: any) {
     console.error(
-      "[Skills Extractor] Gemini API failed — falling back to regex extractor:",
+      `[Skills Extractor] AI API (${config.provider}) failed — falling back to regex extractor:`,
       err.message,
     );
     return extractSkills(resumeText);

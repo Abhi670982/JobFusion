@@ -6,6 +6,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import LayoutWrapper from '@/components/layout-wrapper';
 import GlobalParticles from '@/components/global-particles';
+import { Toaster } from 'sonner';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -68,6 +69,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </LayoutWrapper>
           </TooltipProvider>
           </ThemeProvider>
+          <Toaster position="bottom-right" richColors />
         </ClerkProvider>
       </body>
     </html>

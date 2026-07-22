@@ -1,40 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import { extractProfileDetails } from "@/lib/profile-extractor";
 import { prisma } from "@/lib/prisma";
+import { withAIProviderCheck, validateUserAccess } from "@/lib/middleware/ai-usage";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    const mongoUser = await getOrCreateMongoUser();
-    if (!mongoUser) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 }
-      );
+    // Check AI usage limits and resolve AI provider for profile-extraction feature
+    const aiCheck = await withAIProviderCheck(req, 'profile-extraction');
+    if (!aiCheck.allowed || !aiCheck.config) {
+      return aiCheck.response || NextResponse.json({ success: false, error: "Access denied" }, { status: 403 });
+    }
+    const aiConfig = aiCheck.config;
+
+    // Validate user access
+    const accessCheck = await validateUserAccess(req);
+    if (!accessCheck.allowed) {
+      return accessCheck.response;
     }
 
-    const body = await req.json();
-    const { userId } = body;
-
-    if (!userId) {
-      return NextResponse.json(
-        { success: false, error: "userId is required" },
-        { status: 400 }
-      );
-    }
-
-    if (userId !== mongoUser._id.toString()) {
-      return NextResponse.json(
-        { success: false, error: "Forbidden: You can only extract details from your own profile" },
-        { status: 403 }
-      );
-    }
+    const userId = accessCheck.userId;
 
     // Fetch profile from Postgres
     const pgProfile = await prisma.profile.findUnique({
-      where: { userId: mongoUser._id.toString() }
+      where: { userId: userId || "" }
     });
 
     if (!pgProfile) {
@@ -102,7 +92,7 @@ export async function POST(req: NextRequest) {
     }
 
     console.log(`[Extract Details] Extracting details for user: ${userId}`);
-    const details = await extractProfileDetails(extractedText);
+    const details = await extractProfileDetails(extractedText, aiConfig);
     console.log(`[Extract Details] Extraction result:`, details);
 
     // Save details if currently empty or set to placeholder/default

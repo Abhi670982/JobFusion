@@ -22,6 +22,9 @@ model User {
   reports      Report[]
   parsingLogs  ResumeParsingLog[]
   savedJobs    SavedJob[]
+  subscription Subscription?
+  usages       UserUsage[]
+  apiKeys      UserApiKey?
   userJobs     UserJob[]
   crawlState   UserCrawlState?
 
@@ -499,6 +502,142 @@ enum ParsingStatus {
   failed
 }
 
+
+// ============================================================
+// SUBSCRIPTION & BILLING MODELS
+// (Placeholder — payment logic will be added later via Dodo)
+// ============================================================
+
+enum PlanId {
+  free
+  pro_monthly
+  pro_yearly
+  recruiter
+}
+
+enum SubscriptionStatus {
+  active
+  cancelled
+  expired
+  trialing
+}
+
+enum BillingInterval {
+  monthly
+  yearly
+}
+
+model Plan {
+  id            String          @id @default(uuid())
+  planId        PlanId          @unique
+  name          String
+  price         Int             @default(0) // in paise (0 = free)
+  interval      BillingInterval?
+  features      String[]        @default([])
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+model Subscription {
+  id                     String             @id @default(uuid())
+  userId                 String             @unique
+  planId                 String
+  status                 SubscriptionStatus @default(active)
+  interval               BillingInterval?
+  currentPeriodStart     DateTime           @default(now())
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean            @default(false)
+  
+  // Extra fields requested for Phase 2 Subscription Management
+  clerkUserId            String?
+  email                  String?
+  checkoutSessionId      String?
+  dodoCustomerId         String?
+  dodoSubscriptionId     String?
+  billingCycle           String?            // "monthly" | "yearly"
+
+  // Payment provider fields — filled in when Dodo is integrated
+  paymentProvider        String?            // e.g. "dodo"
+  customerId             String?            // Dodo customer ID
+  providerSubscriptionId String?            // Dodo subscription ID
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  plan                   Plan               @relation(fields: [planId], references: [id])
+  user                   User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments               Payment[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("subscriptions")
+}
+
+model Payment {
+  id                String       @id @default(uuid())
+  subscriptionId    String
+  amount            Int          // in paise
+  currency          String       @default("INR")
+  status            String       @default("pending") // "paid" | "failed" | "pending"
+  // Payment provider fields — filled in when Dodo is integrated
+  paymentProvider   String?      // e.g. "dodo"
+  providerPaymentId String?      // Dodo payment ID
+  metadata          Json?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  subscription      Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId, createdAt(sort: Desc)])
+  @@map("payments")
+}
+
+model WebhookEvent {
+  id         String   @id @default(uuid())
+  eventId    String   @unique
+  provider   String   @default("dodo")
+  eventType  String
+  payload    Json
+  processed  Boolean  @default(false)
+  error      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("webhook_events")
+}
+
+model UserUsage {
+  id          String   @id @default(uuid())
+  userId      String
+  clerkUserId String?
+  featureName String
+  usageCount  Int      @default(0)
+  usageDate   String   // Format: YYYY-MM-DD
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, featureName, usageDate])
+  @@map("user_usages")
+}
+
+model UserApiKey {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  openaiKey String?  // Encrypted
+  geminiKey String?  // Encrypted
+  claudeKey String?  // Encrypted
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_api_keys")
+}
+
+
 model UserJob {
   id            String   @id @default(uuid())
   userId        String
@@ -532,3 +671,4 @@ model UserCrawlState {
 
   @@map("user_crawl_states")
 }
+

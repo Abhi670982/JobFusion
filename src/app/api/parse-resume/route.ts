@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parsePdf, parseDocx } from "@/lib/parser";
-import { extractSkills } from "@/lib/skills-extractor";
+import { extractSkillsWithAI } from "@/lib/skills-extractor";
 import { analyzeResume } from "@/lib/resume-intelligence";
-import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import { prisma } from "@/lib/prisma";
+import { withAIProviderCheck, validateUserAccess } from "@/lib/middleware/ai-usage";
 
 export const dynamic = "force-dynamic";
 
@@ -14,24 +14,24 @@ export async function POST(req: NextRequest) {
   let fileName = "unknown";
 
   try {
-    const body = await req.json();
-    userId = body.userId;
+    // Check AI usage limits and resolve AI provider/key for resume-review feature
+    const aiCheck = await withAIProviderCheck(req, 'resume-review');
+    if (!aiCheck.allowed || !aiCheck.config) {
+      return aiCheck.response || NextResponse.json({ success: false, error: "Access denied" }, { status: 403 });
+    }
+    const aiConfig = aiCheck.config;
 
-    if (!userId) {
-      return NextResponse.json({ success: false, step: "file_validation", error: "userId is required" }, { status: 400 });
+    // Validate user access
+    const accessCheck = await validateUserAccess(req);
+    if (!accessCheck.allowed) {
+      return accessCheck.response;
     }
 
-    const mongoUser = await getOrCreateMongoUser();
-    if (!mongoUser) {
-      return NextResponse.json({ success: false, step: "authentication", error: "Unauthorized" }, { status: 401 });
-    }
-    if (userId !== mongoUser._id.toString()) {
-      return NextResponse.json({ success: false, step: "authorization", error: "Forbidden" }, { status: 403 });
-    }
+    userId = accessCheck.userId || null;
 
     // Fetch profile from Postgres
     const pgProfile = await prisma.profile.findUnique({
-      where: { userId },
+      where: { userId: userId || "" },
       include: { skills: true }
     });
 
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
     }
 
     currentStep = "skills_extraction";
-    const newSkills = extractSkills(extractedText);
+    const newSkills = await extractSkillsWithAI(extractedText, aiConfig);
 
     currentStep = "intelligence";
     let intelligence;
@@ -127,16 +127,18 @@ export async function POST(req: NextRequest) {
 
     // Create success log in Postgres
     try {
-      await prisma.resumeParsingLog.create({
-        data: {
-          userId,
-          status: "success",
-          step: "complete",
-          fileName,
-          parsingTimeMs: Date.now() - startTime,
-          skillsExtractedCount: newSkills.length,
-        }
-      });
+      if (userId) {
+        await prisma.resumeParsingLog.create({
+          data: {
+            userId,
+            status: "success",
+            step: "complete",
+            fileName,
+            parsingTimeMs: Date.now() - startTime,
+            skillsExtractedCount: newSkills.length,
+          }
+        });
+      }
     } catch (pgErr) {
       console.error("[Postgres Parsing Log Error]", pgErr);
     }

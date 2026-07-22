@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sun, Moon, ArrowLeft, User, Mail, Briefcase, MapPin,
-  Edit3, Save, Loader2, CheckCircle2, AlertCircle, X, LogOut
+  Edit3, Save, Loader2, CheckCircle2, AlertCircle, X, LogOut,
+  CreditCard, Sparkles
 } from 'lucide-react';
 import { useClerk } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
@@ -346,7 +347,58 @@ export default function SettingsPage() {
         </div>
       </motion.div>
 
-      {/* Danger Zone / Sign Out Section */}
+      {/* ── Billing & Subscription Section ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="card-premium p-6 sm:p-8 space-y-4"
+        aria-labelledby="billing-section-heading"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 id="billing-section-heading" className="text-lg font-bold" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Billing &amp; Subscription</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Manage your plans, invoice history, payment options and feature usage limits.</p>
+          </div>
+        </div>
+
+        <div className="pt-2">
+          <Button
+            onClick={() => router.push('/settings/billing')}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white border-0 shadow-md hover:opacity-90 transition-all gradient-brand h-11"
+            aria-label="Manage billing settings"
+          >
+            <CreditCard className="w-4 h-4" aria-hidden="true" />
+            Manage Billing &amp; Subscriptions
+          </Button>
+        </div>
+      </motion.div>
+
+      {/* ── AI Providers Section ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="card-premium p-6 sm:p-8 space-y-4"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-bold" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>AI Providers & BYOK</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Bring Your Own Key (BYOK) to unlock unlimited AI features.</p>
+          </div>
+        </div>
+
+        <div className="pt-2">
+          <Button
+            onClick={() => router.push('/settings/ai-providers')}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-primary border-2 border-primary/20 bg-primary/5 hover:bg-primary/10 transition-all h-11"
+            aria-label="Manage AI Providers"
+          >
+            <Sparkles className="w-4 h-4" aria-hidden="true" />
+            Manage AI Providers
+          </Button>
+        </div>
+      </motion.div>
+
+      {/* ── Danger Zone / Sign Out Section ── */}
       <motion.div 
         initial={{ opacity: 0, y: 10 }} 
         animate={{ opacity: 1, y: 0 }} 

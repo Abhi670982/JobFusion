@@ -110,6 +110,7 @@ export interface DbJob {
   category: string;
   source?: string;
   applyUrl?: string;
+  dedupeHash?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -151,7 +152,7 @@ const CACHE_TTL = 15000; // 15 seconds TTL for personalized profile, saved items
 const JOBS_CACHE_TTL = 30000; // 30 seconds TTL for jobs listing
 
 export function clearApiCache() {
-  console.log("[API Cache] Clearing all frontend caches");
+
   cachedUserPromise = null;
   cachedUser = null;
   lastUserFetchTime = 0;
@@ -171,19 +172,19 @@ export function clearApiCache() {
 export async function fetchCurrentUser(forceRefresh = false): Promise<DbUser | null> {
   const now = Date.now();
   if (!forceRefresh && cachedUser && (now - lastUserFetchTime < CACHE_TTL)) {
-    console.log("[Frontend API] fetchCurrentUser() - Cache Hit (In-memory)");
+
     return cachedUser;
   }
   if (!forceRefresh && cachedUserPromise) {
-    console.log("[Frontend API] fetchCurrentUser() - Cache Hit (Active Promise)");
+
     return cachedUserPromise;
   }
 
-  console.log("[Frontend API] fetchCurrentUser() - Cache Miss. Request started");
+
   cachedUserPromise = (async () => {
     try {
       const res = await fetch('/api/users');
-      console.log(`[Frontend API] fetchCurrentUser() - Response status: ${res.status}`);
+
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       if (data.success && data.user) {
@@ -212,21 +213,21 @@ export async function fetchProfile(userId: string, forceRefresh = false): Promis
   const now = Date.now();
   const cached = profileCache.get(userId);
   if (!forceRefresh && cached && (now - cached.time < CACHE_TTL)) {
-    console.log(`[Frontend API] fetchProfile(${userId}) - Cache Hit (In-memory)`);
+
     return cached.data;
   }
   
   let promise = profilePromiseCache.get(userId);
   if (!forceRefresh && promise) {
-    console.log(`[Frontend API] fetchProfile(${userId}) - Cache Hit (Active Promise)`);
+
     return promise;
   }
 
-  console.log(`[Frontend API] fetchProfile(${userId}) - Cache Miss. Request started`);
+
   promise = (async () => {
     try {
       const res = await fetch(`/api/profile?userId=${userId}`);
-      console.log(`[Frontend API] fetchProfile(${userId}) - Response status: ${res.status}`);
+
       if (!res.ok) {
         if (res.status === 404) {
           console.warn(`[Frontend API] fetchProfile(${userId}) - Profile not found (404)`);
@@ -253,14 +254,14 @@ export async function fetchProfile(userId: string, forceRefresh = false): Promis
 }
 
 export async function updateProfile(userId: string, profileData: Partial<DbProfile>): Promise<DbProfile | null> {
-  console.log(`[Frontend API] updateProfile(${userId}) - Request started`);
+
   try {
     const res = await fetch(`/api/profile?userId=${userId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId, ...profileData }),
     });
-    console.log(`[Frontend API] updateProfile(${userId}) - Response status: ${res.status}`);
+
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
     const data = await res.json();
     if (data.success) {
@@ -277,22 +278,22 @@ export async function updateProfile(userId: string, profileData: Partial<DbProfi
 export async function fetchJobs(forceRefresh = false): Promise<DbJob[]> {
   const now = Date.now();
   if (!forceRefresh && cachedJobs.length > 0 && (now - lastJobsFetchTime < JOBS_CACHE_TTL)) {
-    console.log("[Frontend API] fetchJobs() - Cache Hit (In-memory)");
+
     return cachedJobs;
   }
   if (!forceRefresh && cachedJobsPromise) {
-    console.log("[Frontend API] fetchJobs() - Cache Hit (Active Promise)");
+
     return cachedJobsPromise;
   }
 
-  console.log("[Frontend API] fetchJobs() - Cache Miss. Request started");
+
   cachedJobsPromise = (async () => {
     try {
       const res = await fetch('/api/jobs');
-      console.log(`[Frontend API] fetchJobs() - Response status: ${res.status}`);
+
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
-      console.log(`[Frontend API] fetchJobs() - Loaded ${data.data?.length} jobs`);
+
       if (data.success) {
         cachedJobs = data.data;
         lastJobsFetchTime = Date.now();
@@ -310,10 +311,10 @@ export async function fetchJobs(forceRefresh = false): Promise<DbJob[]> {
 }
 
 export async function fetchJobById(id: string): Promise<DbJob | null> {
-  console.log(`[Frontend API] fetchJobById(${id}) - Request started`);
+
   try {
     const res = await fetch(`/api/jobs?id=${id}`);
-    console.log(`[Frontend API] fetchJobById(${id}) - Response status: ${res.status}`);
+
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
     const data = await res.json();
     if (data.success) return data.data;
@@ -327,23 +328,23 @@ export async function fetchApplications(userId: string, forceRefresh = false): P
   const now = Date.now();
   const cached = applicationsCache.get(userId);
   if (!forceRefresh && cached && (now - cached.time < CACHE_TTL)) {
-    console.log(`[Frontend API] fetchApplications(${userId}) - Cache Hit (In-memory)`);
+
     return cached.data;
   }
   let promise = applicationsPromiseCache.get(userId);
   if (!forceRefresh && promise) {
-    console.log(`[Frontend API] fetchApplications(${userId}) - Cache Hit (Active Promise)`);
+
     return promise;
   }
 
-  console.log(`[Frontend API] fetchApplications(${userId}) - Cache Miss. Request started`);
+
   promise = (async () => {
     try {
       const res = await fetch(`/api/applications?userId=${userId}`);
-      console.log(`[Frontend API] fetchApplications(${userId}) - Response status: ${res.status}`);
+
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
-      console.log(`[Frontend API] fetchApplications(${userId}) - Loaded ${data.data?.length} applications`);
+
       if (data.success) {
         applicationsCache.set(userId, { data: data.data, time: Date.now() });
         return data.data;
@@ -361,14 +362,14 @@ export async function fetchApplications(userId: string, forceRefresh = false): P
 }
 
 export async function applyToJob(userId: string, jobId: string): Promise<DbApplication | null> {
-  console.log(`[Frontend API] applyToJob(userId: ${userId}, jobId: ${jobId}) - Request started`);
+
   try {
     const res = await fetch('/api/applications', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId, jobId }),
     });
-    console.log(`[Frontend API] applyToJob(userId: ${userId}, jobId: ${jobId}) - Response status: ${res.status}`);
+
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
     const data = await res.json();
     if (data.success) {
@@ -386,23 +387,23 @@ export async function fetchSavedJobs(userId: string, forceRefresh = false): Prom
   const now = Date.now();
   const cached = savedJobsCache.get(userId);
   if (!forceRefresh && cached && (now - cached.time < CACHE_TTL)) {
-    console.log(`[Frontend API] fetchSavedJobs(${userId}) - Cache Hit (In-memory)`);
+
     return cached.data;
   }
   let promise = savedJobsPromiseCache.get(userId);
   if (!forceRefresh && promise) {
-    console.log(`[Frontend API] fetchSavedJobs(${userId}) - Cache Hit (Active Promise)`);
+
     return promise;
   }
 
-  console.log(`[Frontend API] fetchSavedJobs(${userId}) - Cache Miss. Request started`);
+
   promise = (async () => {
     try {
       const res = await fetch(`/api/saved-jobs?userId=${userId}`);
-      console.log(`[Frontend API] fetchSavedJobs(${userId}) - Response status: ${res.status}`);
+
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
-      console.log(`[Frontend API] fetchSavedJobs(${userId}) - Loaded ${data.data?.length} saved jobs`);
+
       if (data.success) {
         savedJobsCache.set(userId, { data: data.data, time: Date.now() });
         return data.data;
@@ -420,14 +421,14 @@ export async function fetchSavedJobs(userId: string, forceRefresh = false): Prom
 }
 
 export async function saveJob(userId: string, jobId: string): Promise<DbSavedJob | null> {
-  console.log(`[Frontend API] saveJob(userId: ${userId}, jobId: ${jobId}) - Request started`);
+
   try {
     const res = await fetch('/api/saved-jobs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId, jobId }),
     });
-    console.log(`[Frontend API] saveJob(userId: ${userId}, jobId: ${jobId}) - Response status: ${res.status}`);
+
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
     const data = await res.json();
     if (data.success) {
@@ -442,12 +443,12 @@ export async function saveJob(userId: string, jobId: string): Promise<DbSavedJob
 }
 
 export async function unsaveJob(userId: string, jobId: string): Promise<boolean> {
-  console.log(`[Frontend API] unsaveJob(userId: ${userId}, jobId: ${jobId}) - Request started`);
+
   try {
     const res = await fetch(`/api/saved-jobs?userId=${userId}&jobId=${jobId}`, {
       method: 'DELETE',
     });
-    console.log(`[Frontend API] unsaveJob(userId: ${userId}, jobId: ${jobId}) - Response status: ${res.status}`);
+
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
     const data = await res.json();
     if (data.success) {
@@ -462,7 +463,7 @@ export async function unsaveJob(userId: string, jobId: string): Promise<boolean>
 }
 
 export async function uploadResume(userId: string, file: File): Promise<any> {
-  console.log(`[Frontend API] uploadResume(${userId}) - Request started (File: ${file.name}, Size: ${file.size})`);
+
   try {
     const formData = new FormData();
     formData.append('file', file);
@@ -472,7 +473,7 @@ export async function uploadResume(userId: string, file: File): Promise<any> {
       method: 'POST',
       body: formData,
     });
-    console.log(`[Frontend API] uploadResume(${userId}) - Response status: ${res.status}`);
+
     if (!res.ok) {
       const data = await res.json();
       throw new Error(data.error || `HTTP error! status: ${res.status}`);
@@ -493,14 +494,14 @@ export async function uploadResume(userId: string, file: File): Promise<any> {
 }
 
 export async function parseResume(userId: string): Promise<any> {
-  console.log(`[Frontend API] parseResume(${userId}) - Request started`);
+
   try {
     const res = await fetch('/api/parse-resume', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId }),
     });
-    console.log(`[Frontend API] parseResume(${userId}) - Response status: ${res.status}`);
+
     if (!res.ok) {
       const data = await res.json();
       throw new Error(data.error || `HTTP error! status: ${res.status}`);
