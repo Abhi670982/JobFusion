@@ -12,7 +12,7 @@ import { FeatureComparison } from '@/components/pricing/FeatureComparison';
 import { PricingFAQ } from '@/components/pricing/PricingFAQ';
 import { PricingCTA } from '@/components/pricing/PricingCTA';
 import { PricingSection } from '@/components/pricing/PricingSection';
-import { TRUST_BADGES, TESTIMONIALS, ENTERPRISE_HIGHLIGHTS, FREE_PLAN_FEATURES, PRO_PLAN_FEATURES } from '@/lib/plans';
+import { TRUST_BADGES, FREE_PLAN_FEATURES, PRO_PLAN_FEATURES } from '@/lib/plans';
 import { cn } from '@/lib/utils';
 import dynamic from 'next/dynamic';
 import Navbar from '@/components/navbar';
@@ -248,103 +248,9 @@ export default function PricingPage() {
         </div>
       </PricingSection>
 
-      {/* ── TESTIMONIALS ── */}
-      <PricingSection
-        id="testimonials"
-        className="bg-muted/20 border-y border-border"
-        title="Loved by job seekers"
-        subtitle="Real stories from people who accelerated their careers with JobFusion Pro."
-      >
-        <div className="max-w-5xl mx-auto px-4 sm:px-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {TESTIMONIALS.map((t, i) => (
-              <motion.div
-                key={t.name}
-                initial={{ opacity: 0, y: 16 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-                className="card-premium p-6 flex flex-col gap-4"
-              >
-                {/* Stars */}
-                <div className="flex gap-0.5" aria-label="5 out of 5 stars">
-                  {Array.from({ length: 5 }).map((_, j) => (
-                    <Star key={j} className="w-3.5 h-3.5 text-amber-400 fill-amber-400" aria-hidden="true" />
-                  ))}
-                </div>
 
-                <blockquote className="text-sm text-muted-foreground leading-relaxed flex-1">
-                  &ldquo;{t.quote}&rdquo;
-                </blockquote>
 
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                    style={{ backgroundColor: t.color }}
-                    aria-hidden="true"
-                  >
-                    {t.avatar}
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold">{t.name}</p>
-                    <p className="text-xs text-muted-foreground">{t.role}</p>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </PricingSection>
 
-      {/* ── ENTERPRISE BANNER ── */}
-      <PricingSection id="enterprise" className="py-12">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6">
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className={cn(
-              'rounded-2xl border border-purple-500/20 bg-purple-500/[0.04] p-8',
-              'flex flex-col md:flex-row items-center justify-between gap-6'
-            )}
-          >
-            <div className="text-center md:text-left">
-              <div className="inline-flex items-center gap-1.5 text-purple-600 dark:text-purple-400 text-xs font-semibold mb-2 bg-purple-500/10 px-3 py-1 rounded-full">
-                <Users className="w-3.5 h-3.5" aria-hidden="true" />
-                Recruiter / Enterprise
-              </div>
-              <h2 className="text-xl font-bold mb-2">Building for your team?</h2>
-              <p className="text-sm text-muted-foreground max-w-sm leading-relaxed">
-                Custom AI models, bulk resume processing, dedicated support, API access,
-                and SLA-backed uptime. Let&apos;s talk.
-              </p>
-              <ul className="mt-4 space-y-1.5" aria-label="Enterprise features">
-                {ENTERPRISE_HIGHLIGHTS.map((f) => (
-                  <li key={f} className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Check className="w-3.5 h-3.5 text-purple-500" aria-hidden="true" />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="flex flex-col gap-3 flex-shrink-0">
-              <Link href="/contact">
-                <Button
-                  id="enterprise-contact-sales"
-                  size="lg"
-                  className="rounded-xl bg-purple-600 hover:bg-purple-700 text-white border-0 font-semibold min-w-[160px]"
-                  aria-label="Contact sales for enterprise pricing"
-                >
-                  Contact Sales <ArrowRight className="w-4 h-4 ml-2" aria-hidden="true" />
-                </Button>
-              </Link>
-              <p className="text-xs text-center text-muted-foreground">
-                Response within 24 hours
-              </p>
-            </div>
-          </motion.div>
-        </div>
-      </PricingSection>
 
       {/* ── FAQ ── */}
       <PricingSection id="faq" className="bg-muted/10 border-t border-border">
