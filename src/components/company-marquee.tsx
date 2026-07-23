@@ -39,7 +39,7 @@ export function CompanyMarquee() {
         <motion.div
           animate={{ x: ["0%", "-50%"] }}
           transition={{
-            duration: 240,
+            duration: 180,
             ease: "linear",
             repeat: Infinity,
           }}
