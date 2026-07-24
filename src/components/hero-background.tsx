@@ -42,6 +42,17 @@ interface LogoItem {
   floatY2: number;
 }
 
+interface StarItem {
+  id: number;
+  top: string;
+  left: string;
+  width: string;
+  height: string;
+  animationDelay: string;
+  animationDuration: string;
+  layer: number;
+}
+
 
 // Generates a random position outside the "forbidden" center area
 function getRandomPosition(isMobile: boolean): { x: number; y: number } {
@@ -71,6 +82,7 @@ function getRandomPosition(isMobile: boolean): { x: number; y: number } {
 export default function HeroBackground() {
   const [mounted, setMounted] = useState(false);
   const [logoItems, setLogoItems] = useState<LogoItem[]>([]);
+  const [starItems, setStarItems] = useState<StarItem[]>([]);
   const { resolvedTheme } = useTheme();
 
   useEffect(() => {
@@ -123,8 +135,40 @@ export default function HeroBackground() {
         floatY2: (Math.random() - 0.5) * floatRange,
       });
     }
+    
+    // Generate starfield
+    const generatedStars: StarItem[] = [];
+    let starId = 0;
+    
+    for(let i=0; i<30; i++) {
+      generatedStars.push({
+        id: starId++, layer: 1,
+        top: `${Math.random() * 100}%`, left: `${Math.random() * 100}%`,
+        width: '2px', height: '2px',
+        animationDelay: `${Math.random() * 5}s`, animationDuration: `${2 + Math.random() * 3}s`
+      });
+    }
+
+    for(let i=0; i<40; i++) {
+      generatedStars.push({
+        id: starId++, layer: 2,
+        top: `${Math.random() * 100}%`, left: `${Math.random() * 100}%`,
+        width: '1.5px', height: '1.5px',
+        animationDelay: `${Math.random() * 5}s`, animationDuration: `${3 + Math.random() * 4}s`
+      });
+    }
+
+    for(let i=0; i<60; i++) {
+      generatedStars.push({
+        id: starId++, layer: 3,
+        top: `${Math.random() * 100}%`, left: `${Math.random() * 100}%`,
+        width: '1px', height: '1px',
+        animationDelay: `${Math.random() * 5}s`, animationDuration: `${2.5 + Math.random() * 3.5}s`
+      });
+    }
 
     setLogoItems(generatedLogos);
+    setStarItems(generatedStars);
     setMounted(true);
   }, []);
 
@@ -153,89 +197,72 @@ export default function HeroBackground() {
             }} />
           </div>
 
-          {/* Plus Grid Pattern */}
-          <div className="absolute inset-0 pointer-events-none z-0" style={{
-            backgroundImage: `
-              url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")
-            `,
-            backgroundSize: '60px 60px',
-            maskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)',
-            WebkitMaskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)'
-          }}>
-          </div>
+          {/* Animated Starfield */}
+          <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden"
+            style={{
+              maskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)',
+              WebkitMaskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)'
+            }}
+          >
+            <style dangerouslySetInnerHTML={{
+              __html: `
+              .star {
+                position: absolute;
+                border-radius: 50%;
+                background-color: white;
+                animation: twinkle linear infinite;
+              }
+              
+              @keyframes twinkle {
+                0% { opacity: 0.1; transform: scale(0.8); }
+                50% { opacity: 0.9; transform: scale(1.2); }
+                100% { opacity: 0.1; transform: scale(0.8); }
+              }
+              
+              @keyframes drift {
+                0% { transform: translateY(0) translateX(0); }
+                100% { transform: translateY(-30px) translateX(15px); }
+              }
 
-          {/* Particles / Stars */}
-          <div className="absolute inset-0 pointer-events-none z-0" style={{
-            backgroundImage: `
-              url("data:image/svg+xml,%3Csvg width='120' height='120' viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='20' cy='20' r='1' fill='%23ffffff' fill-opacity='0.1' /%3E%3Ccircle cx='80' cy='40' r='1.5' fill='%23ffffff' fill-opacity='0.2' /%3E%3Ccircle cx='40' cy='90' r='0.5' fill='%23ffffff' fill-opacity='0.15' /%3E%3Ccircle cx='100' cy='100' r='1' fill='%23ffffff' fill-opacity='0.08' /%3E%3C/svg%3E")
-            `,
-            backgroundSize: '120px 120px',
-            maskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)',
-            WebkitMaskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)'
-          }}>
+              .star-layer {
+                position: absolute;
+                inset: -50px;
+                animation: drift linear infinite alternate;
+              }
+              
+              .star-layer-1 { animation-duration: 40s; }
+              .star-layer-2 { animation-duration: 70s; }
+              .star-layer-3 { animation-duration: 100s; }
+            `}} />
+
+            <div className="star-layer star-layer-1">
+              {starItems.filter(s => s.layer === 1).map(s => (
+                <div key={s.id} className="star" style={{
+                  top: s.top, left: s.left, width: s.width, height: s.height,
+                  animationDelay: s.animationDelay, animationDuration: s.animationDuration
+                }} />
+              ))}
+            </div>
+            <div className="star-layer star-layer-2">
+              {starItems.filter(s => s.layer === 2).map(s => (
+                <div key={s.id} className="star" style={{
+                  top: s.top, left: s.left, width: s.width, height: s.height,
+                  animationDelay: s.animationDelay, animationDuration: s.animationDuration
+                }} />
+              ))}
+            </div>
+            <div className="star-layer star-layer-3">
+              {starItems.filter(s => s.layer === 3).map(s => (
+                <div key={s.id} className="star" style={{
+                  top: s.top, left: s.left, width: s.width, height: s.height,
+                  animationDelay: s.animationDelay, animationDuration: s.animationDuration
+                }} />
+              ))}
+            </div>
           </div>
         </>
       )}
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-10">
-        <style dangerouslySetInnerHTML={{
-          __html: `
-        @keyframes floatComplex {
-          0%   { transform: translate3d(0, 0, 0) rotate(0deg); }
-          33%  { transform: translate3d(var(--fx1), var(--fy1), 0) rotate(var(--rot)); }
-          66%  { transform: translate3d(var(--fx2), var(--fy2), 0) rotate(calc(var(--rot) * -1)); }
-          100% { transform: translate3d(0, 0, 0) rotate(0deg); }
-        }
-      ` }} />
-
-        {/* 5. Floating company logos with inline SVG */}
-        {logoItems.map((item, i) => (
-          <div
-            key={i}
-            className="absolute flex items-center justify-center rounded-full backdrop-blur-sm"
-            style={{
-              left: `calc(${item.x}% - ${item.size / 2}px)`,
-              top: `calc(${item.y}% - ${item.size / 2}px)`,
-              width: `${item.size}px`,
-              height: `${item.size}px`,
-              background: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
-              border: `1px solid ${resolvedTheme === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'}`,
-              boxShadow: resolvedTheme === 'dark'
-                ? `0 0 18px rgba(56,189,248,0.18), inset 0 0 12px rgba(255,255,255,0.03)`
-                : `0 4px 20px rgba(0,0,0,0.08), inset 0 0 12px rgba(0,0,0,0.02)`,
-              animation: `floatComplex ${item.duration}s ease-in-out infinite`,
-              animationDelay: `${item.delay}s`,
-              '--fx1': `${item.floatX1}px`,
-              '--fy1': `${item.floatY1}px`,
-              '--fx2': `${item.floatX2}px`,
-              '--fy2': `${item.floatY2}px`,
-              '--rot': `${item.rotate}deg`,
-            } as React.CSSProperties}
-          >
-            <div
-              style={{
-                position: 'relative',
-                width: '52%',
-                height: '52%',
-                opacity: 0.85,
-                filter: `drop-shadow(0 0 6px ${item.color}80)`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <img 
-                src={`https://www.google.com/s2/favicons?domain=${item.domain}&sz=128`} 
-                alt={item.name} 
-                style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
-                onError={(e) => { 
-                  e.currentTarget.onerror = null; 
-                  e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(item.name)}&background=${item.color.replace('#', '')}&color=fff&size=128`;
-                }} 
-              />
-            </div>
-          </div>
-        ))}
-
       </div>
 
       {/* Bottom Fade to Page Background */}

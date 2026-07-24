@@ -20,8 +20,27 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 
-const navLinks = [
-  { href: '/jobs', label: 'Find Jobs' },
+type NavLink = {
+  href?: string;
+  label: string;
+  isDropdown?: boolean;
+  children?: { href: string; label: string }[];
+};
+
+const navLinks: NavLink[] = [
+  { 
+    label: 'Browse Jobs', 
+    isDropdown: true,
+    children: [
+      { href: '/jobs', label: 'Latest Jobs' },
+      { href: '/jobs?remote=true', label: 'Remote Jobs' },
+      { href: '/jobs?type=internship', label: 'Internships' },
+      { href: '/jobs/categories', label: 'Jobs by Category' },
+      { href: '/jobs/locations', label: 'Jobs by Location' },
+      { href: '/jobs/types', label: 'Jobs by Type' },
+    ]
+  },
+  { href: '/about', label: 'About' },
   { href: '/#features', label: 'Features' },
   { href: '/pricing', label: 'Pricing' },
 ];
@@ -88,7 +107,16 @@ export default function Navbar() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           {/* Logo & Brand + Mobile Hamburger */}
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-            <Link href={isLoggedIn ? "/dashboard" : "/"} className="flex items-center gap-2 group flex-shrink-0">
+            <Link 
+              href="/" 
+              className="flex items-center gap-2 group flex-shrink-0"
+              onClick={(e) => {
+                if (pathname === '/') {
+                  e.preventDefault();
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+              }}
+            >
               <Image
                 src="/logo-circle.png"
                 alt="JobFusion Logo"
@@ -109,20 +137,44 @@ export default function Navbar() {
 
           {/* Center Nav — hidden on mobile, show on logged-in pages  */}
           <nav className="hidden md:flex items-center gap-1 flex-1 justify-center">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href === '/jobs' ? (isSignedIn ? '/jobs' : '/sign-in') : link.href}
-                className={cn(
-                  'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
-                  pathname === link.href
-                    ? 'text-primary bg-primary/10'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                )}
-              >
-                {link.label}
-              </Link>
-            ))}
+            {navLinks.map((link) => {
+              if (link.isDropdown) {
+                return (
+                  <DropdownMenu key={link.label}>
+                    <DropdownMenuTrigger className={cn(
+                      'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 inline-flex items-center justify-center gap-1',
+                      'text-muted-foreground hover:text-foreground hover:bg-accent outline-none'
+                    )}>
+                      {link.label} <ChevronDown className="w-3.5 h-3.5" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="center" className="w-48 rounded-2xl p-1.5 shadow-xl border-border bg-popover/95 backdrop-blur-md">
+                      {link.children?.map(child => (
+                        <DropdownMenuItem key={child.href} asChild className="rounded-xl px-3 py-2 text-sm cursor-pointer transition-colors">
+                          <Link href={isSignedIn ? child.href : '/sign-in'}>
+                            {child.label}
+                          </Link>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                );
+              }
+
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href === '/jobs' ? (isSignedIn ? '/jobs' : '/sign-in') : (link.href || '')}
+                  className={cn(
+                    'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 inline-flex items-center justify-center',
+                    pathname === link.href
+                      ? 'text-primary bg-primary/10'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                  )}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
           </nav>
 
           {/* Right Actions */}
@@ -280,22 +332,60 @@ export default function Navbar() {
               transition={{ duration: 0.2 }}
               className="md:hidden border-b border-border bg-background/95 backdrop-blur-xl absolute top-16 left-0 right-0 z-40 overflow-hidden shadow-lg"
             >
-              <div className="px-4 py-6 space-y-4 flex flex-col">
-                {navLinks.map((link) => (
+              <div className="px-4 py-4 space-y-1 flex flex-col">
+                {/* 1. About Link */}
+                <Link
+                  href="/about"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={cn(
+                    'px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200',
+                    pathname === '/about'
+                      ? 'text-primary bg-primary/10'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                  )}
+                >
+                  About
+                </Link>
+
+                {/* 2. Browse Jobs subcategories without heading */}
+                {navLinks.find(l => l.isDropdown)?.children?.map(child => (
                   <Link
-                    key={link.href}
-                    href={link.href === '/jobs' ? (isSignedIn ? '/jobs' : '/sign-in') : link.href}
+                    key={child.href}
+                    href={isSignedIn ? child.href : '/sign-in'}
                     onClick={() => setMobileMenuOpen(false)}
-                    className={cn(
-                      'px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',
-                      pathname === link.href
-                        ? 'text-primary bg-primary/10'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                    )}
+                    className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent rounded-xl transition-all"
                   >
-                    {link.label}
+                    {child.label}
                   </Link>
                 ))}
+
+                {/* 3. Features Link */}
+                <Link
+                  href="/#features"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={cn(
+                    'px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200',
+                    pathname === '/#features'
+                      ? 'text-primary bg-primary/10'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                  )}
+                >
+                  Features
+                </Link>
+
+                {/* 4. Pricing Link */}
+                <Link
+                  href="/pricing"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={cn(
+                    'px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200',
+                    pathname === '/pricing'
+                      ? 'text-primary bg-primary/10'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+                  )}
+                >
+                  Pricing
+                </Link>
                 <div className="h-px bg-border my-2" />
                 <div className="flex flex-col gap-2 px-4">
                   <Link href="/sign-in" onClick={() => setMobileMenuOpen(false)}>

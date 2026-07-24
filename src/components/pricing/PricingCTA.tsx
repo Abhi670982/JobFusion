@@ -89,21 +89,11 @@ export function PricingCTA({ className, variant = 'default' }: PricingCTAProps) 
           >
             Upgrade to Pro — ₹299/mo
           </Button>
-          <Link href="/contact">
-            <Button
-              id="cta-contact-sales"
-              variant="ghost"
-              size="lg"
-              className="rounded-xl text-white hover:bg-white/10 border border-white/20 min-w-[140px]"
-              aria-label="Contact sales for enterprise pricing"
-            >
-              Contact Sales <ArrowRight className="w-4 h-4 ml-2" />
-            </Button>
-          </Link>
+
         </div>
 
         <p className="text-white/50 text-xs mt-5">
-          No credit card required to start · Cancel anytime · 100% secure
+          Cancel anytime · 100% secure
         </p>
       </div>
     </motion.section>
