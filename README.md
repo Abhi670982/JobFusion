@@ -146,19 +146,6 @@ http://localhost:3000
 
 ---
 
-# 📸 Screenshots
-
-> Add screenshots of:
-
-- Home Page
-- Dashboard
-- Job Search
-- Match My Skills
-- AI Providers
-- Pricing
-- Billing
-
----
 
 # 🔄 AI Provider Architecture
 
@@ -241,8 +228,6 @@ This project is licensed under the MIT License.
 **Abhishek Chauhan**
 
 - GitHub: https://github.com/Abhi670982
-- LinkedIn: *(Add your LinkedIn profile link)*
-
 ---
 
 ⭐ If you like this project, consider giving it a **Star** on GitHub!
