@@ -1,50 +1,233 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🚀 JobFusion
 
-## Environment Variables & Setup
+**JobFusion** is an AI-powered job search platform that aggregates opportunities from multiple job portals into a single dashboard. It helps job seekers discover relevant opportunities, analyze resumes using AI, match jobs based on skills, and manage applications efficiently.
 
-To run JobFusion locally, follow these steps to configure environment variables:
+Built with **Next.js**, **TypeScript**, **Prisma**, **MongoDB**, **Clerk Authentication**, and **Dodo Payments**, JobFusion provides a modern, scalable, and intelligent job-hunting experience.
 
-1. **Copy the example environment file**:
-   ```bash
-   cp .env.example .env.local
-   # On Windows PowerShell:
-   # Copy-Item .env.example .env.local
-   ```
+---
 
-2. **Fill in your credentials** in `.env.local` (Database URLs, Clerk authentication keys, Cloudinary credentials, Gemini AI API keys, etc.).
+## ✨ Features
 
-> **SECURITY NOTICE**: Contributors must **NEVER** commit `.env` or `.env.local` files to Git. Real credentials, secret keys, and API tokens should only exist in `.env.local` or environment variable settings on your deployment platform (Vercel).
+### 🔍 Unified Job Search
+- Aggregate jobs from multiple job portals.
+- Smart search and filtering.
+- Duplicate job prevention.
+- Personalized recommendations.
 
-3. **Install dependencies and generate Prisma client**:
-   ```bash
-   npm install
-   npx prisma generate
-   ```
+### 🤖 AI-Powered Features
+- Resume Parsing
+- Skill Extraction
+- AI Job Matching
+- Profile Extraction
+- BYOK (Bring Your Own API Key)
+- Support for:
+  - Google Gemini
+  - OpenAI
+  - Anthropic Claude
 
-4. **Run the development server**:
-   ```bash
-   npm run dev
-   ```
+### 👤 User Dashboard
+- Personalized profile
+- Saved jobs
+- Applied jobs
+- AI usage tracking
+- Subscription management
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the application.
+### 💳 Subscription System
+- Free & Premium plans
+- Dodo Payments integration
+- Secure webhook handling
+- Billing management
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 🔐 Authentication
+- Clerk Authentication
+- Protected routes
+- User profile management
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### ⚡ Performance
+- Centralized AI provider architecture
+- Optimized database queries
+- Secure API design
+- Responsive UI
+- TypeScript throughout
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+# 🛠 Tech Stack
 
-To learn more about Next.js, take a look at the following resources:
+### Frontend
+- Next.js 15
+- React
+- TypeScript
+- Tailwind CSS
+- Framer Motion
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Backend
+- Next.js Route Handlers
+- Prisma ORM
+- MongoDB
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Authentication
+- Clerk
 
-## Deploy on Vercel
+### AI
+- Google Gemini
+- OpenAI
+- Anthropic Claude
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Payments
+- Dodo Payments
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Deployment
+- Vercel
+
+---
+
+# 📂 Project Structure
+
+```
+src/
+├── app/
+├── components/
+├── lib/
+├── hooks/
+├── prisma/
+├── types/
+└── utils/
+```
+
+---
+
+# 🚀 Getting Started
+
+## Clone the repository
+
+```bash
+git clone https://github.com/your-username/JobFusion.git
+cd JobFusion
+```
+
+## Install dependencies
+
+```bash
+npm install
+```
+
+## Configure Environment Variables
+
+Create a `.env.local` file and add the required environment variables.
+
+Example:
+
+```env
+DATABASE_URL=
+
+CLERK_SECRET_KEY=
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
+
+GOOGLE_GEMINI_API_KEY=
+OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
+
+DODO_SECRET_KEY=
+DODO_WEBHOOK_SECRET=
+```
+
+## Run Development Server
+
+```bash
+npm run dev
+```
+
+Open:
+
+```
+http://localhost:3000
+```
+
+---
+
+
+# 🔄 AI Provider Architecture
+
+JobFusion supports a centralized AI provider system.
+
+Priority Order:
+
+```
+User BYOK
+      ↓
+JobFusion Premium Provider
+      ↓
+Free Daily Credits
+      ↓
+Limit Reached
+```
+
+Once a user connects their own API key, all AI-powered features automatically use the user's provider without consuming JobFusion's AI quota.
+
+---
+
+# 🔐 Security
+
+- Encrypted API key storage
+- Secure authentication with Clerk
+- Protected API routes
+- Environment variable isolation
+- Secure payment webhook verification
+
+---
+
+# 🌟 Future Roadmap
+
+- AI Resume Review
+- ATS Score Checker
+- Resume Tailoring
+- Cover Letter Generator
+- Interview Preparation
+- Job Alerts
+- Recruiter Dashboard
+- Analytics Dashboard
+
+---
+
+# 🤝 Contributing
+
+Contributions are welcome!
+
+1. Fork the repository
+2. Create a feature branch
+
+```bash
+git checkout -b feature/new-feature
+```
+
+3. Commit your changes
+
+```bash
+git commit -m "Add new feature"
+```
+
+4. Push the branch
+
+```bash
+git push origin feature/new-feature
+```
+
+5. Open a Pull Request
+
+---
+
+# 📄 License
+
+This project is licensed under the MIT License.
+
+---
+
+# 👨‍💻 Author
+
+**Abhishek Chauhan**
+
+- GitHub: https://github.com/Abhi670982
+---
+
+⭐ If you like this project, consider giving it a **Star** on GitHub!
