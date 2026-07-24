@@ -91,6 +91,8 @@ model Job {
   featured         Boolean         @default(false)
   category         String          @default("Engineering")
   source           String?
+  sourceCategory   JobSourceCategory?
+  sourceProvider   String?
   applyUrl         String?
   sourceId         String?
   sourceUrl        String?
@@ -115,6 +117,9 @@ model Job {
   userJobs         UserJob[]
 
   @@index([source])
+  @@index([sourceCategory])
+  @@index([sourceCategory, postedAtDate(sort: Desc)])
+  @@index([sourceCategory, isActive])
   @@index([title])
   @@index([company])
   @@index([location])
@@ -412,6 +417,12 @@ enum CrawlStatus {
   crawling
   failed
   success
+}
+
+enum JobSourceCategory {
+  COMPANY_CAREER
+  JOB_PORTAL
+  UNKNOWN
 }
 
 enum LocationType {

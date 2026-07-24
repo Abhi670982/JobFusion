@@ -44,10 +44,12 @@ export interface UnifiedJob {
 
   // Timestamps
   postedAt: Date | null;       // UTC ISO 8601
+  dateConfidence?: "exact" | "estimated" | "unknown";
   expiresAt: Date | null;
   fetchedAt: Date;             // When we pulled it — always set
 
   // Deduplication
+  sourceJobId?: string;
   dedupeHash: string;          // SHA-256 of (title + company + location).toLowerCase()
 }
 

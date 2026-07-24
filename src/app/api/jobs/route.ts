@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { validateJobsQuery } from "@/lib/api-validators";
-import { Prisma, Job, JobType, ExperienceLevel } from "@prisma/client";
+import { calculateRelevanceScore } from "@/lib/relevance";
+import { Prisma, Job, JobType, ExperienceLevel, JobSourceCategory } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -171,6 +172,17 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    const rawCategoryParam = (searchParams.get("sourceCategory") || searchParams.get("category") || "").toUpperCase().trim();
+    if (rawCategoryParam === "COMPANY_CAREER" || rawCategoryParam === "CAREERS") {
+      andConditions.push({
+        sourceCategory: JobSourceCategory.COMPANY_CAREER,
+      });
+    } else if (rawCategoryParam === "JOB_PORTAL" || rawCategoryParam === "PORTAL") {
+      andConditions.push({
+        sourceCategory: JobSourceCategory.JOB_PORTAL,
+      });
+    }
+
     // 2. Multi-source filter
     if (source) {
       const sources = source.split(",").map((s) => s.trim().toLowerCase());
@@ -274,7 +286,11 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 9. Date posted filter + Rule 1 (careers always 24h)
+    // 9. Strict Rolling 168-Hour Window Date Filter
+    const CUTOFF_168H_MS = 168 * 60 * 60 * 1000;
+    const cutoff168h = new Date(Date.now() - CUTOFF_168H_MS);
+    const clockSkewTolerance = new Date(Date.now() + 5 * 60 * 1000);
+
     const datePosted = searchParams.get("datePosted") || "";
     let dateLimit: Date | null = null;
     if (datePosted) {
@@ -291,39 +307,20 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const TEN_DAYS_MS = 10 * 24 * 60 * 60 * 1000;
-    const cutoffCareers = new Date(Date.now() - TEN_DAYS_MS);
-
     if (dateLimit) {
-      // User applied an explicit date filter — apply to all sources
-      const effectiveDateLimit = dateLimit > cutoffCareers ? dateLimit : cutoffCareers;
+      const effectiveDateLimit = dateLimit > cutoff168h ? dateLimit : cutoff168h;
       andConditions.push({
-        OR: [
-          {
-            AND: [{ source: "careers" }, { postedAtDate: { gte: effectiveDateLimit } }],
-          },
-          {
-            AND: [
-              { OR: [{ source: { not: "careers" } }, { source: null }] },
-              {
-                OR: [
-                  { postedAtDate: { gte: dateLimit } },
-                  { createdAt: { gte: dateLimit } },
-                ],
-              },
-            ],
-          },
-        ],
+        postedAtDate: {
+          gte: effectiveDateLimit,
+          lte: clockSkewTolerance,
+        },
       });
     } else {
-      // No user filter — careers: max 10 days; other sources: unrestricted
       andConditions.push({
-        OR: [
-          {
-            AND: [{ source: "careers" }, { postedAtDate: { gte: cutoffCareers } }],
-          },
-          { OR: [{ source: { not: "careers" } }, { source: null }] },
-        ],
+        postedAtDate: {
+          gte: cutoff168h,
+          lte: clockSkewTolerance,
+        },
       });
     }
 
@@ -348,27 +345,94 @@ export async function GET(req: NextRequest) {
     const queryConditions: Prisma.JobWhereInput =
       andConditions.length > 0 ? { AND: andConditions } : {};
 
-    // Construct sorting
-    const sortField = sortBy === "salaryMin" ? "salaryMin" : "postedAtDate";
-    const sortDirection = order === "asc" ? "asc" : "desc";
-    const orderBy: Prisma.JobOrderByWithRelationInput[] = [
-      { [sortField]: sortDirection },
-      { createdAt: "desc" },
-    ];
+    // 13. Server-side Resume Relevance Skill Resolution
+    let userResumeSkills: string[] = [];
+    const userIdParam = searchParams.get("userId");
 
-    // Execute query with pagination
-    const total = await prisma.job.count({ where: queryConditions });
-    const totalPages = Math.ceil(total / limit);
-    const offset = (page - 1) * limit;
+    if (userIdParam) {
+      const userProfile = await prisma.profile.findUnique({
+        where: { userId: userIdParam },
+        include: { skills: true },
+      });
+      if (userProfile && userProfile.skills.length > 0) {
+        userResumeSkills = userProfile.skills.map((s) => s.name);
+      }
+    }
 
-    const pgJobs = await prisma.job.findMany({
+    if (userResumeSkills.length === 0 && skills) {
+      userResumeSkills = skills.split(",").map((s) => s.trim()).filter(Boolean);
+    }
+
+    // Fallback: Use stored resume skills from active profile if available
+    if (userResumeSkills.length === 0) {
+      const activeProfile = await prisma.profile.findFirst({
+        where: { skills: { some: {} } },
+        include: { skills: true },
+      });
+      if (activeProfile && activeProfile.skills.length > 0) {
+        userResumeSkills = activeProfile.skills.map((s) => s.name);
+      }
+    }
+
+    // Retrieve all active matching candidates for server-side relevance ranking
+    const allCandidateJobs = await prisma.job.findMany({
       where: queryConditions,
-      orderBy,
-      skip: offset,
-      take: limit,
+      orderBy: [{ postedAtDate: "desc" }, { id: "desc" }],
     });
 
-    const jobs = pgJobs.map(mapJob);
+    // Score all candidates against user resume skills
+    const scoredJobs = allCandidateJobs.map((job) => {
+      const score = userResumeSkills.length > 0
+        ? calculateRelevanceScore(
+            {
+              title: job.title,
+              skills: job.skills,
+              description: job.description,
+              requirements: job.requirements,
+            },
+            userResumeSkills
+          )
+        : 0;
+
+      return {
+        ...job,
+        matchScore: score,
+      };
+    });
+
+    // For personalized Company Careers feed when user resume skills exist:
+    // Relevance determines ELIGIBILITY (matchScore > 0).
+    // Freshness determines DISPLAY ORDER (postedAtDate DESC).
+    let finalDataset = scoredJobs;
+
+    if (userResumeSkills.length > 0) {
+      // 1. Filter dataset for relevant jobs (matchScore > 0)
+      const relevantJobs = scoredJobs.filter((j) => j.matchScore > 0);
+      finalDataset = relevantJobs;
+
+      // 2. Sort dataset BEFORE pagination:
+      // Primary: postedAtDate DESC (strict newest -> oldest)
+      // Secondary: matchScore DESC (higher relevance tie-breaker for same timestamp)
+      // Tertiary: id DESC (deterministic tie-breaker)
+      finalDataset.sort((a, b) => {
+        const aDate = a.postedAtDate ? new Date(a.postedAtDate).getTime() : 0;
+        const bDate = b.postedAtDate ? new Date(b.postedAtDate).getTime() : 0;
+        if (bDate !== aDate) {
+          return bDate - aDate;
+        }
+        if (b.matchScore !== a.matchScore) {
+          return b.matchScore - a.matchScore;
+        }
+        return b.id.localeCompare(a.id);
+      });
+    }
+
+    const total = finalDataset.length;
+    const totalPages = Math.ceil(total / limit);
+    const offset = (page - 1) * limit;
+    const pageJobs = finalDataset.slice(offset, offset + limit);
+
+    const jobs = pageJobs.map(mapJob);
 
     // Dynamic counts per source
     const getSourceCount = async (src: string) => {
