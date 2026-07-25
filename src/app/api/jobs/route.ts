@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { validateJobsQuery } from "@/lib/api-validators";
 import { calculateRelevanceScore } from "@/lib/relevance";
+import { queryCareersJobs } from "@/lib/pipeline";
 import { Prisma, Job, JobType, ExperienceLevel, JobSourceCategory } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -374,6 +375,53 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Dedicated fast-path for Company Careers using shared queryCareersJobs service
+    if ((source === "careers" || rawCategoryParam === "COMPANY_CAREER") && !q && !location && !jobType && !experienceLevel) {
+      const careersRes = await queryCareersJobs({
+        userSkills: userResumeSkills,
+        page,
+        limit,
+      });
+
+      const total = careersRes.totalFound;
+      const totalPages = careersRes.totalPages;
+      const pageJobs = careersRes.jobs;
+      const jobs = pageJobs.map(mapJob);
+
+      const getSourceCount = async (src: string) => {
+        const baseConditions = andConditions.filter((c) => !c.source);
+        baseConditions.push({ source: src });
+        return prisma.job.count({
+          where: baseConditions.length > 0 ? { AND: baseConditions } : {},
+        });
+      };
+
+      const [wellfoundCount, careersCount, aggregatorCount] = await Promise.all([
+        getSourceCount("wellfound"),
+        getSourceCount("careers"),
+        getSourceCount("aggregator"),
+      ]);
+
+      return NextResponse.json({
+        success: true,
+        data: jobs,
+        total,
+        page,
+        totalPages,
+        sourceCounts: {
+          wellfound: wellfoundCount,
+          careers: careersCount,
+          aggregator: aggregatorCount,
+        },
+        meta: {
+          careersFreshnessWindowHours: 168,
+          oldestJobAt: careersRes.oldestJobAt,
+          newestJobAt: careersRes.newestJobAt,
+          skillsUsed: userResumeSkills.map((s) => s.toLowerCase().trim()).filter(Boolean),
+        },
+      });
+    }
+
     // Retrieve all active matching candidates for server-side relevance ranking
     const allCandidateJobs = await prisma.job.findMany({
       where: queryConditions,
@@ -400,7 +448,7 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    // For personalized Company Careers feed when user resume skills exist:
+    // For personalized feed when user resume skills exist:
     // Relevance determines ELIGIBILITY (matchScore > 0).
     // Freshness determines DISPLAY ORDER (postedAtDate DESC).
     let finalDataset = scoredJobs;
@@ -412,8 +460,6 @@ export async function GET(req: NextRequest) {
 
       // 2. Sort dataset BEFORE pagination:
       // Primary: postedAtDate DESC (strict newest -> oldest)
-      // Secondary: matchScore DESC (higher relevance tie-breaker for same timestamp)
-      // Tertiary: id DESC (deterministic tie-breaker)
       finalDataset.sort((a, b) => {
         const aDate = a.postedAtDate ? new Date(a.postedAtDate).getTime() : 0;
         const bDate = b.postedAtDate ? new Date(b.postedAtDate).getTime() : 0;

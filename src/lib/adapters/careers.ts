@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { extractNormalizedSkills } from "../skills-extractor";
 import { SourceAdapter, FetchQuery, UnifiedJob } from "./types";
 import { companies, CompanySource } from "../jobs/companySearchUrls";
 import {
@@ -206,12 +207,12 @@ export class CareersAdapter implements SourceAdapter {
       .update(dedupeInput)
       .digest("hex");
 
-    const description = `${title} at ${company}. Location: ${location}. Matched skill: ${raw._skill || ""}`;
-    const extractedSkills: string[] = (raw.skills || []).map((s: any) => String(s).toLowerCase());
-
-    if (raw._skill && !extractedSkills.includes(raw._skill.toLowerCase())) {
-      extractedSkills.push(raw._skill.toLowerCase());
+    const description = raw.description || raw.content || `${title} at ${company}. Location: ${location}.`;
+    const explicitAtsSkills: string[] = Array.isArray(raw.skills) ? raw.skills.map((s: any) => String(s)) : [];
+    if (raw._skill) {
+      explicitAtsSkills.push(String(raw._skill));
     }
+    const extractedSkills = extractNormalizedSkills(title, description, explicitAtsSkills);
 
     const isRemote =
       location.toLowerCase().includes("remote") ||

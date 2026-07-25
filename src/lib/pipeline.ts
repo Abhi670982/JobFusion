@@ -7,6 +7,7 @@ import { CareersAdapter } from "./adapters/careers";
 import { AggregatorAdapter } from "./adapters/aggregator";
 import { extractSkillsFromDB } from "./skills";
 import { calculateRelevanceScore } from "./relevance";
+import { BROAD_TECH_ROLE_TITLES, extractNormalizedSkills } from "./skills-extractor";
 
 
 // Helper to clean HTML from descriptions
@@ -57,6 +58,120 @@ const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 const TEN_DAYS_MS = 10 * 24 * 60 * 60 * 1000;
 
 /**
+ * Shared Careers Query Service — Single Source of Truth for Company Careers retrieval.
+ * Computes dynamic user-specific relevance scoring, supports broad technical title fallbacks,
+ * enforces strict 168-hour rolling freshness, and orders results strictly by postedAtDate DESC.
+ */
+export async function queryCareersJobs(params: {
+  userSkills?: string[];
+  page?: number;
+  limit?: number;
+}): Promise<{
+  jobs: any[];
+  totalFound: number;
+  totalPages: number;
+  page: number;
+  limit: number;
+  expandedBuckets: number;
+  newestJobAt: Date | null;
+  oldestJobAt: Date | null;
+}> {
+  const userSkills = params.userSkills || [];
+  const page = Math.max(1, params.page || 1);
+  const limit = Math.min(Math.max(1, params.limit || DEFAULT_RESULT_TARGET), MAX_RESULT_TARGET);
+
+  const CUTOFF_168H_MS = 168 * 60 * 60 * 1000;
+  const cutoff168h = new Date(Date.now() - CUTOFF_168H_MS);
+  const clockSkewTolerance = new Date(Date.now() + 5 * 60 * 1000);
+
+  // Extract canonical normalized user skills
+  const normalizedUserSkills = userSkills.length > 0
+    ? extractNormalizedSkills(userSkills.join(" "))
+    : [];
+
+  const candidateJobs = await prisma.job.findMany({
+    where: {
+      source: "careers",
+      isActive: true,
+      postedAtDate: {
+        gte: cutoff168h,
+        lte: clockSkewTolerance,
+      },
+      ...(normalizedUserSkills.length > 0
+        ? {
+            OR: [
+              { skills: { hasSome: normalizedUserSkills } },
+              ...BROAD_TECH_ROLE_TITLES.map((role) => ({
+                title: { contains: role, mode: "insensitive" as const },
+              })),
+            ],
+          }
+        : {}),
+    },
+    orderBy: [{ postedAtDate: "desc" }, { id: "desc" }],
+  });
+
+  // Calculate dynamic user-specific relevance score
+  const scoredCandidates = candidateJobs.map((job) => {
+    const score = normalizedUserSkills.length > 0
+      ? calculateRelevanceScore(
+          {
+            title: job.title,
+            skills: job.skills,
+            description: job.description,
+            requirements: job.requirements,
+          },
+          normalizedUserSkills
+        )
+      : 100;
+
+    return {
+      ...job,
+      userMatchScore: score,
+    };
+  });
+
+  // Filter for relevant jobs (userMatchScore > 0 when user skills are present)
+  const relevantCandidates = normalizedUserSkills.length > 0
+    ? scoredCandidates.filter((j) => j.userMatchScore > 0)
+    : scoredCandidates;
+
+  // Strict newest -> oldest ordering among relevant jobs
+  relevantCandidates.sort((a, b) => {
+    const aDate = a.postedAtDate ? new Date(a.postedAtDate).getTime() : 0;
+    const bDate = b.postedAtDate ? new Date(b.postedAtDate).getTime() : 0;
+    if (bDate !== aDate) return bDate - aDate;
+    if (b.userMatchScore !== a.userMatchScore) return b.userMatchScore - a.userMatchScore;
+    return b.id.localeCompare(a.id);
+  });
+
+  const totalFound = relevantCandidates.length;
+  const totalPages = Math.ceil(totalFound / limit) || 1;
+  const offset = (page - 1) * limit;
+  const pageJobs = relevantCandidates.slice(offset, offset + limit);
+
+  // Calculate expanded daily buckets
+  const now = Date.now();
+  let expandedBuckets = 0;
+  if (relevantCandidates.length > 0) {
+    const oldestCandidateDate = new Date(relevantCandidates[relevantCandidates.length - 1].postedAtDate || now).getTime();
+    const ageMs = now - oldestCandidateDate;
+    expandedBuckets = Math.min(7, Math.max(1, Math.ceil(ageMs / (24 * 60 * 60 * 1000))));
+  }
+
+  return {
+    jobs: pageJobs,
+    totalFound,
+    totalPages,
+    page,
+    limit,
+    expandedBuckets,
+    newestJobAt: pageJobs[0]?.postedAtDate ?? null,
+    oldestJobAt: pageJobs[pageJobs.length - 1]?.postedAtDate ?? null,
+  };
+}
+
+/**
  * Progressively queries active DB jobs matching user skills across 24h buckets (up to 7 days = 168h).
  * Decoupled from crawling: stops as soon as targetLimit (default 20, max 50) unique relevant jobs are found.
  */
@@ -65,6 +180,15 @@ export async function queryUserJobs(
   sourceFilter: string = "careers",
   targetLimit: number = DEFAULT_RESULT_TARGET
 ): Promise<{ jobs: any[]; totalFound: number; expandedBuckets: number }> {
+  if (sourceFilter === "careers") {
+    const res = await queryCareersJobs({ userSkills: skills, page: 1, limit: targetLimit });
+    return {
+      jobs: res.jobs,
+      totalFound: res.totalFound,
+      expandedBuckets: res.expandedBuckets,
+    };
+  }
+
   const limit = Math.min(Math.max(1, targetLimit), MAX_RESULT_TARGET);
   const now = new Date();
   const lowerSkills = skills.map(s => s.toLowerCase().trim()).filter(Boolean);
@@ -269,7 +393,7 @@ export async function runSourceSync(
               keywordsToSearch
             );
 
-            const matchedSkill = unified.skills?.[0] || keywordsToSearch[0] || "Software Engineer";
+            const matchedSkill = unified.skills?.[0] || null;
 
             const classified = classifySourceCategory(source);
 
