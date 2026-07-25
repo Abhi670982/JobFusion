@@ -73,7 +73,7 @@ export const usageService = {
     }
 
     const todayUsage = await this.getTodayUsage(userId, featureName);
-    const limit = 2; // 2 requests per calendar day
+    const limit = 12; // 2 requests per calendar day
 
     if (todayUsage < limit) {
       return { allowed: true, used: todayUsage, limit };

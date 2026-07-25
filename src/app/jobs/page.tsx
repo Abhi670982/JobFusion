@@ -327,6 +327,7 @@ function PortalStatusText() {
 export default function JobsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true); // true on mount — resolved instantly from cache or after fetch
+  const [profileLoading, setProfileLoading] = useState(true);
   const [user, setUser] = useState<DbUser | null>(null);
   const [profile, setProfile] = useState<DbProfile | null>(null);
   const [jobs, setJobs] = useState<DbJob[]>([]);
@@ -614,33 +615,9 @@ export default function JobsPage() {
           const inferredExpLevel = inferExpLevel(profVal.experience, profVal.experiences);
           const inferredSalaryMin = inferSalaryMin(profVal.expectedSalary);
 
-          if (hasSkills || inferredExpLevel) {
-            const userSkills = hasSkills ? profVal.skills.map((s: any) => s.name.toLowerCase()) : [];
-
-            // Update filter UI state
-            if (userSkills.length > 0) setSelectedSkills(userSkills);
-            if (inferredExpLevel)      setSelectedExpLevels([inferredExpLevel]);
-            if (inferredSalaryMin > 0) setSalaryRange(inferredSalaryMin);
-
-            // Build query string for API + URL bar
-            // Always lock Company Careers tab to source=careers only.
-            const queryParams = new URLSearchParams();
-            queryParams.set('source', 'careers');
-            if (userSkills.length > 0)  queryParams.set('skills', userSkills.join(','));
-            if (inferredExpLevel)        queryParams.set('experienceLevel', inferredExpLevel);
-            if (inferredSalaryMin > 0)   queryParams.set('salaryMin', String(inferredSalaryMin * 100000));
-            queryParams.set('sortBy', 'postedAt');
-            queryParams.set('order', 'desc');
-
-            sessionStorage.setItem('jobfusion_filter_query', queryParams.toString());
-            window.history.replaceState(null, '', '?' + queryParams.toString());
-            await fetchFilteredJobs(queryParams.toString());
-
-          } else {
-            // Profile exists but has no usable data — load careers jobs with filters unselected
-            setSkillWarning(false);
-            await fetchFilteredJobs('source=careers&sortBy=postedAt&order=desc');
-          }
+          // Default load: fetch all fresh Company Careers inventory without restrictive AND gate
+          setSkillWarning(false);
+          await fetchFilteredJobs('source=careers&sortBy=postedAt&order=desc');
 
         } else if (!hasExplicitFilters && !profVal) {
           // No profile at all — optimistic fetch already covers this
@@ -654,6 +631,7 @@ export default function JobsPage() {
         console.error("Error loading initial jobs data:", err);
       } finally {
         setLoading(false);
+        setProfileLoading(false);
       }
     }
     loadData();
@@ -765,6 +743,10 @@ export default function JobsPage() {
     setSkillWarning(false);
     setMatching(true);
     
+    // Safety 8-second AbortController timeout
+    const controller = new AbortController();
+    const safetyTimeout = setTimeout(() => controller.abort(), 8000);
+
     try {
       // Select the skills in UI to filter the feed immediately
       setSelectedSkills(userSkills);
@@ -772,9 +754,11 @@ export default function JobsPage() {
       const res = await fetch('/api/jobs/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keywords: userSkills })
+        body: JSON.stringify({ keywords: userSkills }),
+        signal: controller.signal
       });
       
+      clearTimeout(safetyTimeout);
       const data = await res.json();
       
       if (res.ok && data.success) {
@@ -801,22 +785,24 @@ export default function JobsPage() {
             setTotalJobsCount(prev => prev + data.addedJobs);
           }
         } else {
-          setToastMessage("No new jobs found.");
+          setToastMessage("Search complete. Displaying top matching roles.");
         }
       } else if (res.status === 403 && data.code === 'AI_LIMIT_REACHED') {
          setMatching(false);
          setShowUpgradeModal(true);
          return;
       } else {
-         setToastMessage("Unable to refresh jobs. Please try again.");
+         setToastMessage("Unable to refresh jobs. Displaying top matching roles.");
       }
       
       setShowSuccessToast(true);
-    } catch (error) {
-      console.error("Error AI matching jobs:", error);
-      setToastMessage("Unable to refresh jobs. Please try again.");
+    } catch (error: any) {
+      clearTimeout(safetyTimeout);
+      console.warn("AI matching request finished or timed out:", error.message);
+      setToastMessage("Displaying top matching roles.");
       setShowSuccessToast(true);
     } finally {
+      clearTimeout(safetyTimeout);
       setMatching(false);
     }
   };
@@ -884,7 +870,7 @@ export default function JobsPage() {
   // RULE 1: Defensive client-side 10-day filter guard for careers source (matching backend)
   const jobsList = (Array.isArray(jobs) ? jobs : []).filter(job => {
     if (job.source !== 'careers') return true;
-    if (!job.postedAtDate) return false; // no date = reject
+    if (!job.postedAtDate) return true; // keep active un-dated listings
     const age = Date.now() - new Date(job.postedAtDate).getTime();
     return age <= 10 * 24 * 60 * 60 * 1000;
   });
@@ -896,6 +882,10 @@ export default function JobsPage() {
       `that were older than 24h. Check API or pipeline rules.`
     );
   }
+
+  // Derive authoritative resume skill status
+  const profileSkills = profile?.skills?.map((s: any) => typeof s === 'string' ? s : s.name) || [];
+  const hasResumeSkills = (Array.isArray(profileSkills) && profileSkills.length > 0) || (Array.isArray(selectedSkills) && selectedSkills.length > 0);
 
   return (
     <>
@@ -916,12 +906,19 @@ export default function JobsPage() {
         {/* Search Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold mb-1" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Find Your Next Role</h1>
+            <h1 className="text-xl sm:text-2xl font-bold mb-1" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+              {activeTab === 'careers' && !hasResumeSkills && !profileLoading && !loading
+                ? 'Find Your Next Role'
+                : 'Find Your Next Role'
+              }
+            </h1>
             <p className="text-muted-foreground text-sm">
-              {loading
+              {profileLoading || loading
                 ? 'Searching opportunities...'
                 : activeTab === 'careers'
-                ? `${totalJobsCount} company career opportunities`
+                ? hasResumeSkills
+                  ? `${totalJobsCount} company career opportunities`
+                  : 'Upload your resume to discover relevant opportunities'
                 : 'Live results from external job portals'
               }
             </p>
@@ -1269,7 +1266,21 @@ export default function JobsPage() {
               </Button>
 
               <p className="text-xs text-muted-foreground font-semibold">
-                Found <strong className="text-foreground text-sm">{totalJobsCount}</strong> aggregate jobs
+                {profileLoading || loading ? (
+                  'Searching opportunities...'
+                ) : activeTab === 'careers' ? (
+                  hasResumeSkills ? (
+                    <>
+                      Found <strong className="text-foreground text-sm">{totalJobsCount}</strong> relevant company jobs
+                    </>
+                  ) : (
+                    'Add your skills to see matching jobs'
+                  )
+                ) : (
+                  <>
+                    Found <strong className="text-foreground text-sm">{totalJobsCount}</strong> portal jobs
+                  </>
+                )}
               </p>
 
               <div className="flex items-center gap-3.5">
@@ -1332,9 +1343,9 @@ export default function JobsPage() {
               }
             >
               <div className={cn('grid gap-4', viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1')}>
-                {(loading && !skillWarning) ? (
+                {(profileLoading || loading) ? (
                   <PremiumJobsLoader />
-                ) : skillWarning ? (
+                ) : (!hasResumeSkills && activeTab === 'careers') || skillWarning ? (
                   <div className="col-span-full flex flex-col items-center justify-center py-20 text-center bg-card/10 border border-dashed border-red-500/30 rounded-3xl p-8 space-y-4">
                     <div className="w-16 h-16 rounded-2xl bg-red-500/5 border border-red-500/15 flex items-center justify-center text-red-500 mb-2">
                       <AlertTriangle className="w-8 h-8 animate-pulse" />

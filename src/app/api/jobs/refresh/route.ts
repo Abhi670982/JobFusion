@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { JobSourceCategory } from "@prisma/client";
 import { withAIProviderCheck } from "@/lib/middleware/ai-usage";
-import { runSourceSync } from "@/lib/pipeline";
-import { JobSource } from "@/lib/adapters/types";
+import { enqueueCrawlJob } from "@/lib/queue";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    // Check AI usage limits and resolve AI provider for match-my-skills feature
+    // 1. Authenticate & check AI usage limits
     const aiCheck = await withAIProviderCheck(req, 'match-my-skills');
     if (!aiCheck.allowed) {
       return aiCheck.response;
@@ -25,43 +25,55 @@ export async function POST(req: NextRequest) {
       // Ignore if body is empty or not JSON
     }
 
-    // To prevent Vercel timeout (10s on hobby), we might only take top 3 keywords.
     const keywordsToSearch = keywords.slice(0, 3);
+    const primaryKeyword = keywordsToSearch[0] || "software engineer";
 
-    console.log(`[API Refresh] User ${mongoUserId} refreshing jobs with keywords:`, keywordsToSearch);
+    console.log(`[API Refresh] User ${mongoUserId} requesting asynchronous BullMQ refresh for keyword: "${primaryKeyword}"`);
 
-    const sources: JobSource[] = ["wellfound", "careers", "aggregator"];
-    let addedJobs = 0;
-    let skippedJobs = 0;
-    let totalJobs = 0;
-    const allNewJobs: any[] = [];
+    // 2. Enqueue separate category jobs into BullMQ background-crawl-queue
+    // A. Official Company Careers Job
+    const careersRes = await enqueueCrawlJob({
+      category: JobSourceCategory.COMPANY_CAREER,
+      provider: "CAREERS",
+      keyword: primaryKeyword,
+      location: "India",
+      userId: mongoUserId,
+    });
 
-    // Run sources sequentially to avoid hammering the servers or exhausting memory
-    for (const source of sources) {
-      try {
-        const result = await runSourceSync(source, keywordsToSearch);
-        if (result.success) {
-          addedJobs += result.addedJobs || 0;
-          skippedJobs += result.skippedJobs || 0;
-          totalJobs += (result.addedJobs || 0) + (result.skippedJobs || 0) + (result.updatedJobs || 0);
-          if (result.newJobs) {
-            allNewJobs.push(...result.newJobs);
-          }
-        }
-      } catch (err: any) {
-        console.error(`[API Refresh] Source ${source} failed:`, err.message);
-      }
-    }
+    // B. Job Portal - Wellfound Job
+    const wellfoundRes = await enqueueCrawlJob({
+      category: JobSourceCategory.JOB_PORTAL,
+      provider: "WELLFOUND",
+      keyword: primaryKeyword,
+      location: "India",
+      userId: mongoUserId,
+    });
 
+    // C. Job Portal - Aggregator Job
+    const aggregatorRes = await enqueueCrawlJob({
+      category: JobSourceCategory.JOB_PORTAL,
+      provider: "AGGREGATOR",
+      keyword: primaryKeyword,
+      location: "India",
+      userId: mongoUserId,
+    });
+
+    const enqueuedCount = [careersRes, wellfoundRes, aggregatorRes].filter(r => r.enqueued).length;
+
+    // 3. Return HTTP response immediately WITHOUT waiting for background crawling/adapters
     return NextResponse.json({
       success: true,
-      addedJobs,
-      skippedJobs,
-      totalJobs,
-      newJobs: allNewJobs
+      refreshQueued: true,
+      enqueuedCount,
+      message: "Job refresh enqueued successfully. Background worker is processing fresh opportunities.",
+      jobs: [],
+      totalJobs: 0,
     });
   } catch (error: any) {
-    console.error("[API Refresh] Fatal Error:", error);
-    return NextResponse.json({ success: false, error: error.message || "Failed to refresh jobs" }, { status: 500 });
+    console.error("[API Refresh] Fatal Error enqueueing refresh:", error);
+    return NextResponse.json(
+      { success: false, error: error.message || "Failed to enqueue refresh" },
+      { status: 500 }
+    );
   }
 }

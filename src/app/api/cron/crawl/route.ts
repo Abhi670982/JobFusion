@@ -2,17 +2,26 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { runSourceSync } from "@/lib/pipeline";
 import { JobSource } from "@/lib/adapters/types";
 import { prisma } from "@/lib/prisma";
+import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 
 const COOLDOWN_MS = 3 * 60 * 60 * 1000; // 3 hours
 
+function isTimingSafeMatch(input: string | null | undefined, expected: string | undefined): boolean {
+  if (!expected) return true;
+  if (!input) return false;
+  const a = Buffer.from(input);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
 export async function POST(req: NextRequest) {
   try {
-    // Secret-based auth (optional in local/dev when CRON_SECRET is unset)
-    const secret = req.headers.get("x-cron-secret");
+    const secret = req.headers.get("x-cron-secret") || req.headers.get("authorization")?.replace("Bearer ", "");
     const expectedSecret = process.env.CRON_SECRET;
-    if (expectedSecret && secret !== expectedSecret) {
+    if (!isTimingSafeMatch(secret, expectedSecret)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

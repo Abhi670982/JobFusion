@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { runSourceSync } from "@/lib/pipeline";
-import { JobSource } from "@/lib/adapters/types";
+import { JobSourceCategory } from "@prisma/client";
+import { enqueueCrawlJob } from "@/lib/queue";
+import { classifySourceCategory } from "@/lib/source-category";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { source } = body;
 
-    const validSources: JobSource[] = ["wellfound", "careers", "aggregator"];
+    const validSources = ["wellfound", "careers", "aggregator"];
     if (!source || !validSources.includes(source)) {
       return NextResponse.json(
         { success: false, error: `Invalid source. Must be one of: ${validSources.join(", ")}` },
@@ -17,25 +18,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const classified = classifySourceCategory(source);
     const keywords = (process.env.FETCH_KEYWORDS || "software engineer,frontend developer,backend developer").split(",");
-    
-    console.log(`[FetchNow API] Immediate fetch triggered for source: ${source} with keywords: ${keywords.join(", ")}`);
-    
-    // Trigger the pipeline sync
-    const result = await runSourceSync(source as JobSource, keywords);
+    const primaryKeyword = keywords[0] || "software engineer";
 
-    if (result.success) {
-      return NextResponse.json({
-        success: true,
-        message: `Successfully synchronized jobs from ${source}.`,
-        jobsFetchedCount: result.count,
-      });
-    } else {
-      return NextResponse.json(
-        { success: false, error: result.error || `Failed to synchronize jobs from ${source}` },
-        { status: 500 }
-      );
-    }
+    console.log(`[FetchNow API] Enqueueing BullMQ background fetch for source: ${source} (${classified.category})`);
+    
+    // Trigger non-blocking BullMQ background enqueue
+    const result = await enqueueCrawlJob({
+      category: classified.category,
+      provider: classified.provider,
+      keyword: primaryKeyword,
+      location: "India"
+    });
+
+    return NextResponse.json({
+      success: true,
+      refreshQueued: result.enqueued,
+      jobId: result.jobId,
+      message: `Successfully enqueued background synchronization from ${source}.`,
+    });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: error.message || "Something went wrong" },

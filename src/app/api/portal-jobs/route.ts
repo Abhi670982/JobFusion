@@ -1,113 +1,159 @@
 import { NextRequest, NextResponse } from "next/server";
-import { crawlPortalJobs } from "@/lib/portal-fetcher/crawler";
-import { JobPortalSource } from "@/lib/portal-fetcher/adapters/base-adapter";
+import { JobSourceCategory } from "@prisma/client";
 import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import { prisma } from "@/lib/prisma";
+import { classifySourceCategory } from "@/lib/source-category";
+import { enqueueCrawlJob } from "@/lib/queue";
+import { buildCacheKey, getCachedCategoryJobs, setCachedCategoryJobs } from "@/lib/redis-cache";
+import { calculateRelevanceScore } from "@/lib/relevance";
+import { canonicalizeUrl } from "@/lib/url-cleaner";
 import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 
-// Helper function to calculate the strict 168-hour rolling visibility window
+// Calculate rolling 168-hour (7-day) visibility window
 function getRollingJobVisibilityWindow(now = new Date()) {
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   return {
     from: sevenDaysAgo,
-    to: now,
+    to: new Date(now.getTime() + 5 * 60 * 1000), // 5-min clock skew tolerance
   };
 }
 
-// Process and save jobs into global Job table and user-specific UserJob table
-async function processAndPersistJobs(userId: string, jobs: any[], userSkills: string[]): Promise<number> {
+// Process and save jobs in controlled in-memory deduplication and transaction batches
+async function processAndPersistPortalJobs(userId: string, jobs: any[], userSkills: string[]): Promise<number> {
+  if (!jobs || jobs.length === 0) return 0;
+  
   let savedCount = 0;
   const lowerSkills = userSkills.map(s => s.toLowerCase().trim());
-  
-  for (const job of jobs) {
-    const jobTitle = (job.title || "").toLowerCase();
-    const jobDesc = (job.description || "").toLowerCase();
-    const jobSkills = (job.skills || []).map((s: string) => s.toLowerCase().trim());
-    
-    // Weighted skill match count
-    const matched = lowerSkills.filter(skill => 
-      jobTitle.includes(skill) || 
-      jobDesc.includes(skill) ||
-      jobSkills.includes(skill)
-    );
+  const BATCH_SIZE = 50;
 
-    // Calculate match score
-    let matchScore = 80;
-    if (lowerSkills.length > 0) {
-      const ratio = matched.length / lowerSkills.length;
-      matchScore = Math.max(80, Math.round(ratio * 100));
+  // 1. In-Memory Deduplication and Classification
+  const preparedJobs: any[] = [];
+  const seenHashes = new Set<string>();
+
+  for (const job of jobs) {
+    const rawSource = job.source || "linkedin";
+    const classified = classifySourceCategory(rawSource, job.sourceProvider);
+
+    // GUARANTEE: Only process JOB_PORTAL jobs in this endpoint helper
+    if (classified.category !== JobSourceCategory.JOB_PORTAL) {
+      console.warn(`[Portal Jobs Pipeline] Skipping non-portal job category "${classified.category}" for source "${rawSource}".`);
+      continue;
     }
 
-    // Generate stable deduplication hash
-    const hashInput = `${job.source}-${job.sourceId || ""}-${job.applyUrl || ""}-${job.title}-${job.company}`.toLowerCase();
-    const dedupeHash = crypto.createHash("sha256").update(hashInput).digest("hex");
-
-    // Upsert into global Job table
-    const dbJob = await prisma.job.upsert({
-      where: { dedupeHash },
-      update: {
+    const matchScore = calculateRelevanceScore(
+      {
         title: job.title,
-        company: job.company,
-        location: job.location,
-        isRemote: job.isRemote,
-        applyUrl: job.applyUrl,
-        postedAtDate: job.postedDate ? new Date(job.postedDate) : new Date(),
-        isActive: true,
-        matchScore,
-      },
-      create: {
-        title: job.title,
-        company: job.company,
-        location: job.location,
-        isRemote: job.isRemote,
-        applyUrl: job.applyUrl,
-        postedAtDate: job.postedDate ? new Date(job.postedDate) : new Date(),
-        source: job.source,
-        sourceId: job.sourceId,
-        sourceUrl: job.sourceUrl,
-        dedupeHash,
         skills: job.skills,
         description: job.description,
-        isActive: true,
-        matchScore,
-      }
-    });
-
-    // Upsert user-specific UserJob association
-    await prisma.userJob.upsert({
-      where: {
-        userId_jobId: {
-          userId,
-          jobId: dbJob.id,
-        }
+        requirements: job.requirements,
       },
-      update: {
-        matchedSkills: matched,
-        matchScore,
-      },
-      create: {
-        userId,
-        jobId: dbJob.id,
-        matchedSkills: matched,
-        matchScore,
-        discoveredAt: new Date(),
-      }
-    });
+      userSkills
+    );
 
-    savedCount++;
+    const canonicalApplyUrl = canonicalizeUrl(job.applyUrl);
+    const hashInput = `job_portal-${rawSource}-${job.sourceId || ""}-${canonicalApplyUrl || ""}-${job.title}-${job.company}`.toLowerCase();
+    const dedupeHash = crypto.createHash("sha256").update(hashInput).digest("hex");
+
+    if (seenHashes.has(dedupeHash)) continue;
+    seenHashes.add(dedupeHash);
+
+    const parsedPostedDate = job.postedDate && !isNaN(new Date(job.postedDate).getTime())
+      ? new Date(job.postedDate)
+      : null;
+
+    preparedJobs.push({
+      job,
+      classified,
+      dedupeHash,
+      canonicalApplyUrl,
+      parsedPostedDate,
+      matchScore,
+    });
   }
-  
+
+  // 2. Controlled Transaction Batching (No giant single transaction)
+  for (let i = 0; i < preparedJobs.length; i += BATCH_SIZE) {
+    const batch = preparedJobs.slice(i, i + BATCH_SIZE);
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        for (const item of batch) {
+          const { job, classified, dedupeHash, canonicalApplyUrl, parsedPostedDate, matchScore } = item;
+
+          const dbJob = await tx.job.upsert({
+            where: { dedupeHash },
+            update: {
+              title: job.title,
+              company: job.company,
+              location: job.location,
+              isRemote: job.isRemote,
+              applyUrl: canonicalApplyUrl || job.applyUrl,
+              postedAtDate: parsedPostedDate || undefined,
+              sourceCategory: JobSourceCategory.JOB_PORTAL,
+              sourceProvider: classified.provider,
+              isActive: true,
+              matchScore,
+            },
+            create: {
+              title: job.title,
+              company: job.company,
+              location: job.location,
+              isRemote: job.isRemote,
+              applyUrl: canonicalApplyUrl || job.applyUrl,
+              postedAtDate: parsedPostedDate || new Date(),
+              source: job.source || "linkedin",
+              sourceCategory: JobSourceCategory.JOB_PORTAL,
+              sourceProvider: classified.provider,
+              sourceId: job.sourceId,
+              sourceUrl: canonicalizeUrl(job.sourceUrl) || job.applyUrl,
+              dedupeHash,
+              skills: job.skills || [],
+              description: job.description || "",
+              isActive: true,
+              matchScore,
+            }
+          });
+
+          await tx.userJob.upsert({
+            where: {
+              userId_jobId: {
+                userId,
+                jobId: dbJob.id,
+              }
+            },
+            update: {
+              matchedSkills: lowerSkills,
+              matchScore,
+            },
+            create: {
+              userId,
+              jobId: dbJob.id,
+              matchedSkills: lowerSkills,
+              matchScore,
+              discoveredAt: new Date(),
+            }
+          });
+
+          savedCount++;
+        }
+      });
+    } catch (err: any) {
+      console.error(`[Portal Jobs Batch] Error persisting batch of ${batch.length} jobs:`, err.message);
+    }
+  }
+
   return savedCount;
 }
 
-// Retrieve cached jobs from db for user within visibility boundaries
-async function getUserCachedJobs(userId: string, portal: string, visibilityFrom: Date, visibilityTo: Date) {
+// Retrieve cached JOB_PORTAL jobs from DB strictly matching sourceCategory = JOB_PORTAL
+async function getUserCachedPortalJobs(userId: string, portal: string, visibilityFrom: Date, visibilityTo: Date) {
   const userJobs = await prisma.userJob.findMany({
     where: {
       userId,
       job: {
+        sourceCategory: JobSourceCategory.JOB_PORTAL, // STRICT ENFORCEMENT
         postedAtDate: {
           gte: visibilityFrom,
           lte: visibilityTo,
@@ -131,6 +177,8 @@ async function getUserCachedJobs(userId: string, portal: string, visibilityFrom:
     return {
       sourceId: uj.job.sourceId || uj.job.id,
       source: uj.job.source || "linkedin",
+      sourceCategory: uj.job.sourceCategory,
+      sourceProvider: uj.job.sourceProvider,
       sourceUrl: uj.job.sourceUrl || uj.job.applyUrl || "",
       applyUrl: uj.job.applyUrl,
       title: uj.job.title,
@@ -172,47 +220,19 @@ export async function GET(req: NextRequest) {
   const location = searchParams.get("location")?.trim() || "India";
   const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
 
-  // Validate keyword
+  // Input Sanitization
   const validatedKeyword = keyword.trim().replace(/\s+/g, " ");
-  if (validatedKeyword.length > 200) {
+  if (validatedKeyword.length > 200 || /[\x00-\x1F\x7F-\x9F]/.test(validatedKeyword)) {
     return NextResponse.json(
-      { success: false, error: "Keyword exceeds maximum length of 200 characters" },
-      { status: 400 }
-    );
-  }
-  if (/[\x00-\x1F\x7F-\x9F]/.test(validatedKeyword)) {
-    return NextResponse.json(
-      { success: false, error: "Keyword contains invalid control characters" },
+      { success: false, error: "Invalid keyword format or characters" },
       { status: 400 }
     );
   }
 
-  // Validate location
   const validatedLocation = location.trim().replace(/\s+/g, " ");
-  if (validatedLocation.length > 100) {
+  if (validatedLocation.length > 100 || /[\x00-\x1F\x7F-\x9F]/.test(validatedLocation)) {
     return NextResponse.json(
-      { success: false, error: "Location exceeds maximum length of 100 characters" },
-      { status: 400 }
-    );
-  }
-  if (/[\x00-\x1F\x7F-\x9F]/.test(validatedLocation)) {
-    return NextResponse.json(
-      { success: false, error: "Location contains invalid control characters" },
-      { status: 400 }
-    );
-  }
-
-  // Validate portal parameter
-  const validPortals: (JobPortalSource | "all")[] = [
-    "linkedin",
-    "indeed",
-    "internshala",
-    "wellfound",
-    "all",
-  ];
-  if (!validPortals.includes(portal as JobPortalSource | "all")) {
-    return NextResponse.json(
-      { success: false, error: `Invalid portal parameter. Must be one of: ${validPortals.join(", ")}` },
+      { success: false, error: "Invalid location format or characters" },
       { status: 400 }
     );
   }
@@ -225,181 +245,44 @@ export async function GET(req: NextRequest) {
     }
     const userId = user.id;
 
-    // 2. Load user extracted skills
-    const profile = await prisma.profile.findUnique({
-      where: { userId },
-      include: { skills: true },
-    });
-    const userSkills = profile?.skills.map(s => s.name.toLowerCase().trim()) || [];
-
-    // 3. Load or create UserCrawlState
-    let crawlState = await prisma.userCrawlState.findUnique({
-      where: { userId }
-    });
-    if (!crawlState) {
-      crawlState = await prisma.userCrawlState.create({
-        data: {
-          userId,
-          crawlStatus: "idle",
-        }
-      });
-    }
-
-    // 4. Resume/Profile Change Detection
-    const sortedSkillsJoined = [...userSkills].sort().join(",");
-    const currentSkillsHash = crypto.createHash("sha256").update(sortedSkillsJoined).digest("hex");
-
-    if (crawlState.skillsHash !== currentSkillsHash) {
-      console.log(`[Portal Jobs API] Skills profile changed for user ${userId}. Invalidating crawl cache.`);
-      crawlState = await prisma.userCrawlState.update({
-        where: { userId },
-        data: {
-          skillsHash: currentSkillsHash,
-          lastSuccessfulCrawlAt: null,
-        }
-      });
-    }
-
-    // 5. Lock Check
-    const lockTimeout = 10 * 60 * 1000; // 10 minutes
-
-    if (crawlState.crawlStatus === "running" && crawlState.crawlStartedAt) {
-      const elapsed = requestNow.getTime() - crawlState.crawlStartedAt.getTime();
-      if (elapsed < lockTimeout) {
-        console.log(`[Portal Jobs API] Crawl lock active for user ${userId} (elapsed: ${elapsed}ms). Returning cached jobs.`);
-        const cachedJobs = await getUserCachedJobs(userId, portal, visibilityFrom, visibilityTo);
-        return NextResponse.json({
-          success: true,
-          portal,
-          keyword: validatedKeyword,
-          location: validatedLocation,
-          page,
-          data: cachedJobs,
-          jobs: cachedJobs,
-          cached: true,
-          partial: true,
-          message: "Crawl lock active. Returning cached jobs.",
-        });
-      } else {
-        console.log(`[Portal Jobs API] Stale crawl lock for user ${userId} (${elapsed}ms). Overriding lock.`);
-      }
-    }
-
-    // 6. Crawl Type Check
-    let isFirstSearchToday = false;
-    if (!crawlState.lastSuccessfulCrawlAt) {
-      isFirstSearchToday = true;
-    } else {
-      const lastCrawlDate = new Date(crawlState.lastSuccessfulCrawlAt);
-      isFirstSearchToday =
-        lastCrawlDate.getUTCDate() !== requestNow.getUTCDate() ||
-        lastCrawlDate.getUTCMonth() !== requestNow.getUTCMonth() ||
-        lastCrawlDate.getUTCFullYear() !== requestNow.getUTCFullYear();
-    }
-
-    // 7. Acquire lock
-    await prisma.userCrawlState.update({
-      where: { userId },
-      data: {
-        crawlStatus: "running",
-        crawlStartedAt: requestNow,
-      }
-    });
-
-    let crawlSuccess = false;
-    let crawlError: string | null = null;
-
-    // 8. Execute progressive or incremental crawl
-    try {
-      if (isFirstSearchToday) {
-        console.log(`[Portal Jobs API] Starting progressive crawl for user ${userId} (MIN_RELEVANT_JOB_TARGET: env value or fallback to 20).`);
-        const MIN_RELEVANT_JOB_TARGET = process.env.MIN_RELEVANT_JOB_TARGET 
-          ? parseInt(process.env.MIN_RELEVANT_JOB_TARGET, 10) 
-          : 20;
-
-        let totalSaved = 0;
-
-        for (let day = 0; day < 7; day++) {
-          const crawlFrom = new Date(requestNow.getTime() - (day + 1) * 24 * 60 * 60 * 1000);
-          const crawlTo = new Date(requestNow.getTime() - day * 24 * 60 * 60 * 1000);
-
-          console.log(`[Portal Jobs API] Crawling window - Day ${day + 1}: ${crawlFrom.toISOString()} to ${crawlTo.toISOString()}`);
-
-          const result = await crawlPortalJobs({
-            portal: portal as JobPortalSource | "all",
-            keyword: validatedKeyword,
-            skills: userSkills,
-            location: validatedLocation,
-            page: 1,
-            crawlFrom,
-            crawlTo,
-          });
-
-          // Persist the jobs from this window
-          const savedInWindow = await processAndPersistJobs(userId, result.jobs, userSkills);
-          totalSaved += savedInWindow;
-
-          console.log(`[Portal Jobs API] Day ${day + 1} processing done. Saved: ${savedInWindow}. Total progressive saved: ${totalSaved}/${MIN_RELEVANT_JOB_TARGET}`);
-
-          // Stop progressive crawl if target is satisfied after processing this window
-          if (totalSaved >= MIN_RELEVANT_JOB_TARGET) {
-            console.log(`[Portal Jobs API] Reached target of ${MIN_RELEVANT_JOB_TARGET} relevant jobs. Stopping progressive crawl.`);
-            break;
-          }
-        }
-      } else {
-        const oneHour = 60 * 60 * 1000;
-        const crawlFrom = new Date(crawlState.lastSuccessfulCrawlAt!.getTime() - oneHour);
-        const crawlTo = requestNow;
-
-        console.log(`[Portal Jobs API] Incremental crawl for user ${userId} since: ${crawlFrom.toISOString()}`);
-
-        const result = await crawlPortalJobs({
-          portal: portal as JobPortalSource | "all",
-          keyword: validatedKeyword,
-          skills: userSkills,
-          location: validatedLocation,
-          page: 1,
-          crawlFrom,
-          crawlTo,
-        });
-
-        const savedCount = await processAndPersistJobs(userId, result.jobs, userSkills);
-        console.log(`[Portal Jobs API] Incremental crawl completed. Saved: ${savedCount} new jobs.`);
-      }
-
-      crawlSuccess = true;
-    } catch (err: any) {
-      crawlError = err.message || "Unknown crawler error";
-      console.error("[Portal Jobs API] Crawler execution failed:", crawlError);
-    } finally {
-      // 9. Release lock & Save crawl state
-      await prisma.userCrawlState.update({
-        where: { userId },
-        data: {
-          crawlStatus: "idle",
-          ...(crawlSuccess ? { lastSuccessfulCrawlAt: new Date() } : {}),
-        }
-      });
-    }
-
-    // 10. Query & Return user's jobs sorted newest -> oldest within the calculated request's visibility window
-    const jobs = await getUserCachedJobs(userId, portal, visibilityFrom, visibilityTo);
-
-    if (crawlError) {
-      // Fallback response on crawler failure: return successful 200 response with cached jobs and flags
+    // 2. Check Category-Isolated Redis Cache
+    const cacheKey = buildCacheKey(JobSourceCategory.JOB_PORTAL, validatedKeyword || portal, validatedLocation, page);
+    const redisCached = await getCachedCategoryJobs<any[]>(cacheKey);
+    if (redisCached) {
       return NextResponse.json({
         success: true,
         portal,
         keyword: validatedKeyword,
         location: validatedLocation,
         page,
-        data: jobs,
-        jobs: jobs,
+        data: redisCached,
+        jobs: redisCached,
         cached: true,
-        refreshFailed: true,
-        message: `Failed to refresh jobs: ${crawlError}. Displaying cached results.`,
+        sourceCategory: JobSourceCategory.JOB_PORTAL,
       });
+    }
+
+    // 3. Query PostgreSQL for matching JOB_PORTAL jobs strictly within 168-hour rolling window
+    const cachedJobs = await getUserCachedPortalJobs(userId, portal, visibilityFrom, visibilityTo);
+
+    // 4. NON-BLOCKING DECOUPLED ARCHITECTURE:
+    // If DB results are empty or stale, enqueue a background BullMQ refresh task asynchronously with deterministic lock.
+    // Return available cached/empty response immediately to the client WITHOUT waiting for synchronous crawling!
+    let backgroundSyncQueued = false;
+    if (cachedJobs.length < 10) {
+      const enqueueRes = await enqueueCrawlJob({
+        category: JobSourceCategory.JOB_PORTAL,
+        provider: portal,
+        keyword: validatedKeyword || "software engineer",
+        location: validatedLocation,
+        userId,
+      });
+      backgroundSyncQueued = enqueueRes.enqueued;
+    }
+
+    // Save to category-aware Redis cache if data is present
+    if (cachedJobs.length > 0) {
+      await setCachedCategoryJobs(cacheKey, cachedJobs, 600);
     }
 
     return NextResponse.json({
@@ -408,12 +291,16 @@ export async function GET(req: NextRequest) {
       keyword: validatedKeyword,
       location: validatedLocation,
       page,
-      data: jobs,
-      jobs: jobs,
+      data: cachedJobs,
+      jobs: cachedJobs,
+      cached: true,
+      sourceCategory: JobSourceCategory.JOB_PORTAL,
+      backgroundSyncQueued,
+      message: backgroundSyncQueued ? "Returning cached results. Refreshing background pool." : "Returned fresh cached jobs.",
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Failed executing optimized crawl";
-    console.error("[Portal Jobs API] Optimized Handler failed:", errorMessage);
+    const errorMessage = error instanceof Error ? error.message : "Failed retrieving portal jobs";
+    console.error("[Portal Jobs API] Handler failed:", errorMessage);
     return NextResponse.json(
       { success: false, error: errorMessage },
       { status: 500 }
