@@ -11,7 +11,7 @@ jobs:
     steps:
       - name: Trigger crawl endpoint
         run: |
-          curl -s -X POST "${{ secrets.APP_URL }}/api/cron/crawl" \
+          curl -s -L -X POST "${{ secrets.APP_URL }}/api/cron/crawl" \
             -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
             -H "Content-Type: application/json" \
             --fail \
