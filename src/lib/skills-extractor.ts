@@ -12,7 +12,7 @@ export const PREDEFINED_SKILLS: SkillDefinition[] = [
   { name: "Java", aliases: ["java"], domain: "tech" },
   { name: "C++", aliases: ["c++", "cpp"], domain: "tech" },
   { name: "C#", aliases: ["c#", "csharp", ".net", "dotnet"], domain: "tech" },
-  { name: "C", aliases: ["c language", " c programming"], domain: "tech" },
+  { name: "C", aliases: ["c language", "c programming", "c/c++", "(c)"], domain: "tech" },
   { name: "Go", aliases: ["golang", "go language"], domain: "tech" },
   { name: "Rust", aliases: ["rust", "rustlang"], domain: "tech" },
   { name: "Ruby", aliases: ["ruby", "ruby on rails", "rails"], domain: "tech" },
@@ -67,6 +67,7 @@ export const PREDEFINED_SKILLS: SkillDefinition[] = [
   { name: "Linux", aliases: ["linux", "ubuntu", "debian", "centos", "unix"], domain: "tech" },
   { name: "Nginx", aliases: ["nginx", "apache"], domain: "tech" },
   // ── DATA & AI ──
+  { name: "AI Engineer", aliases: ["ai engineer", "ai/ml engineer", "artificial intelligence engineer"], domain: "tech" },
   { name: "Machine Learning", aliases: ["machine learning", "ml", "scikit-learn", "sklearn"], domain: "tech" },
   { name: "Deep Learning", aliases: ["deep learning", "neural network", "tensorflow", "pytorch", "keras"], domain: "tech" },
   { name: "Data Analysis", aliases: ["data analysis", "data analytics", "eda", "exploratory data analysis"], domain: "tech" },
@@ -241,6 +242,14 @@ function escapeRegExp(str: string): string {
 function isFalsePositive(skillName: string, alias: string, matchIndex: number, fullText: string): boolean {
   const lowerText = fullText.toLowerCase();
   
+  if (skillName.toLowerCase() === "express.js" || alias.toLowerCase() === "express") {
+    const isEnglishPhrase = /express\s+(your\s+interest|interest|delivery|shipping|mail|way|opinion)/i.test(lowerText);
+    const isTechContext = /\b(node|nodejs|node\.js|js|javascript|framework|middleware|npm|api|backend|web|app)\b/i.test(lowerText);
+    if (isEnglishPhrase && !isTechContext) {
+      return true;
+    }
+  }
+
   if (skillName.toLowerCase() === "canva") {
     // Look at a window of characters around the match to detect template credits
     const start = Math.max(0, matchIndex - 40);
@@ -537,4 +546,109 @@ export async function extractSkillsWithAI(
     return extractSkills(resumeText);
   }
 }
+
+/**
+ * Curated technical role vocabulary for Prisma-compatible title candidate matching.
+ * Excludes generic "engineer" to prevent matching civil, mechanical, or electrical roles.
+ */
+export const BROAD_TECH_ROLE_TITLES = [
+  "software engineer",
+  "software developer",
+  "backend engineer",
+  "backend developer",
+  "frontend engineer",
+  "frontend developer",
+  "full stack",
+  "fullstack",
+  "web developer",
+  "data engineer",
+  "devops",
+  "site reliability",
+  "machine learning",
+  "ai engineer",
+  "mobile developer",
+  "cloud engineer",
+];
+
+// Mapping raw matched skill names/aliases to canonical lowercase forms
+const CANONICAL_SKILL_MAP: Record<string, string> = {
+  javascript: "javascript",
+  js: "javascript",
+  ecmascript: "javascript",
+  typescript: "typescript",
+  ts: "typescript",
+  react: "react",
+  "react.js": "react",
+  reactjs: "react",
+  "next.js": "next.js",
+  nextjs: "next.js",
+  "node.js": "node.js",
+  nodejs: "node.js",
+  "node js": "node.js",
+  node: "node.js",
+  "express.js": "express.js",
+  expressjs: "express.js",
+  "express js": "express.js",
+  express: "express.js",
+  "c++": "c++",
+  cpp: "c++",
+  "rest api": "rest apis",
+  "rest apis": "rest apis",
+  restful: "rest apis",
+  "restful api": "rest apis",
+  git: "git",
+  github: "git",
+  gitlab: "gitlab",
+  html: "html",
+  html5: "html",
+  css: "css",
+  css3: "css",
+  tailwind: "tailwind css",
+  tailwindcss: "tailwind css",
+  "tailwind css": "tailwind css",
+  mongodb: "mongodb",
+  mongo: "mongodb",
+  postgresql: "postgresql",
+  postgres: "postgresql",
+  psql: "postgresql",
+  python: "python",
+  py: "python",
+};
+
+/**
+ * Extracts and returns canonical lowercase skills from job content (title, explicit ATS tags, description text).
+ */
+export function extractNormalizedSkills(
+  title: string = "",
+  description: string = "",
+  explicitSkills: string[] = []
+): string[] {
+  const combinedText = `${title} ${description} ${explicitSkills.join(" ")}`;
+  if (!combinedText.trim()) return [];
+
+  const extracted = extractSkills(combinedText);
+  const canonicalSet = new Set<string>();
+
+  for (const item of extracted) {
+    const rawLower = item.name.toLowerCase().trim();
+    const canonical = CANONICAL_SKILL_MAP[rawLower] || rawLower;
+    if (canonical) {
+      canonicalSet.add(canonical);
+    }
+  }
+
+  // Also include explicit ATS skills if provided
+  for (const s of explicitSkills) {
+    if (typeof s === "string" && s.trim()) {
+      const lower = s.toLowerCase().trim();
+      const canonical = CANONICAL_SKILL_MAP[lower] || lower;
+      if (canonical) {
+        canonicalSet.add(canonical);
+      }
+    }
+  }
+
+  return Array.from(canonicalSet);
+}
+
 

@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     });
 
     const isPro = subscription?.planId !== "free";
-    const limit = isPro ? null : 12;
+    const limit = isPro ? null : 20;
 
     return NextResponse.json({
       success: true,
