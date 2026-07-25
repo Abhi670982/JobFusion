@@ -379,32 +379,36 @@ export default function JobsPage() {
   const JOBS_CACHE_PREFIX = 'jobfusion_jobs_cache_';
   const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes — skip re-fetch entirely if cache is fresh
  
-  // 2. Fetch jobs — skips the API call completely if cache is fresh (< 5 min)
+  // 2. Fetch jobs — Stale-While-Revalidate for Company Careers to prevent pre-crawl lock-in
   const fetchFilteredJobs = async (searchParamsString: string) => {
     const cacheKey = JOBS_CACHE_PREFIX + searchParamsString;
     const cached = sessionStorage.getItem(cacheKey);
 
+    const isCareers =
+      searchParamsString.includes("source=careers") ||
+      (!searchParamsString.includes("source=") && activeTab === "careers");
+
     if (cached) {
       try {
         const { jobs: cachedJobs, total, totalPages: tp, cachedAt } = JSON.parse(cached);
-        const isFresh = cachedAt && (Date.now() - cachedAt) < CACHE_TTL_MS;
+        const isFresh = Boolean(cachedAt && (Date.now() - Number(cachedAt)) < CACHE_TTL_MS);
 
-        // Restore cached data and turn off skeleton immediately
+        // Restore cached data and turn off skeleton immediately for zero-wait UI
         setJobs(cachedJobs || []);
         setTotalJobsCount(total || 0);
         setTotalPages(tp || 1);
-        setLoading(false); // ← skeleton dismissed immediately when cache exists
+        setLoading(false);
 
-        if (isFresh) {
-          // Cache is fresh — skip API call entirely, user sees jobs with zero wait
+        // For non-careers sources: if cache is fresh (< 5 min), skip background API call.
+        // For Company Careers: ALWAYS revalidate in background so fresh crawl results replace cached pre-crawl responses.
+        if (!isCareers && isFresh) {
           return;
         }
-        // Cache is stale — silently re-fetch in background (jobs already visible, no skeleton)
-      } catch { /* ignore corrupt cache, fall through to fetch */ }
+      } catch {
+        /* ignore corrupt cache, fall through to fetch */
+      }
     }
-    // No cache — skeleton stays on (loading was true from mount) until API responds
-
-    // ── Fetch from API (first load or stale cache) ──
+    // No cache (or revalidating Careers) — fetch from API to get fresh results
     try {
       const res = await fetch(`/api/jobs?${searchParamsString}`);
       const data = await res.json();
@@ -412,14 +416,17 @@ export default function JobsPage() {
         setJobs(data.data || []);
         setTotalJobsCount(data.total || 0);
         setTotalPages(data.totalPages || 1);
-        // Only cache if we actually got results back (don't cache empty pages in dev/sync states)
+
         if (data.data && data.data.length > 0) {
-          sessionStorage.setItem(cacheKey, JSON.stringify({
-            jobs: data.data,
-            total: data.total || 0,
-            totalPages: data.totalPages || 1,
-            cachedAt: Date.now(),
-          }));
+          sessionStorage.setItem(
+            cacheKey,
+            JSON.stringify({
+              jobs: data.data,
+              total: data.total || 0,
+              totalPages: data.totalPages || 1,
+              cachedAt: Date.now(),
+            })
+          );
         } else {
           sessionStorage.removeItem(cacheKey);
         }
