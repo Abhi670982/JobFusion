@@ -12,6 +12,11 @@ import {
   MapPin,
   ExternalLink,
   Plus,
+  Activity,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Server,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -29,6 +34,16 @@ interface JobItem {
   applyUrl: string;
 }
 
+interface CrawlerStatsPayload {
+  stats: {
+    crawledToday: number;
+    successRate: number;
+    activePipelines: number;
+  };
+  portalStats: Array<{ name: string; success: number; total: number }>;
+  recentLogs: Array<{ id: string; source: string; status: string; jobsFound?: number; message?: string; timestamp: string }>;
+}
+
 export default function AdminJobs() {
   const [jobs, setJobs] = useState<JobItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -38,6 +53,7 @@ export default function AdminJobs() {
   const [sourceFilter, setSourceFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [loading, setLoading] = useState(true);
+  const [crawlerData, setCrawlerData] = useState<CrawlerStatsPayload | null>(null);
 
   // Sync state
   const [syncSource, setSyncSource] = useState("careers");
@@ -54,12 +70,22 @@ export default function AdminJobs() {
       const url = `/api/admin/jobs?page=${page}&q=${encodeURIComponent(
         search
       )}&source=${sourceFilter}&status=${statusFilter}`;
-      const res = await fetch(url);
-      const data = await res.json();
+      
+      const [jobsRes, statsRes] = await Promise.all([
+        fetch(url),
+        fetch("/api/admin/crawler-stats")
+      ]);
+      
+      const data = await jobsRes.json();
+      const statsData = await statsRes.json();
+      
       if (data.success) {
         setJobs(data.data.jobs);
         setTotal(data.data.total);
         setPages(data.data.pages);
+      }
+      if (statsData.success) {
+        setCrawlerData(statsData.data);
       }
     } catch (err) {
       console.error(err);
@@ -153,6 +179,73 @@ export default function AdminJobs() {
           Add Job
         </button>
       </div>
+
+      {/* Crawler Analytics */}
+      {crawlerData && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-5 grid grid-cols-2 gap-4">
+            <div className="rounded-2xl border border-[#27272a] bg-[#18181b]/20 p-5 flex flex-col justify-center">
+              <p className="text-[10px] font-bold text-[#71717a] uppercase tracking-wider mb-1">Crawled Today</p>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center">
+                  <Activity className="w-5 h-5" />
+                </div>
+                <span className="text-2xl font-bold text-[#f4f4f5] tabular-nums">{crawlerData.stats.crawledToday}</span>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-[#27272a] bg-[#18181b]/20 p-5 flex flex-col justify-center">
+              <p className="text-[10px] font-bold text-[#71717a] uppercase tracking-wider mb-1">Success Rate</p>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+                <span className="text-2xl font-bold text-[#f4f4f5] tabular-nums">{crawlerData.stats.successRate}%</span>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-[#27272a] bg-[#18181b]/20 p-5 col-span-2">
+              <p className="text-[10px] font-bold text-[#71717a] uppercase tracking-wider mb-3">Portal Success Rates</p>
+              <div className="space-y-3">
+                {crawlerData.portalStats.map((p) => (
+                  <div key={p.name} className="flex items-center justify-between text-xs font-semibold">
+                    <span className="text-[#a1a1aa]">{p.name}</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-24 h-1.5 bg-[#27272a] rounded-full overflow-hidden">
+                        <div className="h-full bg-indigo-500" style={{ width: `${(p.success / p.total) * 100}%` }} />
+                      </div>
+                      <span className="text-[#f4f4f5] tabular-nums min-w-[30px] text-right">{Math.round((p.success / p.total) * 100)}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          
+          <div className="lg:col-span-7 rounded-2xl border border-[#27272a] bg-[#18181b]/20 overflow-hidden flex flex-col">
+            <div className="px-5 py-4 border-b border-[#27272a] bg-[#18181b]/40 flex items-center justify-between">
+              <h3 className="text-xs font-bold text-[#f4f4f5] uppercase tracking-wider">Recent Crawl Logs</h3>
+              <Server className="w-4 h-4 text-[#71717a]" />
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 scrollbar-thin max-h-[220px]">
+              {crawlerData.recentLogs.map((log) => (
+                <div key={log.id} className="flex items-center gap-3 p-3 hover:bg-[#18181b]/40 rounded-xl transition-colors">
+                  <div className={`p-1.5 rounded-lg ${log.status === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                    {log.status === 'success' ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-[#e4e4e7] capitalize flex items-center justify-between">
+                      {log.source} 
+                      <span className="text-[9px] font-medium text-[#71717a] flex items-center gap-1"><Clock className="w-3 h-3" /> {new Date(log.timestamp).toLocaleTimeString()}</span>
+                    </p>
+                    <p className="text-[10px] text-[#a1a1aa] mt-0.5 truncate">
+                      {log.status === 'success' ? `Successfully scraped ${log.jobsFound} jobs.` : log.message}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sync Control & Filters */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 bg-[#18181b]/30 p-5 rounded-2xl border border-[#27272a]/60">

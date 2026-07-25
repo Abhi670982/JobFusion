@@ -26,6 +26,7 @@ import {
   Loader2,
   Shield,
   Mail,
+  CreditCard,
 } from "lucide-react";
 
 interface AdminLayoutClientProps {
@@ -77,6 +78,7 @@ export default function AdminLayoutClient({ children, adminUser }: AdminLayoutCl
     { name: "Companies", href: "/admin/companies", icon: Building2 },
     { name: "Resume & AI", href: "/admin/resume-ai", icon: FileText },
     { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
+    { name: "Billing", href: "/admin/billing", icon: CreditCard },
     { name: "Reports", href: "/admin/reports", icon: AlertTriangle },
     { name: "Activity Logs", href: "/admin/activity-logs", icon: Activity },
     { name: "Contact Messages", href: "/admin/contact-messages", icon: Mail },

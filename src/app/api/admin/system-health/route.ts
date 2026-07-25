@@ -60,6 +60,30 @@ export async function GET() {
       health.gemini = { status: "healthy", message: "Gemini API Key loaded successfully" };
     }
 
+    // 3a. OpenAI API Check
+    const openaiKey = process.env.OPENAI_API_KEY;
+    if (!openaiKey) {
+      health.openai = { status: "warning", message: "OpenAI API key is not set" };
+    } else {
+      health.openai = { status: "healthy", message: "OpenAI API Key loaded successfully" };
+    }
+
+    // 3b. Claude API Check
+    const claudeKey = process.env.ANTHROPIC_API_KEY;
+    if (!claudeKey) {
+      health.claude = { status: "warning", message: "Anthropic API key is not set" };
+    } else {
+      health.claude = { status: "healthy", message: "Anthropic API Key loaded successfully" };
+    }
+
+    // 3c. Payments Check
+    const dodoKey = process.env.DODO_PAYMENTS_SECRET_KEY;
+    if (!dodoKey) {
+      health.payments = { status: "warning", message: "Dodo Payments Secret Key is not set" };
+    } else {
+      health.payments = { status: "healthy", message: "Dodo Payments configured" };
+    }
+
     // 4. Cloudinary Check
     const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
     const apiKey = process.env.CLOUDINARY_API_KEY;

@@ -17,7 +17,7 @@ export async function GET() {
     const userIdStr = user._id.toString();
 
     // Query stats in PostgreSQL
-    const [profile, savedCount, visitedJobs] = await Promise.all([
+    const [profile, savedCount, visitedJobs, appliedCountResult] = await Promise.all([
       prisma.profile.findUnique({
         where: { userId: userIdStr },
         include: { skills: true }
@@ -33,10 +33,14 @@ export async function GET() {
           jobId: { not: null }
         },
         distinct: ["jobId"]
+      }),
+      prisma.application.count({
+        where: { userId: userIdStr }
       })
     ]);
 
     const visitedCount = visitedJobs.length;
+    const appliedCount = appliedCountResult || 0;
 
     // Map profile back to MongoDB casing
     const mappedProfile = profile ? {
@@ -55,6 +59,16 @@ export async function GET() {
       githubUrl: profile.githubUrl,
       linkedinUrl: profile.linkedinUrl,
       isOnboarded: profile.isOnboarded,
+      resumeCategory: profile.resumeCategory,
+      resumeSummary: profile.resumeSummary,
+      suggestedRoles: profile.suggestedRoles,
+      lastAnalyzedAt: profile.lastAnalyzedAt,
+      resumeInsights: {
+        found: profile.insightsFound,
+        missing: profile.insightsMissing,
+        tips: profile.insightsTips
+      },
+      resumeSkillMode: profile.resumeSkillMode,
       createdAt: profile.createdAt,
       updatedAt: profile.updatedAt
     } : null;
@@ -67,6 +81,7 @@ export async function GET() {
         visitedCount,
         skillsCount: profile?.skills?.length || 0,
         savedCount,
+        appliedCount,
       },
     });
   } catch (error: any) {

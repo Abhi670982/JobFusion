@@ -7,7 +7,7 @@ import {
   TrendingUp, Briefcase, Bookmark, Eye,
   CheckCircle2, XCircle,
   Calendar, Star, ChevronRight, Zap, Code2, Smile, FileText, User,
-  CreditCard, Sparkles
+  CreditCard, Sparkles, Send, FileCode, Workflow
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -98,6 +98,9 @@ const activityConfig = {
   rejected:        { icon: XCircle,      color: '#ef4444', label: 'Rejected' },
   updated_resume:  { icon: FileText,     color: '#8b5cf6', label: 'Resume Updated' },
   updated_profile: { icon: CheckCircle2, color: '#10b981', label: 'Profile Updated' },
+  resume_parsed:   { icon: FileCode,     color: '#ec4899', label: 'Resume Parsed' },
+  ai_request:      { icon: Zap,          color: '#3b82f6', label: 'AI Action' },
+  subscription_changed: { icon: CreditCard, color: '#f59e0b', label: 'Plan Updated' },
 };
 
 function formatTime(dateStr?: string) {
@@ -117,11 +120,12 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<DbUser | null>(null);
   const [profile, setProfile] = useState<DbProfile | null>(null);
-  const [stats, setStats] = useState<any>({ visitedCount: 0, skillsCount: 0, savedCount: 0 });
+  const [stats, setStats] = useState<any>({ visitedCount: 0, skillsCount: 0, savedCount: 0, appliedCount: 0 });
   const [activities, setActivities] = useState<any[]>([]);
   const [chartData, setChartData] = useState<any[]>([]);
   const [matchesCount, setMatchesCount] = useState(0);
   const [subscription, setSubscription] = useState<any>(null);
+  const [aiConfig, setAiConfig] = useState<any>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -133,14 +137,16 @@ export default function DashboardPage() {
           setProfile(dash.profile);
           setStats(dash.stats);
 
-          const [actRes, matchRes, subRes] = await Promise.all([
+          const [actRes, matchRes, subRes, aiRes] = await Promise.all([
             fetchDashboardActivity(), 
             fetchDashboardMatches(),
-            fetch('/api/subscription/current').then(r => r.json())
+            fetch('/api/subscription/current').then(r => r.json()),
+            fetch('/api/user/ai-provider').then(r => r.json())
           ]);
           if (actRes) { setActivities(actRes.recentActivities || []); setChartData(actRes.chartData || []); }
           if (matchRes) setMatchesCount(matchRes.totalMatches || 0);
           if (subRes && subRes.subscription) setSubscription(subRes.subscription);
+          if (aiRes && aiRes.data) setAiConfig(aiRes.data);
         } else {
           router.push('/sign-in');
         }
@@ -183,7 +189,9 @@ export default function DashboardPage() {
         <Skeleton className="h-32 w-full rounded-2xl bg-muted/70 skeleton-shimmer" />
 
         {/* Stats Grid Skeleton */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+          <StatCardSkeleton />
+          <StatCardSkeleton />
           <StatCardSkeleton />
           <StatCardSkeleton />
           <StatCardSkeleton />
@@ -341,7 +349,7 @@ export default function DashboardPage() {
 
           {/* Actions */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            {!subscription?.features?.hasProAccess && (
+            {(!subscription?.features?.hasProAccess && !aiConfig?.isBYOK) && (
               <Link href="/pricing">
                 <Button
                   id="dashboard-upgrade-btn"
@@ -369,22 +377,95 @@ export default function DashboardPage() {
         </div>
 
         {/* Pro features teaser */}
-        <div className="mt-4 pt-4 border-t border-border/60">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2.5">Unlock with Pro</p>
-          <div className="flex flex-wrap gap-2">
-            {[
-              { icon: Sparkles, label: 'AI Resume Builder' },
-              { icon: FileText, label: 'Cover Letters' },
-              { icon: User,     label: 'Interview Prep' },
-              { icon: Zap,      label: 'Smart Matching' },
-            ].map(({ icon: Icon, label }) => (
-              <Link key={label} href="/pricing" className="touch-auto">
-                <span className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-muted/60 text-muted-foreground hover:bg-primary/8 hover:text-primary transition-colors border border-border/40 cursor-pointer">
-                  <Icon className="w-3 h-3" aria-hidden="true" />
-                  {label}
-                </span>
-              </Link>
-            ))}
+        {(!subscription?.features?.hasProAccess && !aiConfig?.isBYOK) && (
+          <div className="mt-4 pt-4 border-t border-border/60">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2.5">Unlock with Pro</p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { icon: Sparkles, label: 'AI Resume Builder' },
+                { icon: FileText, label: 'Cover Letters' },
+                { icon: User,     label: 'Interview Prep' },
+                { icon: Zap,      label: 'Smart Matching' },
+              ].map(({ icon: Icon, label }) => (
+                <Link key={label} href="/pricing" className="touch-auto">
+                  <span className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-muted/60 text-muted-foreground hover:bg-primary/8 hover:text-primary transition-colors border border-border/40 cursor-pointer">
+                    <Icon className="w-3 h-3" aria-hidden="true" />
+                    {label}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+      </motion.div>
+
+      {/* ── AI Provider Status Card ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="card-premium p-5"
+      >
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+              <Zap className="w-5 h-5 text-blue-500" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold">AI Provider Config</span>
+                {aiConfig?.isBYOK ? (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20">
+                    BYOK Active
+                  </span>
+                ) : aiConfig?.mode === 'pro' ? (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                    Premium API
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-600 dark:text-slate-400 border border-slate-500/20">
+                    Free Tier API
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Current Provider: <span className="font-semibold capitalize text-foreground">{aiConfig?.provider || 'Unknown'}</span>
+                {!aiConfig?.isBYOK && " (JobFusion Platform)"}
+              </p>
+            </div>
+          </div>
+
+          <div className="hidden sm:block flex-1 max-w-[200px]">
+            {aiConfig?.isBYOK || aiConfig?.mode === 'pro' ? (
+              <div className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded-md w-max">
+                <CheckCircle2 className="w-3 h-3" /> Unlimited Requests
+              </div>
+            ) : (
+              <>
+                <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+                  <span>Daily Usage (Resets at midnight)</span>
+                  <span>
+                    {aiConfig?.usage?.used || 0} / {aiConfig?.usage?.limit || 2}
+                  </span>
+                </div>
+                <div className="h-1.5 bg-muted rounded-full overflow-hidden" role="progressbar">
+                  <div 
+                    className="h-full bg-blue-500 rounded-full transition-all" 
+                    style={{ 
+                      width: `${Math.min(100, Math.round(((aiConfig?.usage?.used || 0) / (aiConfig?.usage?.limit || 2)) * 100))}%` 
+                    }} 
+                  />
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Link href="/settings/ai-provider">
+              <Button size="sm" variant="outline" className="rounded-xl text-xs h-8">
+                Manage Keys
+              </Button>
+            </Link>
           </div>
         </div>
       </motion.div>
@@ -413,14 +494,16 @@ export default function DashboardPage() {
       )}
 
       {/* ── Stats Grid ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         {loading ? (
-          Array.from({ length: 3 }).map((_, i) => <StatCardSkeleton key={i} />)
+          Array.from({ length: 5 }).map((_, i) => <StatCardSkeleton key={i} />)
         ) : (
           <>
+            <StatCard icon={Send} label="Applied Jobs" value={stats.appliedCount} color="#ec4899" href="/applications" />
+            <StatCard icon={Zap} label="Matches Found" value={matchesCount} color="#f59e0b" href="/jobs" />
+            <StatCard icon={Bookmark} label="Saved Jobs" value={stats.savedCount} color="#8b5cf6" href="/jobs/saved" />
             <StatCard icon={Eye} label="Visited Openings" value={stats.visitedCount} color="#6366f1" />
             <StatCard icon={Code2} label="Skills in Profile" value={stats.skillsCount} color="#10b981" href="/resume" />
-            <StatCard icon={Bookmark} label="Saved Jobs" value={stats.savedCount} color="#8b5cf6" href="/jobs/saved" />
           </>
         )}
       </div>
@@ -494,12 +577,21 @@ export default function DashboardPage() {
                   <p className="text-sm font-bold text-primary">{profile.resumeCategory}</p>
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-2">
+              {profile.resumeSummary && (
+                <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed px-1">
+                  {profile.resumeSummary}
+                </p>
+              )}
+              <div className="grid grid-cols-3 gap-2">
                 <div className="p-3 rounded-xl bg-muted/50 text-center">
                   <div className="text-xl font-extrabold">{profile.skills?.length || 0}</div>
                   <div className="text-[10px] text-muted-foreground mt-0.5">Skills</div>
                 </div>
-                <div className="p-3 rounded-xl bg-muted/50 text-center">
+                <div className="p-3 rounded-xl bg-muted/50 text-center flex flex-col justify-center">
+                  <div className="text-xs font-bold text-emerald-500">Active</div>
+                  <div className="text-[10px] text-muted-foreground mt-0.5">Status</div>
+                </div>
+                <div className="p-3 rounded-xl bg-muted/50 text-center flex flex-col justify-center">
                   <div className="text-sm font-extrabold">
                     {profile.lastAnalyzedAt ? new Date(profile.lastAnalyzedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—'}
                   </div>

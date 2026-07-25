@@ -22,6 +22,9 @@ interface UserItem {
   role: string;
   status: string;
   createdAt: string;
+  subscription: string;
+  isBYOK: boolean;
+  aiUsageToday: number;
 }
 
 interface UserProfileDetails {
@@ -67,6 +70,8 @@ export default function AdminUsers() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
+  const [planFilter, setPlanFilter] = useState("");
+  const [byokFilter, setByokFilter] = useState("");
   const [loading, setLoading] = useState(true);
 
   // Selected User details
@@ -83,7 +88,7 @@ export default function AdminUsers() {
     try {
       const url = `/api/admin/users?page=${page}&q=${encodeURIComponent(
         search
-      )}&status=${statusFilter}&role=${roleFilter}`;
+      )}&status=${statusFilter}&role=${roleFilter}&plan=${planFilter}&byok=${byokFilter}`;
       const res = await fetch(url);
       const data = await res.json();
       if (data.success) {
@@ -101,7 +106,7 @@ export default function AdminUsers() {
   useEffect(() => {
     fetchUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, statusFilter, roleFilter]);
+  }, [page, statusFilter, roleFilter, planFilter, byokFilter]);
 
   // Debounced search
   useEffect(() => {
@@ -225,6 +230,28 @@ export default function AdminUsers() {
           <option value="jobseeker">Jobseeker</option>
           <option value="admin">Admin</option>
         </select>
+
+        {/* Plan filter */}
+        <select
+          value={planFilter}
+          onChange={(e) => { setPage(1); setPlanFilter(e.target.value); }}
+          className="bg-[#09090b]/60 border border-[#27272a] hover:border-[#3f3f46] text-xs text-[#f4f4f5] px-4 py-2.5 rounded-xl outline-none transition-all touch-auto"
+        >
+          <option value="">All Plans</option>
+          <option value="free">Free</option>
+          <option value="pro">Pro</option>
+        </select>
+
+        {/* BYOK filter */}
+        <select
+          value={byokFilter}
+          onChange={(e) => { setPage(1); setByokFilter(e.target.value); }}
+          className="bg-[#09090b]/60 border border-[#27272a] hover:border-[#3f3f46] text-xs text-[#f4f4f5] px-4 py-2.5 rounded-xl outline-none transition-all touch-auto"
+        >
+          <option value="">Any AI Config</option>
+          <option value="true">BYOK Active</option>
+          <option value="false">Platform API</option>
+        </select>
       </div>
 
       {/* Table grid */}
@@ -246,6 +273,8 @@ export default function AdminUsers() {
                   <th className="px-6 py-4">User</th>
                   <th className="px-6 py-4">Role</th>
                   <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4">Subscription</th>
+                  <th className="px-6 py-4">AI Usage (Today)</th>
                   <th className="px-6 py-4">Registered At</th>
                   <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
@@ -290,6 +319,27 @@ export default function AdminUsers() {
                       }`}>
                         {user.status}
                       </span>
+                    </td>
+                    
+                    {/* Subscription */}
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-1">
+                        <span className={`w-fit px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
+                          user.subscription === "pro" ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" : "bg-slate-500/10 text-slate-400 border border-slate-500/20"
+                        }`}>
+                          {user.subscription}
+                        </span>
+                        {user.isBYOK && (
+                          <span className="w-fit px-1.5 py-0.5 rounded text-[8px] font-bold uppercase bg-violet-500/10 text-violet-400 border border-violet-500/20">
+                            BYOK
+                          </span>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* AI Usage */}
+                    <td className="px-6 py-4 text-[#71717a] font-medium text-xs">
+                      {user.aiUsageToday} {user.isBYOK || user.subscription === 'pro' ? '' : '/ 2'} reqs
                     </td>
 
                     {/* Registered Date */}
@@ -426,6 +476,28 @@ export default function AdminUsers() {
                             {selectedUser.role}
                           </span>
                         </div>
+                      </div>
+                    </div>
+
+                    {/* Subscription & AI Stats */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-4 rounded-xl border border-[#27272a]/50 bg-[#18181b]/5 flex flex-col items-center justify-center text-center">
+                        <span className="text-[10px] text-[#71717a] font-bold uppercase tracking-wider mb-1">Plan</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          selectedUser.subscription === "pro" ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" : "bg-slate-500/10 text-slate-400 border border-slate-500/20"
+                        }`}>
+                          {selectedUser.subscription}
+                        </span>
+                      </div>
+                      <div className="p-4 rounded-xl border border-[#27272a]/50 bg-[#18181b]/5 flex flex-col items-center justify-center text-center">
+                        <span className="text-[10px] text-[#71717a] font-bold uppercase tracking-wider mb-1">AI Config</span>
+                        {selectedUser.isBYOK ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-violet-500/10 text-violet-400 border border-violet-500/20">
+                            BYOK Active
+                          </span>
+                        ) : (
+                          <span className="text-xs font-bold text-[#e4e4e7]">{selectedUser.aiUsageToday} {selectedUser.subscription === 'pro' ? '' : '/ 2'} reqs today</span>
+                        )}
                       </div>
                     </div>
 

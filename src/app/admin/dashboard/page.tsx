@@ -22,6 +22,10 @@ import {
   Database,
   Image as ImageIcon,
   Clock,
+  Crown,
+  Key,
+  CreditCard,
+  DollarSign
 } from "lucide-react";
 
 interface KPI {
@@ -42,6 +46,11 @@ interface DashboardStats {
   savedJobs: KPI;
   pendingReports: KPI;
   systemHealth: KPI;
+  premiumUsers: KPI;
+  freeUsers: KPI;
+  byokUsers: KPI;
+  totalAIRequests: KPI;
+  todayAIRequests: KPI;
 }
 
 interface ServiceHealth {
@@ -53,6 +62,9 @@ interface SystemHealth {
   postgres: ServiceHealth;
   clerk: ServiceHealth;
   gemini: ServiceHealth;
+  openai: ServiceHealth;
+  claude: ServiceHealth;
+  payments: ServiceHealth;
   cloudinary: ServiceHealth;
   jobSync: ServiceHealth;
   apiLatency: ServiceHealth;
@@ -71,6 +83,7 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [health, setHealth] = useState<SystemHealth | null>(null);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [revenue, setRevenue] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,20 +91,23 @@ export default function AdminDashboard() {
   const loadData = async (isManual = false) => {
     if (isManual) setRefreshing(true);
     try {
-      const [statsRes, healthRes, analyticsRes] = await Promise.all([
+      const [statsRes, healthRes, analyticsRes, billingRes] = await Promise.all([
         fetch("/api/admin/stats"),
         fetch("/api/admin/system-health"),
         fetch("/api/admin/analytics"),
+        fetch("/api/admin/billing"),
       ]);
 
       const statsData = await statsRes.json();
       const healthData = await healthRes.json();
       const analyticsData = await analyticsRes.json();
+      const billingData = await billingRes.json();
 
       if (statsData.success && healthData.success && analyticsData.success) {
         setStats(statsData.data);
         setHealth(healthData.data);
         setActivities(analyticsData.data.activityFeed || []);
+        if (billingData.success) setRevenue(billingData.data.revenue);
         setError(null);
       } else {
         setError("Failed to load dashboard statistics.");
@@ -138,9 +154,13 @@ export default function AdminDashboard() {
     { title: "Active Users", icon: Eye, data: stats?.activeUsers, href: "/admin/users", color: "text-emerald-400" },
     { title: "New Users Today", icon: Calendar, data: stats?.newUsersToday, href: "/admin/users", color: "text-indigo-400" },
     { title: "Total Jobs", icon: Briefcase, data: stats?.totalJobs, href: "/admin/jobs", color: "text-violet-400" },
+    { title: "Premium Users", icon: Crown, data: stats?.premiumUsers, href: "/admin/users", color: "text-amber-400" },
+    { title: "Free Users", icon: Users, data: stats?.freeUsers, href: "/admin/users", color: "text-slate-400" },
+    { title: "BYOK Keys", icon: Key, data: stats?.byokUsers, href: "/admin/users", color: "text-violet-400" },
+    { title: "Today's AI Requests", icon: Zap, data: stats?.todayAIRequests, href: "/admin/analytics", color: "text-blue-400" },
+    { title: "Total AI Requests", icon: Database, data: stats?.totalAIRequests, href: "/admin/analytics", color: "text-indigo-400" },
     { title: "Resume Uploads", icon: FileText, data: stats?.resumeUploads, href: "/admin/resume-ai", color: "text-purple-400" },
-    { title: "AI Analyses", icon: Zap, data: stats?.aiAnalyses, href: "/admin/resume-ai", color: "text-amber-400" },
-    { title: "Applications", icon: Send, data: stats?.totalApplications, href: "/admin/analytics", color: "text-pink-400" },
+    { title: "Total Applications", icon: Send, data: stats?.totalApplications, href: "/admin/analytics", color: "text-pink-400" },
     { title: "Saved Jobs", icon: Star, data: stats?.savedJobs, href: "/admin/analytics", color: "text-rose-400" },
     { title: "Pending Reports", icon: AlertTriangle, data: stats?.pendingReports, href: "/admin/reports", color: "text-orange-400" },
     { title: "System Health", icon: Heart, data: stats?.systemHealth, href: "/admin/dashboard", color: "text-teal-400" },
@@ -219,10 +239,13 @@ export default function AdminDashboard() {
 
           <div className="rounded-2xl border border-[#27272a] bg-[#18181b]/20 p-6 space-y-4">
             {health && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <HealthBadgeItem label="PostgreSQL DB" icon={Database} health={health.postgres} />
                 <HealthBadgeItem label="Clerk Identity" icon={Users} health={health.clerk} />
-                <HealthBadgeItem label="Gemini AI API" icon={Zap} health={health.gemini} />
+                <HealthBadgeItem label="Gemini API" icon={Zap} health={health.gemini} />
+                <HealthBadgeItem label="OpenAI API" icon={Zap} health={health.openai} />
+                <HealthBadgeItem label="Claude API" icon={Zap} health={health.claude} />
+                <HealthBadgeItem label="Dodo Payments" icon={CreditCard} health={health.payments} />
                 <HealthBadgeItem label="Cloudinary CDN" icon={ImageIcon} health={health.cloudinary} />
                 <HealthBadgeItem label="Crawler Sync" icon={RefreshCw} health={health.jobSync} />
                 <HealthBadgeItem label="API Speed" icon={Clock} health={health.apiLatency} />
@@ -236,6 +259,23 @@ export default function AdminDashboard() {
               <span className="tabular-nums">Checked: just now</span>
             </div>
           </div>
+          
+          {revenue && (
+            <div className="rounded-2xl border border-[#27272a] bg-[#18181b]/20 p-6 flex items-center justify-between mt-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                  <DollarSign className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-[#71717a] uppercase tracking-wider">Monthly Revenue</p>
+                  <p className="text-xl font-bold text-[#f4f4f5] tabular-nums">₹{revenue.monthly.toLocaleString()}</p>
+                </div>
+              </div>
+              <Link href="/admin/billing" className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 flex items-center gap-1">
+                View billing <ArrowRight className="w-3 h-3" />
+              </Link>
+            </div>
+          )}
         </div>
 
         {/* Activity Feed */}

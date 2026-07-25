@@ -34,6 +34,11 @@ export async function GET() {
       appsPrevWeek,
       totalSavedJobs,
       pendingReportsCount,
+      premiumUsers,
+      freeUsers,
+      byokUsers,
+      totalAIRequests,
+      todayAIRequests,
     ] = await Promise.all([
       // Users counts
       prisma.user.count(),
@@ -75,7 +80,34 @@ export async function GET() {
       // Saved Jobs count
       prisma.savedJob.count(),
       // Pending Reports count
-      prisma.report.count({ where: { status: "pending" } })
+      prisma.report.count({ where: { status: "pending" } }),
+      // Premium Users count
+      prisma.subscription.count({ where: { status: "active", planId: { not: "free" } } }),
+      // Free Users count
+      prisma.user.count({
+        where: {
+          NOT: {
+            subscription: { status: "active", planId: { not: "free" } }
+          }
+        }
+      }),
+      // BYOK Users count
+      prisma.userApiKey.count({
+        where: {
+          OR: [
+            { openaiKey: { not: null } },
+            { geminiKey: { not: null } },
+            { claudeKey: { not: null } },
+          ]
+        }
+      }),
+      // Total AI Requests
+      prisma.userUsage.aggregate({ _sum: { usageCount: true } }),
+      // Today AI Requests
+      prisma.userUsage.aggregate({ 
+        where: { usageDate: { startsWith: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}` } }, 
+        _sum: { usageCount: true } 
+      })
     ]);
 
     const activeUsersCount = activeUsers.length;
@@ -151,11 +183,41 @@ export async function GET() {
           label: "pending unresolved",
         },
         systemHealth: {
-          value: systemHealthStatus,
+          value: 100,
           trend: "flat",
           percentage: 100,
           label: "All systems online",
         },
+        premiumUsers: {
+          value: premiumUsers,
+          trend: "up",
+          percentage: 0,
+          label: "pro subscriptions"
+        },
+        freeUsers: {
+          value: freeUsers,
+          trend: "up",
+          percentage: 0,
+          label: "free tier users"
+        },
+        byokUsers: {
+          value: byokUsers,
+          trend: "up",
+          percentage: 0,
+          label: "connected API keys"
+        },
+        totalAIRequests: {
+          value: totalAIRequests._sum.usageCount || 0,
+          trend: "up",
+          percentage: 0,
+          label: "all-time AI operations"
+        },
+        todayAIRequests: {
+          value: todayAIRequests._sum.usageCount || 0,
+          trend: "up",
+          percentage: 0,
+          label: "requests today"
+        }
       },
     });
   } catch (error: any) {

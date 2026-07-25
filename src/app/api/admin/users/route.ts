@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { Prisma, User, UserStatus } from "@prisma/client";
+import { usageService } from "@/lib/usageService";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,15 @@ export async function GET(req: NextRequest) {
         orderBy: { createdAt: "desc" },
         skip,
         take: limit,
+        include: {
+          subscription: true,
+          apiKeys: true,
+          usages: {
+            where: {
+              usageDate: usageService.getTodayDateString()
+            }
+          }
+        }
       }),
       prisma.user.count({
         where: filter,
@@ -52,17 +62,37 @@ export async function GET(req: NextRequest) {
     ]);
 
     // Map to MongoDB-like payload
-    const users = pgUsers.map((u: User) => ({
-      _id: u.id,
-      clerkId: u.clerkId,
-      fullName: u.fullName,
-      email: u.email,
-      profileImage: u.profileImage,
-      role: u.role,
-      status: u.status,
-      createdAt: u.createdAt,
-      updatedAt: u.updatedAt
-    }));
+    const users = pgUsers.map((u: any) => {
+      let isBYOK = false;
+      let connectedProvider = null;
+      if (u.apiKeys) {
+        if (u.apiKeys.openaiKey) { isBYOK = true; connectedProvider = "openai"; }
+        else if (u.apiKeys.geminiKey) { isBYOK = true; connectedProvider = "gemini"; }
+        else if (u.apiKeys.claudeKey) { isBYOK = true; connectedProvider = "claude"; }
+      }
+      
+      const aiUsageToday = u.usages.reduce((acc: number, curr: any) => acc + curr.usageCount, 0);
+
+      return {
+        _id: u.id,
+        clerkId: u.clerkId,
+        fullName: u.fullName,
+        email: u.email,
+        profileImage: u.profileImage,
+        role: u.role,
+        status: u.status,
+        createdAt: u.createdAt,
+        updatedAt: u.updatedAt,
+        subscription: {
+          planId: u.subscription?.planId || "free",
+        },
+        aiProvider: {
+          isBYOK,
+          provider: connectedProvider
+        },
+        aiUsageToday
+      };
+    });
 
     return NextResponse.json({
       success: true,
