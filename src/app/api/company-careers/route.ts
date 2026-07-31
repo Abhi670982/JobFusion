@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queryCareersJobs, DEFAULT_RESULT_TARGET } from "@/lib/pipeline";
+import { checkAndEnqueueCareersRefresh } from "@/lib/careers-freshness";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,11 @@ export async function GET(req: NextRequest) {
     const skills = skillsParam ? skillsParam.split(",").map(s => s.trim()).filter(Boolean) : [];
     const limit = limitParam ? parseInt(limitParam, 10) : DEFAULT_RESULT_TARGET;
     const page = pageParam ? parseInt(pageParam, 10) : 1;
+
+    // Trigger non-blocking background refresh check for company careers
+    checkAndEnqueueCareersRefresh().catch((err) => {
+      console.error("[Company Careers API] Background refresh check failed:", err?.message || err);
+    });
 
     // Strict server-side boundary: ONLY source == "careers" and active within 7 days
     const result = await queryCareersJobs({ userSkills: skills, page, limit });

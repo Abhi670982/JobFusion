@@ -13,6 +13,7 @@ let crawlQueue: Queue | null = null;
 
 export const CRAWL_QUEUE_NAME = "background-crawl-queue";
 const devActiveLocks = new Set<string>();
+const inFlightEnqueues = new Set<string>();
 
 export function getRedisClient(): IORedis | null {
   if (!redisClient && process.env.REDIS_URL) {
@@ -71,56 +72,73 @@ export function normalizeCrawlKey(params: EnqueueCrawlParams): string {
  */
 export async function enqueueCrawlJob(params: EnqueueCrawlParams): Promise<{ enqueued: boolean; jobId: string }> {
   const jobId = normalizeCrawlKey(params);
-  const queue = getCrawlQueue();
 
-  if (queue) {
-    try {
-      // Check existing job status in Redis for deduplication
-      const existingJob = await queue.getJob(jobId);
-      if (existingJob) {
-        const state = await existingJob.getState();
-        if (state === "waiting" || state === "active" || state === "delayed") {
-          console.log(`[Queue] Crawl job ${jobId} already active in BullMQ (${state}). Deduplicated.`);
+  // In-flight concurrent request deduplication
+  if (inFlightEnqueues.has(jobId)) {
+    console.log(`[Queue Dedupe] In-flight enqueue request for ${jobId} deduplicated.`);
+    return { enqueued: false, jobId };
+  }
+  inFlightEnqueues.add(jobId);
+
+  try {
+    const queue = getCrawlQueue();
+
+    if (queue) {
+      try {
+        // Check existing job status in Redis for deduplication
+        const existingJob = await queue.getJob(jobId);
+        if (existingJob) {
+          const state = await existingJob.getState();
+          if (state === "waiting" || state === "active" || state === "delayed") {
+            console.log(`[Queue] Crawl job ${jobId} already active in BullMQ (${state}). Deduplicated.`);
+            return { enqueued: false, jobId };
+          } else if (state === "completed" || state === "failed") {
+            await existingJob.remove().catch((e) => {
+              console.warn(`[Queue] Failed to remove previous ${state} job ${jobId}:`, e.message);
+            });
+          }
+        }
+
+        // BullMQ deduplicates jobs with identical jobId if waiting/active
+        await queue.add(
+          "crawl-task",
+          {
+            category: params.category,
+            provider: params.provider,
+            keyword: params.keyword,
+            location: params.location || "India",
+            userId: params.userId,
+          },
+          {
+            jobId, // Deterministic safe identity without colons
+            deduplication: {
+              id: jobId,
+            },
+            attempts: 3,
+            backoff: {
+              type: "exponential",
+              delay: 3000,
+            },
+            removeOnComplete: { age: 900 }, // 15 mins retention
+            removeOnFail: { age: 3600 },
+          }
+        );
+        console.log(`[Queue] Successfully enqueued distributed BullMQ job: ${jobId}`);
+        return { enqueued: true, jobId };
+      } catch (err: any) {
+        if (err.message?.includes("Job already exists") || err.message?.includes("id already exists")) {
+          console.log(`[Queue] Crawl job ${jobId} already active/waiting in queue (deduplicated).`);
           return { enqueued: false, jobId };
         }
-      }
-
-      // BullMQ deduplicates jobs with identical jobId if waiting/active
-      await queue.add(
-        "crawl-task",
-        {
-          category: params.category,
-          provider: params.provider,
-          keyword: params.keyword,
-          location: params.location || "India",
-          userId: params.userId,
-        },
-        {
-          jobId, // Deterministic safe identity without colons
-          deduplication: {
-            id: jobId,
-          },
-          attempts: 3,
-          backoff: {
-            type: "exponential",
-            delay: 3000,
-          },
-          removeOnComplete: { age: 900 }, // 15 mins retention
-          removeOnFail: { age: 3600 },
-        }
-      );
-      console.log(`[Queue] Successfully enqueued distributed BullMQ job: ${jobId}`);
-      return { enqueued: true, jobId };
-    } catch (err: any) {
-      if (err.message?.includes("Job already exists") || err.message?.includes("id already exists")) {
-        console.log(`[Queue] Crawl job ${jobId} already active/waiting in queue (deduplicated).`);
+        
+        // CRITICAL: If Redis is connected but BullMQ enqueue fails, DO NOT fall back to in-process execution!
+        console.error(`[Queue Error] BullMQ enqueue failed for ${jobId}: ${err.message}`);
         return { enqueued: false, jobId };
       }
-      
-      // CRITICAL: If Redis is connected but BullMQ enqueue fails, DO NOT fall back to in-process execution!
-      console.error(`[Queue Error] BullMQ enqueue failed for ${jobId}: ${err.message}`);
-      return { enqueued: false, jobId };
     }
+  } finally {
+    // Release in-flight lock after brief window to allow future runs
+    setTimeout(() => inFlightEnqueues.delete(jobId), 5000);
   }
 
   // Production Safety Policy: Never execute expensive crawls inside HTTP server process in Production!

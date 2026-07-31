@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { validateJobsQuery } from "@/lib/api-validators";
 import { calculateRelevanceScore } from "@/lib/relevance";
 import { queryCareersJobs } from "@/lib/pipeline";
+import { checkAndEnqueueCareersRefresh } from "@/lib/careers-freshness";
 import { Prisma, Job, JobType, ExperienceLevel, JobSourceCategory } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -351,6 +352,7 @@ export async function GET(req: NextRequest) {
     const userIdParam = searchParams.get("userId");
 
     if (userIdParam) {
+      // Resolve skills for the specific authenticated user only.
       const userProfile = await prisma.profile.findUnique({
         where: { userId: userIdParam },
         include: { skills: true },
@@ -360,27 +362,42 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // If the client passed explicit skills in the query string, use those.
+    // This is the primary mechanism when userId is unavailable.
     if (userResumeSkills.length === 0 && skills) {
       userResumeSkills = skills.split(",").map((s) => s.trim()).filter(Boolean);
     }
 
-    // Fallback: Use stored resume skills from active profile if available
-    if (userResumeSkills.length === 0) {
-      const activeProfile = await prisma.profile.findFirst({
-        where: { skills: { some: {} } },
-        include: { skills: true },
+    // NOTE: No prisma.profile.findFirst fallback.
+    // A missing userId must never cause another/random user's profile to be selected.
+    // If neither userId nor skills param is present, userResumeSkills stays empty
+    // and the query returns all jobs in postedAtDate DESC order.
+
+    const isCareersRequest =
+      source === "careers" ||
+      (source ? source.split(",").map((s) => s.trim().toLowerCase()).includes("careers") : false) ||
+      rawCategoryParam === "COMPANY_CAREER" ||
+      rawCategoryParam === "CAREERS";
+
+    if (isCareersRequest) {
+      checkAndEnqueueCareersRefresh().catch((err) => {
+        console.error("[API Jobs] Background careers refresh check failed:", err?.message || err);
       });
-      if (activeProfile && activeProfile.skills.length > 0) {
-        userResumeSkills = activeProfile.skills.map((s) => s.name);
-      }
     }
 
     // Dedicated fast-path for Company Careers using shared queryCareersJobs service
     if ((source === "careers" || rawCategoryParam === "COMPANY_CAREER") && !q && !location && !jobType && !experienceLevel) {
+      // Map sortBy param → sortMode for queryCareersJobs.
+      // 'postedAt' (default/latest) → 'latest': pure chronological DESC, null dates last.
+      // 'relevance'                  → 'relevance': tier DESC → score DESC → date DESC.
+      const sortMode: 'latest' | 'relevance' =
+        (sortBy as string) === 'relevance' ? 'relevance' : 'latest';
+
       const careersRes = await queryCareersJobs({
         userSkills: userResumeSkills,
         page,
         limit,
+        sortMode,
       });
 
       const total = careersRes.totalFound;
@@ -450,7 +467,7 @@ export async function GET(req: NextRequest) {
 
     // For personalized feed when user resume skills exist:
     // Relevance determines ELIGIBILITY (matchScore > 0).
-    // Freshness determines DISPLAY ORDER (postedAtDate DESC).
+    // Sorting uses Quality Tier Bucket Order (HIGH -> MODERATE -> LOW) then postedAtDate DESC within tier.
     let finalDataset = scoredJobs;
 
     if (userResumeSkills.length > 0) {
@@ -459,8 +476,16 @@ export async function GET(req: NextRequest) {
       finalDataset = relevantJobs;
 
       // 2. Sort dataset BEFORE pagination:
-      // Primary: postedAtDate DESC (strict newest -> oldest)
+      // Primary: Quality Tier (HIGH >= 70, MODERATE 35-69, LOW 1-34)
+      // Secondary: postedAtDate DESC (newest -> oldest within tier)
       finalDataset.sort((a, b) => {
+        const aTier = a.matchScore >= 70 ? 3 : a.matchScore >= 35 ? 2 : 1;
+        const bTier = b.matchScore >= 70 ? 3 : b.matchScore >= 35 ? 2 : 1;
+
+        if (bTier !== aTier) {
+          return bTier - aTier; // Quality Tier precedence
+        }
+
         const aDate = a.postedAtDate ? new Date(a.postedAtDate).getTime() : 0;
         const bDate = b.postedAtDate ? new Date(b.postedAtDate).getTime() : 0;
         if (bDate !== aDate) {

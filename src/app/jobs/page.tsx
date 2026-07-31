@@ -348,7 +348,7 @@ export default function JobsPage() {
   const [mobileFilters, setMobileFilters] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [activeTab, setActiveTab] = useState<'careers' | 'portals'>('careers');
-  const [sortBy, setSortBy] = useState<'postedAt' | 'salaryMin'>('postedAt');
+  const [sortBy, setSortBy] = useState<'postedAt' | 'relevance' | 'salaryMin'>('postedAt');
   const [order, setOrder] = useState<'asc' | 'desc'>('desc');
 
   // Filter states
@@ -366,6 +366,13 @@ export default function JobsPage() {
   const [toastMessage, setToastMessage] = useState('');
   const [filtersCollapsed, setFiltersCollapsed] = useState(false);
   const [skillWarning, setSkillWarning] = useState(false);
+  /**
+   * relevanceMode = true when the user has activated "Match My Skills".
+   * Controls whether sortBy is treated as 'relevance' (tier→score→date)
+   * or 'latest' (pure postedAtDate DESC).
+   * Reset to false whenever the user explicitly selects a different sort.
+   */
+  const [relevanceMode, setRelevanceMode] = useState(false);
 
   // Usage tracking and Modals
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -374,6 +381,12 @@ export default function JobsPage() {
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const initialDataLoaded = useRef(false);
+  /**
+   * Suppresses the filter-change effect for exactly ONE firing cycle.
+   * Set to true by handleAISearch right before it calls setSortBy/setRelevanceMode
+   * to prevent a redundant re-fetch when the effect fires due to those state changes.
+   */
+  const skipNextFilterEffect = useRef(false);
   
   // Cache key for sessionStorage based on the current query string
   const JOBS_CACHE_PREFIX = 'jobfusion_jobs_cache_';
@@ -648,13 +661,24 @@ export default function JobsPage() {
 
 
   // 3. Build search params, update browser URL, and trigger fetch
-  const handleFilterChange = (page = currentPage) => {
+  // currentRelevanceMode is passed explicitly so callers can override the state
+  // (React state updates are asynchronous — the caller may have just changed it).
+  const handleFilterChange = (page = currentPage, currentRelevanceMode = relevanceMode) => {
     const params = new URLSearchParams();
 
     if (queryInput) params.set('q', queryInput);
     if (locationInput) params.set('location', locationInput);
     if (remoteOnly) params.set('remote', 'true');
-    if (sortBy) params.set('sortBy', sortBy);
+
+    // Forward the authenticated user's id so the server resolves their specific
+    // profile skills instead of falling back to a random profile.
+    if (user?._id) params.set('userId', user._id);
+
+    // Compute the effective sort mode.
+    // relevanceMode overrides whatever sortBy is set to — the server receives
+    // sortBy=relevance so it uses tier→score→date ordering.
+    const effectiveSortBy = currentRelevanceMode ? 'relevance' : sortBy;
+    params.set('sortBy', effectiveSortBy);
     if (order) params.set('order', order);
     
     // Company Careers tab always restricts to source=careers by default.
@@ -716,6 +740,11 @@ export default function JobsPage() {
   // 5. Trigger filter update immediately when checkbox / dropdown filters change
   useEffect(() => {
     if (!initialDataLoaded.current) return;
+    // Skip this firing if handleAISearch just set the state (it already fetched directly).
+    if (skipNextFilterEffect.current) {
+      skipNextFilterEffect.current = false;
+      return;
+    }
     setCurrentPage(1);
     handleFilterChange(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -737,9 +766,13 @@ export default function JobsPage() {
     }
   }, [currentPage]);
 
-  // AI Matching with Skills in Profile
+  // AI Matching with Skills in Profile — Decoupled from global crawling.
+  // Queries current PostgreSQL inventory directly, computes user relevance, and applies tier ranking.
   const handleAISearch = async () => {
-    if (!user || !profile) return;
+    if (!user || !profile) {
+      setSkillWarning(true);
+      return;
+    }
     
     const userSkills = profile.skills?.map(s => s.name.toLowerCase()) || [];
     if (userSkills.length === 0) {
@@ -749,67 +782,94 @@ export default function JobsPage() {
     
     setSkillWarning(false);
     setMatching(true);
-    
-    // Safety 8-second AbortController timeout
-    const controller = new AbortController();
-    const safetyTimeout = setTimeout(() => controller.abort(), 8000);
 
     try {
-      // Select the skills in UI to filter the feed immediately
-      setSelectedSkills(userSkills);
-      
-      const res = await fetch('/api/jobs/refresh', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keywords: userSkills }),
-        signal: controller.signal
-      });
-      
-      clearTimeout(safetyTimeout);
-      const data = await res.json();
-      
-      if (res.ok && data.success) {
-        if (usageStats && !usageStats.isPro) {
-          setUsageStats((prev: any) => ({
-            ...prev,
-            featureUsage: {
-              ...prev.featureUsage,
-              'match-my-skills': (prev.featureUsage?.['match-my-skills'] || 0) + 1
-            }
-          }));
-        }
+      // Build the relevance-mode query directly — do NOT rely on the effect chain
+      // because React state updates (setRelevanceMode, setSelectedSkills, setSortBy)
+      // are batched asynchronously and won't be visible until the next render.
+      // We construct the URL params here with the known desired values.
+      const params = new URLSearchParams();
+      if (queryInput) params.set('q', queryInput);
+      if (locationInput) params.set('location', locationInput);
+      if (remoteOnly) params.set('remote', 'true');
+      // Always forward the authenticated user's id for reliable skill resolution.
+      params.set('userId', user._id);
+      // Request relevance ordering: tier DESC → score DESC → date DESC.
+      params.set('sortBy', 'relevance');
+      params.set('order', 'desc');
+      const effectiveSources = selectedSources.length > 0 ? selectedSources : ['careers'];
+      params.set('source', effectiveSources.join(','));
+      // Also send skill names as a query-param fallback (belt-and-suspenders).
+      params.set('skills', userSkills.join(','));
+      if (datePosted) params.set('datePosted', datePosted);
+      params.set('page', '1');
 
-        if (data.addedJobs > 0) {
-          setToastMessage(`✅ Added ${data.addedJobs} new jobs. (Skipped ${data.skippedJobs} duplicates)`);
-          
-          if (data.newJobs && data.newJobs.length > 0) {
-            setJobs(prev => {
-              // Append new jobs avoiding existing dedupeHashes
-              const prevHashes = new Set(prev.map(j => j.dedupeHash));
-              const trulyNew = data.newJobs.filter((j: any) => !prevHashes.has(j.dedupeHash));
-              return [...trulyNew, ...prev];
-            });
-            setTotalJobsCount(prev => prev + data.addedJobs);
-          }
-        } else {
-          setToastMessage("Search complete. Displaying top matching roles.");
-        }
-      } else if (res.status === 403 && data.code === 'AI_LIMIT_REACHED') {
-         setMatching(false);
-         setShowUpgradeModal(true);
-         return;
-      } else {
-         setToastMessage("Unable to refresh jobs. Displaying top matching roles.");
+      const queryString = params.toString();
+
+      // Perform the fetch and WAIT for the response before updating any UI state.
+      const res = await fetch(`/api/jobs?${queryString}`);
+      const data = await res.json();
+
+      if (!data.success) {
+        console.warn('[Match My Skills] API returned error:', data.error);
+        setToastMessage('Matching failed. Please try again.');
+        setShowSuccessToast(true);
+        return;
       }
-      
+
+      const returnedJobs: DbJob[] = data.data || [];
+
+      if (process.env.NODE_ENV === 'development') {
+        console.group('[Match My Skills] Verification');
+        console.log('User skills used:', userSkills);
+        console.log('Jobs returned:', returnedJobs.length);
+        const scores = returnedJobs.map(j => j.matchScore ?? 0);
+        console.log('matchScore range:', scores.length > 0 ? `${Math.min(...scores)} – ${Math.max(...scores)}` : 'N/A');
+        console.log('Top 10 job titles + scores:',
+          returnedJobs.slice(0, 10).map(j => ({ title: j.title, company: j.company, score: j.matchScore }))
+        );
+        console.groupEnd();
+      }
+
+      if (returnedJobs.length === 0) {
+        setToastMessage('No matching jobs found for your skills. Try broadening your skills.');
+        setShowSuccessToast(true);
+        return;
+      }
+
+      // Now that we have a successful non-empty response, commit all state updates.
+      // Activate relevance mode: the sort dropdown will display "Sort: Relevance".
+      // Set skipNextFilterEffect BEFORE the state setters so the dep-array effect
+      // that fires due to setSortBy/setSelectedSkills does NOT cause a second fetch.
+      skipNextFilterEffect.current = true;
+      setRelevanceMode(true);
+      setSortBy('relevance');
+      setSelectedSkills(userSkills);
+      setCurrentPage(1);
+      setJobs(returnedJobs);
+      setTotalJobsCount(data.total || returnedJobs.length);
+      setTotalPages(data.totalPages || 1);
+
+      // Cache the relevance-mode response.
+      sessionStorage.setItem(
+        'jobfusion_jobs_cache_' + queryString,
+        JSON.stringify({
+          jobs: returnedJobs,
+          total: data.total || returnedJobs.length,
+          totalPages: data.totalPages || 1,
+          cachedAt: Date.now(),
+        })
+      );
+      sessionStorage.setItem('jobfusion_filter_query', queryString);
+      window.history.pushState(null, '', `?${queryString}`);
+
+      setToastMessage(`Matched ${returnedJobs.length} opportunities with your profile skills.`);
       setShowSuccessToast(true);
     } catch (error: any) {
-      clearTimeout(safetyTimeout);
-      console.warn("AI matching request finished or timed out:", error.message);
-      setToastMessage("Displaying top matching roles.");
+      console.warn('[Match My Skills] Network/parse error:', error.message);
+      setToastMessage('Matching failed. Please check your connection.');
       setShowSuccessToast(true);
     } finally {
-      clearTimeout(safetyTimeout);
       setMatching(false);
     }
   };
@@ -849,6 +909,8 @@ export default function JobsPage() {
     setLocationInput('');
     setSortBy('postedAt');
     setOrder('desc');
+    // Also exit relevance mode so the sort dropdown shows "Latest" again.
+    setRelevanceMode(false);
     
     sessionStorage.removeItem('jobfusion_filter_query');
     Object.keys(sessionStorage).forEach((key) => {
@@ -1295,20 +1357,39 @@ export default function JobsPage() {
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="sm" className="rounded-xl border-border h-9 font-medium gap-1 text-xs select-none hover:bg-accent touch-auto">
-                      Sort: {sortBy === 'postedAt' ? 'Latest' : 'Salary (Min)'}
+                      Sort: {relevanceMode ? 'Relevance' : sortBy === 'postedAt' ? 'Latest' : 'Salary (Min)'}
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-44 p-1.5 rounded-xl">
+                  <DropdownMenuContent align="end" className="w-48 p-1.5 rounded-xl">
                     <DropdownMenuCheckboxItem
-                      checked={sortBy === 'postedAt'}
-                      onCheckedChange={() => setSortBy('postedAt')}
+                      checked={!relevanceMode && sortBy === 'postedAt'}
+                      onCheckedChange={() => {
+                        // Clear relevance mode \u2014 return to pure chronological order.
+                        setRelevanceMode(false);
+                        setSortBy('postedAt');
+                      }}
                       className="rounded-lg text-xs cursor-pointer"
                     >
                       Latest Posted
                     </DropdownMenuCheckboxItem>
                     <DropdownMenuCheckboxItem
-                      checked={sortBy === 'salaryMin'}
-                      onCheckedChange={() => setSortBy('salaryMin')}
+                      checked={relevanceMode}
+                      onCheckedChange={() => {
+                        if (selectedSkills.length > 0 || (profile?.skills && profile.skills.length > 0)) {
+                          setRelevanceMode(true);
+                          setSortBy('relevance');
+                        }
+                      }}
+                      className="rounded-lg text-xs cursor-pointer"
+                    >
+                      Relevance
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem
+                      checked={!relevanceMode && sortBy === 'salaryMin'}
+                      onCheckedChange={() => {
+                        setRelevanceMode(false);
+                        setSortBy('salaryMin');
+                      }}
                       className="rounded-lg text-xs cursor-pointer"
                     >
                       Salary Range (Min)

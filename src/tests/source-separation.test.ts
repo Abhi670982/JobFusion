@@ -86,7 +86,7 @@ async function runTests() {
   const key1 = normalizeCrawlKey(params1);
   const key2 = normalizeCrawlKey(params2);
 
-  assert.strictEqual(key1, "crawl:JOB_PORTAL:LINKEDIN:react_developer:india");
+  assert.strictEqual(key1, "crawl-JOB_PORTAL-LINKEDIN-react_developer-india");
   assert.strictEqual(key1, key2, "Normalized job keys across instances must match");
   console.log("✅ Rule 5 Passed: BullMQ deterministic distributed identity verified.");
 

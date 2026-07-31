@@ -90,6 +90,10 @@ export const companies: CompanySource[] = [
   { id: "fastly", company: "Fastly", careersUrl: "https://www.fastly.com/careers", atsType: "greenhouse", slug: "fastly", country: "IN", enabled: true, priority: "P1", category: "CDN/Edge" },
   { id: "purestorage", company: "Pure Storage", careersUrl: "https://www.purestorage.com/company/careers.html", atsType: "greenhouse", slug: "purestorage", country: "IN", enabled: true, priority: "P1", category: "Data Hardware" },
   { id: "cribl", company: "Cribl", careersUrl: "https://cribl.io/careers/", atsType: "greenhouse", slug: "cribl", country: "IN", enabled: true, priority: "P1", category: "Data Engine" },
+  { id: "rubrik", company: "Rubrik", careersUrl: "https://www.rubrik.com/company/careers", atsType: "greenhouse", slug: "rubrik", country: "IN", enabled: true, priority: "P1", category: "Data Security" },
+  { id: "thoughtworks", company: "Thoughtworks", careersUrl: "https://www.thoughtworks.com/careers", atsType: "greenhouse", slug: "thoughtworks", country: "IN", enabled: true, priority: "P1", category: "Consulting/Tech" },
+  { id: "100ms", company: "100ms", careersUrl: "https://www.100ms.live/careers", atsType: "lever", slug: "100ms", country: "IN", enabled: true, priority: "P1", category: "Video/Dev Tools" },
+  { id: "zeta", company: "Zeta", careersUrl: "https://zetaglobal.com/careers/", atsType: "greenhouse", slug: "zetaglobal", country: "IN", enabled: true, priority: "P1", category: "Fintech/SaaS" },
 
   // P2 - Verified High-Growth AI & Next-Gen Database Infrastructure Employers
   { id: "clickhouse", company: "ClickHouse", careersUrl: "https://clickhouse.com/company/careers", atsType: "greenhouse", slug: "clickhouse", country: "IN", enabled: true, priority: "P2", category: "Databases" },
