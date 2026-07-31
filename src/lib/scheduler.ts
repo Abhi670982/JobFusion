@@ -1,198 +1,101 @@
-import { Queue, Worker } from "bullmq";
-import IORedis from "ioredis";
-import { runSourceSync } from "./pipeline";
-import { JobSource } from "./adapters/types";
+import { JobSourceCategory } from "@prisma/client";
+import { getCrawlQueue, enqueueCrawlJob } from "./queue";
 
-const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
+/**
+ * BullMQ Scheduler Configuration for Company Careers
+ * Cadence: Every 8 hours (3 times per day)
+ * Timezone/UTC behavior: BullMQ intervals and cron expressions evaluate in UTC system time.
+ * An interval of 8 hours (28,800,000 ms) executes reliably 3 times per 24-hour cycle UTC.
+ */
+export const CAREERS_SCHEDULER_ID = "careers-scheduled-crawl-scheduler";
+export const CAREERS_SCHEDULE_EVERY_MS = 8 * 60 * 60 * 1000; // 8 hours in ms
 
-let redisClient: IORedis | null = null;
-let isRedisConnected = false;
-
-// Initialize Redis and test connection
-export async function initRedis(): Promise<boolean> {
-  if (redisClient) return isRedisConnected;
-
-  return new Promise((resolve) => {
-    try {
-      console.log(`[Scheduler] Connecting to Redis at: ${REDIS_URL}`);
-      redisClient = new IORedis(REDIS_URL, {
-        maxRetriesPerRequest: 1,
-        connectTimeout: 3000,
-      });
-
-      redisClient.on("connect", () => {
-        console.log("✅ Redis connected successfully. Enabling BullMQ queues.");
-        isRedisConnected = true;
-        resolve(true);
-      });
-
-      redisClient.on("error", (err) => {
-        console.warn(`[Scheduler] Redis connection failed: ${err.message}. Using in-memory fallback scheduler.`);
-        isRedisConnected = false;
-        resolve(false);
-      });
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : "Redis connection error";
-      console.warn(`[Scheduler] Redis connection error: ${errorMessage}. Using in-memory fallback scheduler.`);
-      isRedisConnected = false;
-      resolve(false);
-    }
-  });
+export interface SchedulerRegisterResult {
+  registered: boolean;
+  schedulerId: string;
+  cadenceMs: number;
+  cadenceHours: number;
+  runsPerDay: number;
 }
 
-// Keep track of active intervals for in-memory scheduler
-const activeIntervals: NodeJS.Timeout[] = [];
+/**
+ * Registers/upserts the recurring Company Careers background acquisition job into BullMQ.
+ * Strictly idempotent: BullMQ's upsertJobScheduler API overwrites any existing scheduler
+ * identified by CAREERS_SCHEDULER_ID, preventing duplicate recurring schedules across worker restarts.
+ */
+export async function registerCareersScheduler(): Promise<SchedulerRegisterResult> {
+  const queue = getCrawlQueue();
+  
+  if (!queue) {
+    console.warn("[Scheduler] Redis unavailable. Recurring Company Careers schedule could not be registered in BullMQ.");
+    return {
+      registered: false,
+      schedulerId: CAREERS_SCHEDULER_ID,
+      cadenceMs: CAREERS_SCHEDULE_EVERY_MS,
+      cadenceHours: 8,
+      runsPerDay: 3,
+    };
+  }
 
-// Cleanup jobs older than 60 days
-export async function cleanupExpiredJobs() {
   try {
-    const { prisma } = await import("./prisma");
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - 60);
-
-    console.log(`[Scheduler] Cleaning up jobs posted before: ${cutoffDate.toISOString()}`);
-    
-    // Delete in PostgreSQL
-    const res = await prisma.job.deleteMany({
-      where: {
-        OR: [
-          { postedAtDate: { lt: cutoffDate } },
-          { createdAt: { lt: cutoffDate } }
-        ]
-      }
-    });
-    console.log(`[Scheduler] Expired job cleanup completed in Postgres. Deleted ${res.count} jobs.`);
-
-
-  } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : "Expired job cleanup failed";
-    console.error(`[Scheduler] Expired job cleanup failed:`, errorMessage);
-  }
-}
-
-// Start the Scheduler
-export async function startScheduler() {
-  const useRedis = await initRedis();
-
-  if (useRedis && redisClient) {
-    // ─── BullMQ Scheduler Mode ───────────────────────────────────────────────
-    console.log("[Scheduler] Initializing BullMQ queues and workers...");
-
-    const sources: JobSource[] = ["wellfound", "careers", "aggregator"];
-    
-    // Define Queue and Workers
-    for (const source of sources) {
-      const queueName = `${source}-fetch`;
-      const queue = new Queue(queueName, { connection: redisClient as any });
-
-      // Worker to process the job
-      const worker = new Worker(
-        queueName,
-        async () => {
-          console.log(`[Scheduler Worker] Processing queue job for: ${source}`);
-          await runSourceSync(source, []);
-        },
-        { connection: redisClient as any }
-      );
-
-      worker.on("completed", (job) => {
-        console.log(`[Scheduler Worker] Job ${job.id} completed for ${source}.`);
-      });
-
-      worker.on("failed", (job, err) => {
-        console.error(`[Scheduler Worker] Job ${job?.id} failed for ${source}:`, err.message);
-      });
-
-      // Repeatable job configuration
-      // Wellfound: every 4h ('0 */4 * * *')
-      // Careers: every 6h ('0 */6 * * *')
-      // Aggregator: every 4h ('0 */4 * * *')
-      let cronExpression = "0 */6 * * *"; // default
-      if (source === "wellfound") cronExpression = "0 */4 * * *";
-      else if (source === "careers") cronExpression = "0 */6 * * *";
-      else if (source === "aggregator") cronExpression = "0 */4 * * *";
-
-      // Add repeatable job to queue
-      await queue.add(
-        `fetch-repeat-${source}`,
-        {},
-        {
-          repeat: {
-            pattern: cronExpression,
-          },
-        }
-      );
-
-      console.log(`[Scheduler] Configured BullMQ cron for ${source}: ${cronExpression}`);
-    }
-
-    // Cron queue for cleanup
-    const cleanupQueue = new Queue("cleanup-expired-jobs", { connection: redisClient as any });
-    new Worker(
-      "cleanup-expired-jobs",
-      async () => {
-        await cleanupExpiredJobs();
+    await queue.upsertJobScheduler(
+      CAREERS_SCHEDULER_ID,
+      {
+        every: CAREERS_SCHEDULE_EVERY_MS,
       },
-      { connection: redisClient as any }
+      {
+        name: "scheduled-careers-crawl",
+        data: {
+          category: JobSourceCategory.COMPANY_CAREER,
+          provider: "CAREERS",
+          keyword: "software engineer",
+          location: "India",
+        },
+        opts: {
+          attempts: 3,
+          backoff: {
+            type: "exponential",
+            delay: 3000,
+          },
+          removeOnComplete: { age: 900 }, // 15 mins retention
+          removeOnFail: { age: 3600 },
+        },
+      }
     );
-    await cleanupQueue.add("cleanup-repeat", {}, { repeat: { pattern: "0 0 * * *" } }); // daily at midnight
-  } else {
-    // ─── In-Memory Fallback Mode ─────────────────────────────────────────────
-    // Only run in development. In production, GitHub Actions is the cron source.
-    // Running setInterval in production alongside GitHub Actions would cause
-    // double crawls, double MongoDB writes, and doubled Puppeteer instances.
-    if (process.env.NODE_ENV === "production") {
-      console.log(
-        "[Scheduler] Production environment detected without Redis. " +
-        "Skipping in-memory fallback scheduler. " +
-        "GitHub Actions (.github/workflows/crawl-jobs.yml) is the cron source."
-      );
-      return;
-    }
 
-    console.log("[Scheduler] Starting in-memory fallback interval scheduler (dev only).");
+    console.log(
+      `[Scheduler] Idempotently registered recurring Company Careers acquisition scheduler: "${CAREERS_SCHEDULER_ID}" (Cadence: Every 8h / 3x daily UTC).`
+    );
 
-    // Define intervals (cadence) in milliseconds
-    const intervals = {
-      wellfound: 4 * 60 * 60 * 1000,    // 4 hours
-      aggregator: 4 * 60 * 60 * 1000,   // 4 hours
-      cleanup: 24 * 60 * 60 * 1000      // 24 hours
+    return {
+      registered: true,
+      schedulerId: CAREERS_SCHEDULER_ID,
+      cadenceMs: CAREERS_SCHEDULE_EVERY_MS,
+      cadenceHours: 8,
+      runsPerDay: 3,
     };
-
-    // Helper to setup repeatable interval
-    const setupInterval = (name: string, fn: () => Promise<any>, time: number) => {
-      // Trigger once immediately
-      fn().catch((e) => console.error(`[Scheduler Fallback] Initial run failed for ${name}:`, e.message));
-
-      const intervalId = setInterval(async () => {
-        console.log(`[Scheduler Fallback] Sync triggered for: ${name}`);
-        await fn();
-      }, time);
-
-      activeIntervals.push(intervalId);
+  } catch (err: any) {
+    console.error(`[Scheduler Error] Failed to register careers scheduler: ${err.message}`);
+    return {
+      registered: false,
+      schedulerId: CAREERS_SCHEDULER_ID,
+      cadenceMs: CAREERS_SCHEDULE_EVERY_MS,
+      cadenceHours: 8,
+      runsPerDay: 3,
     };
-
-    setupInterval("wellfound", () => runSourceSync("wellfound", []), intervals.wellfound);
-    // Careers scraper — offset by 15 mins, then every 6h
-    setTimeout(() => {
-      setupInterval("careers", () => runSourceSync("careers", []), 6 * 60 * 60 * 1000);
-    }, 15 * 60 * 1000);
-    // Aggregator scraper — offset by 45 mins, then every 4h
-    setTimeout(() => {
-      setupInterval("aggregator", () => runSourceSync("aggregator", []), intervals.aggregator);
-    }, 45 * 60 * 1000);
-    setupInterval("cleanup", cleanupExpiredJobs, intervals.cleanup);
   }
 }
 
-// Stop all scheduled tasks
-export function stopScheduler() {
-  console.log("[Scheduler] Shutting down all scheduler intervals...");
-  activeIntervals.forEach((intervalId) => clearInterval(intervalId));
-  activeIntervals.length = 0;
-  if (redisClient) {
-    redisClient.quit();
-    redisClient = null;
-  }
-  isRedisConnected = false;
+/**
+ * Helper to safely trigger ONE scheduled-equivalent Company Careers crawl manually
+ * for local testing/verification without waiting 8 hours.
+ */
+export async function triggerManualScheduledCrawl(): Promise<{ enqueued: boolean; jobId: string }> {
+  console.log("[Scheduler] Manually triggering one scheduled-equivalent Company Careers crawl...");
+  return enqueueCrawlJob({
+    category: JobSourceCategory.COMPANY_CAREER,
+    provider: "CAREERS",
+    keyword: "software engineer",
+    location: "India",
+  });
 }

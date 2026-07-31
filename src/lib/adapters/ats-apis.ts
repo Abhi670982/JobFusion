@@ -1,3 +1,11 @@
+import { AdapterRegistry } from "./AdapterRegistry";
+import "./index"; // Ensures self-registration of all adapters
+import { GreenhouseAdapter } from "./GreenhouseAdapter";
+import { LeverAdapter } from "./LeverAdapter";
+import { AshbyAdapter } from "./AshbyAdapter";
+import { SmartRecruitersAdapter } from "./SmartRecruitersAdapter";
+import { RecruiteeAdapter } from "./RecruiteeAdapter";
+
 export interface ParsedLocation {
   rawLocation: string;
   countryCode: "IN" | "OTHER";
@@ -21,7 +29,7 @@ export function parseIndiaLocation(rawLocation: string, atsCountryObj?: string):
   const loc = (rawLocation || "").trim();
   const locLower = loc.toLowerCase();
 
-  // 1. Prefer structured ATS country code if present
+  // 1. Structured country code check
   if (atsCountryObj) {
     const cLower = String(atsCountryObj).toLowerCase().trim();
     if (cLower === "in" || cLower === "ind" || cLower.includes("india")) {
@@ -30,7 +38,7 @@ export function parseIndiaLocation(rawLocation: string, atsCountryObj?: string):
         countryCode: "IN",
         city: extractCity(locLower),
         remoteEligible: isRemote(locLower),
-        locationConfidence: "high"
+        locationConfidence: "high",
       };
     }
   }
@@ -50,7 +58,7 @@ export function parseIndiaLocation(rawLocation: string, atsCountryObj?: string):
       countryCode: "IN",
       city: extractCity(locLower),
       remoteEligible,
-      locationConfidence: "high"
+      locationConfidence: "high",
     };
   }
 
@@ -60,7 +68,7 @@ export function parseIndiaLocation(rawLocation: string, atsCountryObj?: string):
       countryCode: "IN",
       city: "Remote",
       remoteEligible: true,
-      locationConfidence: "medium"
+      locationConfidence: "medium",
     };
   }
 
@@ -69,7 +77,7 @@ export function parseIndiaLocation(rawLocation: string, atsCountryObj?: string):
     countryCode: "OTHER",
     city: null,
     remoteEligible,
-    locationConfidence: "low"
+    locationConfidence: "low",
   };
 }
 
@@ -89,167 +97,82 @@ function isRemote(locLower: string): boolean {
   return locLower.includes("remote") || locLower.includes("anywhere") || locLower.includes("work from home");
 }
 
-// Fetch jobs from Greenhouse public JSON API with detailed posting payload
+// Legacy wrapper functions delegating to modern BaseAdapter architecture via AdapterRegistry
+
 export async function fetchGreenhouseJobs(slug: string): Promise<RawATSJob[]> {
-  const url = `https://boards-api.greenhouse.io/v1/boards/${slug}/jobs?content=true`;
-  const res = await fetch(url, { 
-    headers: { "Accept": "application/json", "User-Agent": "JobFusion-CrawlEngine/1.0" },
-    signal: AbortSignal.timeout(5000)
-  });
-  if (!res.ok) throw new Error(`Greenhouse API responded with HTTP ${res.status}`);
-  const data = await res.json();
-  if (!data || !Array.isArray(data.jobs)) return [];
-  
-  const results: RawATSJob[] = [];
-  for (const job of data.jobs) {
-    const rawLoc = job.location?.name || "Remote";
-    const parsedLoc = parseIndiaLocation(rawLoc);
-    if (parsedLoc.countryCode !== "IN") continue; // Strict India Filter
-
-    results.push({
-      sourceJobId: job.id ? String(job.id) : undefined,
-      title: job.title,
-      location: rawLoc,
-      parsedLocation: parsedLoc,
-      url: job.absolute_url,
-      postedAt: job.updated_at ? new Date(job.updated_at).toISOString() : undefined,
-      dateConfidence: job.updated_at ? "estimated" : "unknown",
-    });
-  }
-  return results;
+  const adapter = AdapterRegistry.getAdapter<GreenhouseAdapter>("greenhouse");
+  if (!adapter) throw new Error("Greenhouse adapter is not registered");
+  const normalized = await adapter.fetchJobs({ slug, companyName: slug });
+  return normalized.map(job => ({
+    sourceJobId: job.metadata?.sourceJobId || job.id,
+    title: job.title,
+    location: job.location.rawLocation || job.location.city || "Remote",
+    parsedLocation: parseIndiaLocation(job.location.rawLocation || ""),
+    url: job.applyUrl,
+    postedAt: job.postedAt ? job.postedAt.toISOString() : undefined,
+    dateConfidence: job.metadata?.dateConfidence || "unknown",
+  }));
 }
 
-// Fetch jobs from Lever public JSON API
 export async function fetchLeverJobs(slug: string): Promise<RawATSJob[]> {
-  const url = `https://api.lever.co/v0/postings/${slug}?mode=json`;
-  const res = await fetch(url, { 
-    headers: { "Accept": "application/json", "User-Agent": "JobFusion-CrawlEngine/1.0" },
-    signal: AbortSignal.timeout(5000)
-  });
-  if (!res.ok) throw new Error(`Lever API responded with HTTP ${res.status}`);
-  const data = await res.json();
-  if (!data || !Array.isArray(data)) return [];
-  
-  const results: RawATSJob[] = [];
-  for (const job of data) {
-    const rawLoc = job.categories?.location || "Remote";
-    const parsedLoc = parseIndiaLocation(rawLoc);
-    if (parsedLoc.countryCode !== "IN") continue;
-
-    results.push({
-      sourceJobId: job.id ? String(job.id) : undefined,
-      title: job.text,
-      location: rawLoc,
-      parsedLocation: parsedLoc,
-      url: job.hostedUrl,
-      postedAt: job.createdAt ? new Date(job.createdAt).toISOString() : undefined,
-      dateConfidence: job.createdAt ? "exact" : "unknown",
-    });
-  }
-  return results;
+  const adapter = AdapterRegistry.getAdapter<LeverAdapter>("lever");
+  if (!adapter) throw new Error("Lever adapter is not registered");
+  const normalized = await adapter.fetchJobs({ slug, companyName: slug });
+  return normalized.map(job => ({
+    sourceJobId: job.metadata?.sourceJobId || job.id,
+    title: job.title,
+    location: job.location.rawLocation || job.location.city || "Remote",
+    parsedLocation: parseIndiaLocation(job.location.rawLocation || ""),
+    url: job.applyUrl,
+    postedAt: job.postedAt ? job.postedAt.toISOString() : undefined,
+    dateConfidence: job.metadata?.dateConfidence || "unknown",
+  }));
 }
 
-// Fetch jobs from Ashby public JSON API
 export async function fetchAshbyJobs(slug: string): Promise<RawATSJob[]> {
-  const url = `https://api.ashbyhq.com/posting-api/job-board/${slug}`;
-  const res = await fetch(url, { 
-    headers: { "Accept": "application/json", "User-Agent": "JobFusion-CrawlEngine/1.0" },
-    signal: AbortSignal.timeout(5000)
-  });
-  if (!res.ok) throw new Error(`Ashby API responded with HTTP ${res.status}`);
-  const data = await res.json();
-  if (!data || !Array.isArray(data.jobs)) return [];
-  
-  const results: RawATSJob[] = [];
-  for (const job of data.jobs) {
-    const rawLoc = job.location || "Remote";
-    const parsedLoc = parseIndiaLocation(rawLoc);
-    if (parsedLoc.countryCode !== "IN") continue;
-
-    results.push({
-      sourceJobId: job.id ? String(job.id) : undefined,
-      title: job.title,
-      location: rawLoc,
-      parsedLocation: parsedLoc,
-      url: job.jobUrl || job.applyUrl,
-      postedAt: job.publishedAt ? new Date(job.publishedAt).toISOString() : undefined,
-      dateConfidence: job.publishedAt ? "exact" : "unknown",
-      jobType: job.employmentType,
-    });
-  }
-  return results;
+  const adapter = AdapterRegistry.getAdapter<AshbyAdapter>("ashby");
+  if (!adapter) throw new Error("Ashby adapter is not registered");
+  const normalized = await adapter.fetchJobs({ slug, companyName: slug });
+  return normalized.map(job => ({
+    sourceJobId: job.metadata?.sourceJobId || job.id,
+    title: job.title,
+    location: job.location.rawLocation || job.location.city || "Remote",
+    parsedLocation: parseIndiaLocation(job.location.rawLocation || ""),
+    url: job.applyUrl,
+    postedAt: job.postedAt ? job.postedAt.toISOString() : undefined,
+    dateConfidence: job.metadata?.dateConfidence || "unknown",
+    jobType: job.employmentType,
+  }));
 }
 
-// Fetch jobs from SmartRecruiters public JSON API with pagination support
 export async function fetchSmartRecruitersJobs(slug: string): Promise<RawATSJob[]> {
-  const results: RawATSJob[] = [];
-  let offset = 0;
-  const limit = 100;
-
-  while (offset < 500) {
-    const url = `https://api.smartrecruiters.com/v1/companies/${slug}/postings?limit=${limit}&offset=${offset}`;
-    const res = await fetch(url, { 
-      headers: { "Accept": "application/json", "User-Agent": "JobFusion-CrawlEngine/1.0" },
-      signal: AbortSignal.timeout(5000)
-    });
-    if (!res.ok) {
-      if (offset > 0) break;
-      throw new Error(`SmartRecruiters API responded with HTTP ${res.status}`);
-    }
-    const data = await res.json();
-    if (!data || !Array.isArray(data.content) || data.content.length === 0) break;
-    
-    for (const job of data.content) {
-      const rawLoc = job.location?.fullLocation || job.location?.city || "Remote";
-      const parsedLoc = parseIndiaLocation(rawLoc, job.location?.country);
-      if (parsedLoc.countryCode !== "IN") continue;
-
-      results.push({
-        sourceJobId: job.id ? String(job.id) : undefined,
-        title: job.name,
-        location: rawLoc,
-        parsedLocation: parsedLoc,
-        url: `https://jobs.smartrecruiters.com/${slug}/${job.id}`,
-        postedAt: job.releasedDate ? new Date(job.releasedDate).toISOString() : undefined,
-        dateConfidence: job.releasedDate ? "exact" : "unknown",
-        jobType: job.typeOfEmployment?.label,
-      });
-    }
-
-    if (data.content.length < limit) break;
-    offset += limit;
-  }
-
-  return results;
+  const adapter = AdapterRegistry.getAdapter<SmartRecruitersAdapter>("smartrecruiters");
+  if (!adapter) throw new Error("SmartRecruiters adapter is not registered");
+  const normalized = await adapter.fetchJobs({ slug, companyName: slug });
+  return normalized.map(job => ({
+    sourceJobId: job.metadata?.sourceJobId || job.id,
+    title: job.title,
+    location: job.location.rawLocation || job.location.city || "Remote",
+    parsedLocation: parseIndiaLocation(job.location.rawLocation || ""),
+    url: job.applyUrl,
+    postedAt: job.postedAt ? job.postedAt.toISOString() : undefined,
+    dateConfidence: job.metadata?.dateConfidence || "unknown",
+    jobType: job.employmentType,
+  }));
 }
 
-// Fetch jobs from Recruitee public JSON API
 export async function fetchRecruiteeJobs(slug: string): Promise<RawATSJob[]> {
-  const url = `https://${slug}.recruitee.com/api/offers`;
-  const res = await fetch(url, { 
-    headers: { "Accept": "application/json", "User-Agent": "JobFusion-CrawlEngine/1.0" },
-    signal: AbortSignal.timeout(5000)
-  });
-  if (!res.ok) throw new Error(`Recruitee API responded with HTTP ${res.status}`);
-  const data = await res.json();
-  if (!data || !Array.isArray(data.offers)) return [];
-  
-  const results: RawATSJob[] = [];
-  for (const job of data.offers) {
-    const rawLoc = job.location || job.city || "Remote";
-    const parsedLoc = parseIndiaLocation(rawLoc, job.country_code);
-    if (parsedLoc.countryCode !== "IN") continue;
-
-    results.push({
-      sourceJobId: job.id ? String(job.id) : undefined,
-      title: job.title,
-      location: rawLoc,
-      parsedLocation: parsedLoc,
-      url: job.careers_url || job.careers_apply_url || `https://${slug}.recruitee.com`,
-      postedAt: job.published_at || job.created_at ? new Date(job.published_at || job.created_at).toISOString() : undefined,
-      dateConfidence: (job.published_at || job.created_at) ? "exact" : "unknown",
-      jobType: job.employment_type_code,
-    });
-  }
-  return results;
+  const adapter = AdapterRegistry.getAdapter<RecruiteeAdapter>("recruitee");
+  if (!adapter) throw new Error("Recruitee adapter is not registered");
+  const normalized = await adapter.fetchJobs({ slug, companyName: slug });
+  return normalized.map(job => ({
+    sourceJobId: job.metadata?.sourceJobId || job.id,
+    title: job.title,
+    location: job.location.rawLocation || job.location.city || "Remote",
+    parsedLocation: parseIndiaLocation(job.location.rawLocation || ""),
+    url: job.applyUrl,
+    postedAt: job.postedAt ? job.postedAt.toISOString() : undefined,
+    dateConfidence: job.metadata?.dateConfidence || "unknown",
+    jobType: job.employmentType,
+  }));
 }

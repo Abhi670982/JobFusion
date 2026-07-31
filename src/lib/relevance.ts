@@ -1,32 +1,82 @@
 /**
  * Mathematically Normalized Relevance Scoring & Skill Matching Engine
  * Precision-engineered to eliminate false positives, build bidirectional alias resolution,
- * and discriminate score strength cleanly across multi-skill vs single-skill roles.
+ * discriminate Core vs Supporting skills, enforce title safety, and assign quality tiers.
  */
 
 export interface RelevanceInput {
   title?: string | null;
+  company?: string | null;
   skills?: string[] | null;
   description?: string | null;
   requirements?: string[] | null;
 }
 
+export type RelevanceTier = "HIGH" | "MODERATE" | "LOW" | "NONE";
+
 export interface DetailedMatchResult {
   score: number;
+  tier: RelevanceTier;
   matchedSkills: Array<{
     skill: string;
     location: "TITLE" | "EXPLICIT_SKILLS" | "DESCRIPTION";
+    isCore: boolean;
   }>;
+  eligibilityReason: string;
 }
 
-// Canonical Skill Groups
+/**
+ * Core Technical Skills (Primary Languages, Core Frameworks, Runtimes)
+ */
+export const CORE_SKILLS = new Set([
+  "js", "javascript", "ecmascript",
+  "ts", "typescript",
+  "python", "py",
+  "java",
+  "c++", "cpp",
+  "c#", "csharp",
+  "c",
+  "go", "golang",
+  "rust",
+  "ruby", "rails",
+  "php",
+  "swift",
+  "kotlin",
+  "scala",
+  "react", "reactjs", "react.js", "react native",
+  "angular", "angularjs",
+  "vue", "vuejs", "vue.js",
+  "node", "nodejs", "node.js",
+  "next", "nextjs", "next.js",
+  "express", "expressjs", "express.js",
+  "spring", "spring boot",
+  "django",
+  "flask",
+  "fastapi",
+  ".net", "dotnet",
+  "flutter"
+]);
+
+/**
+ * Supporting Skills & Tools (SCM, Styling, Markup, Databases, Cloud, Utility)
+ */
+export const SUPPORTING_SKILLS = new Set([
+  "git", "github", "gitlab", "jira", "confluence", "bitbucket",
+  "tailwind", "tailwindcss", "tailwind css", "bootstrap", "html", "html5", "css", "css3", "sass", "less",
+  "mysql", "postgresql", "postgres", "mongodb", "mongo", "sqlite", "redis",
+  "docker", "kubernetes", "k8s", "aws", "amazon web services", "azure", "gcp",
+  "ci/cd", "cicd", "jenkins", "circleci",
+  "rest api", "rest apis", "restful", "graphql", "json", "webpack", "vite", "prisma", "redux"
+]);
+
+// Canonical Skill Groups (refined to prevent improper alias collisions like git <-> gitlab)
 const SKILL_GROUPS: string[][] = [
   ["js", "javascript", "ecmascript"],
   ["ts", "typescript"],
-  ["react", "reactjs", "react.js", "react native"],
+  ["react", "reactjs", "react.js"],
   ["next", "nextjs", "next.js"],
   ["node", "nodejs", "node.js"],
-  ["express.js", "expressjs", "express js"],
+  ["express.js", "expressjs", "express js", "express"],
   ["mongo", "mongodb"],
   ["c++", "cpp"],
   ["c#", "csharp"],
@@ -45,7 +95,9 @@ const SKILL_GROUPS: string[][] = [
   ["rest api", "rest apis", "restful"],
   ["system design"],
   ["ci/cd", "cicd", "continuous integration"],
-  ["git", "github", "gitlab"],
+  ["git"],
+  ["github"],
+  ["gitlab"],
 ];
 
 // Build bidirectional alias lookup map
@@ -70,12 +122,31 @@ function escapeRegex(str: string): string {
 }
 
 /**
+ * Checks whether a normalized skill is classified as a CORE technical skill.
+ */
+export function isCoreSkill(skill: string): boolean {
+  const sLower = skill.toLowerCase().trim();
+  const aliases = ALIAS_LOOKUP.get(sLower) || [sLower];
+  return aliases.some(a => CORE_SKILLS.has(a));
+}
+
+/**
  * Precision boundary-aware technical match check
  */
-export function isTermInText(term: string, text: string): boolean {
+export function isTermInText(term: string, text: string, rawTitleText: string = "", rawDescText: string = ""): boolean {
   if (!term || !text) return false;
   const normTerm = term.toLowerCase().trim();
   const normText = text.toLowerCase();
+
+  // Special handling for REACT to prevent false matches against organizational acronyms (e.g., Incident Response Analyst - REACT)
+  if (normTerm === "react" || normTerm === "reactjs" || normTerm === "react.js") {
+    // Check if REACT is an all-caps acronym in title/text without frontend context
+    const hasAllCapsAcronymInTitle = /\bREACT\b/.test(rawTitleText);
+    const hasFrontendContext = /\b(javascript|typescript|frontend|front-end|ui|web|component|jsx|tsx|redux|next\.js|node|npm)\b/i.test(rawDescText || text);
+    if (hasAllCapsAcronymInTitle && !hasFrontendContext) {
+      return false;
+    }
+  }
 
   // Special handling for Express.js to eliminate false positives ("Express Your Interest", "Expression")
   if (normTerm === "express.js" || normTerm === "expressjs" || normTerm === "express js" || normTerm === "express") {
@@ -124,69 +195,109 @@ export function calculateRelevanceScore(input: RelevanceInput, userSkills: strin
 }
 
 /**
- * Detailed relevance calculation returning score and evidence locations
+ * Assigns a RelevanceTier based on userMatchScore
+ */
+export function getRelevanceTier(score: number): RelevanceTier {
+  if (score >= 70) return "HIGH";
+  if (score >= 35) return "MODERATE";
+  if (score > 0) return "LOW";
+  return "NONE";
+}
+
+import { normalizeSkillsList } from "./skills-normalizer";
+
+/**
+ * Detailed relevance calculation returning score, tier, and evidence locations
  */
 export function calculateDetailedRelevance(input: RelevanceInput, userSkills: string[]): DetailedMatchResult {
   if (!userSkills || userSkills.length === 0) {
-    return { score: 0, matchedSkills: [] };
+    return { score: 0, tier: "NONE", matchedSkills: [], eligibilityReason: "No user skills provided" };
   }
 
+  const normalizedUserSkills = normalizeSkillsList(userSkills);
   const titleText = (input.title || "").toLowerCase();
-  const explicitSkills = (input.skills || []).map(s => s.toLowerCase());
-  const descText = ((input.description || "") + " " + (input.requirements || []).join(" ")).toLowerCase();
+  const companyText = (input.company || "").toLowerCase();
+  const descRaw = (input.description || "") + " " + (input.requirements || []).join(" ");
+  const descText = descRaw.toLowerCase();
 
-  const matchedSkills: Array<{ skill: string; location: "TITLE" | "EXPLICIT_SKILLS" | "DESCRIPTION" }> = [];
+  // Strip company name from explicit skills tags to prevent company-name skill leakage (e.g. GitLab -> git)
+  const explicitSkills = (input.skills || [])
+    .map(s => s.toLowerCase().trim())
+    .filter(s => {
+      if (companyText && (s === companyText || (companyText.includes(s) && (s === "gitlab" || s === "docker" || s === "postman")))) {
+        return false; // Exclude company name leakage tags
+      }
+      return true;
+    });
+
+  const matchedSkills: Array<{ skill: string; location: "TITLE" | "EXPLICIT_SKILLS" | "DESCRIPTION"; isCore: boolean }> = [];
   const matchedTechSet = new Set<string>();
 
   let titleTechMatches = 0;
   let explicitTechMatches = 0;
   let descTechMatches = 0;
+  let matchedCoreTechCount = 0;
 
-  for (const rawSkill of userSkills) {
+  for (const rawSkill of normalizedUserSkills) {
     const normSkill = rawSkill.toLowerCase().trim();
-    if (!normSkill || GENERIC_SOFT_SKILLS.has(normSkill)) continue; // Skip generic soft skills for technical scoring
+    if (!normSkill || GENERIC_SOFT_SKILLS.has(normSkill)) continue;
 
+    const isCore = isCoreSkill(normSkill);
     let matchedInThisSkill = false;
 
     // 1. Check Title Match
-    if (isTermInText(normSkill, titleText)) {
+    if (isTermInText(normSkill, titleText, input.title || "", descRaw)) {
       titleTechMatches++;
       matchedTechSet.add(normSkill);
-      matchedSkills.push({ skill: rawSkill, location: "TITLE" });
+      if (isCore) matchedCoreTechCount++;
+      matchedSkills.push({ skill: rawSkill, location: "TITLE", isCore });
       matchedInThisSkill = true;
     }
 
     // 2. Check Explicit Skills Array
     const aliases = ALIAS_LOOKUP.get(normSkill) || [normSkill];
-    const inExplicit = explicitSkills.some(tag => aliases.some(a => isTermInText(a, tag)));
+    const inExplicit = explicitSkills.some(tag => aliases.some(a => isTermInText(a, tag, input.title || "", descRaw)));
     if (inExplicit) {
       explicitTechMatches++;
       matchedTechSet.add(normSkill);
-      matchedSkills.push({ skill: rawSkill, location: "EXPLICIT_SKILLS" });
+      if (!matchedInThisSkill && isCore) matchedCoreTechCount++;
+      matchedSkills.push({ skill: rawSkill, location: "EXPLICIT_SKILLS", isCore });
       matchedInThisSkill = true;
     }
 
-    // 3. Check Description if not matched in Title/Explicit or for additional evidence
-    if (!matchedInThisSkill && isTermInText(normSkill, descText)) {
+    // 3. Check Description if not matched in Title/Explicit
+    if (!matchedInThisSkill && isTermInText(normSkill, descText, input.title || "", descRaw)) {
       descTechMatches++;
       matchedTechSet.add(normSkill);
-      matchedSkills.push({ skill: rawSkill, location: "DESCRIPTION" });
+      if (isCore) matchedCoreTechCount++;
+      matchedSkills.push({ skill: rawSkill, location: "DESCRIPTION", isCore });
     }
   }
 
-  // Broad Tech Title check (e.g., Software Engineer, Full Stack, Frontend, Backend)
-  const isBroadTechTitle = /\b(software engineer|full stack|frontend|backend|web developer|systems engineer|devops engineer|data engineer|mobile developer)\b/i.test(titleText);
+  // Technical Role Title check (e.g., Software Engineer, Full Stack, Frontend, Backend, Web Developer)
+  const isTechnicalTitle = /\b(software engineer|software developer|fullstack|full-stack|full stack|frontend|front-end|backend|back-end|web developer|systems engineer|devops engineer|data engineer|mobile developer|platform engineer|sre|site reliability engineer)\b/i.test(titleText);
 
-  // If no core technical skills matched at all, score is 0
-  if (matchedTechSet.size === 0) {
-    return { score: 0, matchedSkills: [] };
+  // STEP 1 ELIGIBILITY RULE:
+  // Must have at least ONE CORE technical skill match OR (technical title AND at least 1 skill match).
+  // Roles matching ONLY supporting skills (e.g. Git, Jira) without a core skill or technical title fail eligibility.
+  const isEligible = matchedCoreTechCount > 0 || (isTechnicalTitle && matchedTechSet.size > 0);
+
+  if (!isEligible || matchedTechSet.size === 0) {
+    return {
+      score: 0,
+      tier: "NONE",
+      matchedSkills: [],
+      eligibilityReason: matchedTechSet.size === 0
+        ? "No matching skills"
+        : "Failed Step 1 Eligibility: Matched only supporting skills without core tech or technical title",
+    };
   }
 
   let rawScore = 0;
 
   if (titleTechMatches > 0) {
     rawScore += 35 + (titleTechMatches - 1) * 15;
-  } else if (isBroadTechTitle) {
+  } else if (isTechnicalTitle) {
     rawScore += 20;
   }
 
@@ -200,9 +311,12 @@ export function calculateDetailedRelevance(input: RelevanceInput, userSkills: st
   }
 
   const finalScore = Math.min(100, Math.max(0, Math.round(rawScore)));
+  const tier = getRelevanceTier(finalScore);
 
   return {
     score: finalScore,
-    matchedSkills
+    tier,
+    matchedSkills,
+    eligibilityReason: `Eligible: ${matchedCoreTechCount} core skills matched, isTechTitle=${isTechnicalTitle}`,
   };
 }

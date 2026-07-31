@@ -8,6 +8,7 @@ import { AggregatorAdapter } from "./adapters/aggregator";
 import { extractSkillsFromDB } from "./skills";
 import { calculateRelevanceScore } from "./relevance";
 import { BROAD_TECH_ROLE_TITLES, extractNormalizedSkills } from "./skills-extractor";
+import { calculateCandidateSuitability } from "./candidate-suitability";
 
 
 // Helper to clean HTML from descriptions
@@ -64,8 +65,17 @@ const TEN_DAYS_MS = 10 * 24 * 60 * 60 * 1000;
  */
 export async function queryCareersJobs(params: {
   userSkills?: string[];
+  userExperienceYears?: number;
   page?: number;
   limit?: number;
+  /**
+   * 'latest'    → pure postedAtDate DESC (null dates last), no tier influence.
+   *               Used when the user has Sort: Latest selected.
+   * 'relevance' → Candidate suitability DESC → postedAtDate DESC → matchScore DESC → id DESC.
+   *               Used when the user has Sort: Relevance selected (Match My Skills).
+   * Defaults to 'latest' to be safe — callers must explicitly opt into 'relevance'.
+   */
+  sortMode?: 'latest' | 'relevance';
 }): Promise<{
   jobs: any[];
   totalFound: number;
@@ -79,6 +89,8 @@ export async function queryCareersJobs(params: {
   const userSkills = params.userSkills || [];
   const page = Math.max(1, params.page || 1);
   const limit = Math.min(Math.max(1, params.limit || DEFAULT_RESULT_TARGET), MAX_RESULT_TARGET);
+  // Default to 'latest' — callers must explicitly pass 'relevance' to get tier ordering.
+  const sortMode = params.sortMode ?? 'latest';
 
   const CUTOFF_168H_MS = 168 * 60 * 60 * 1000;
   const cutoff168h = new Date(Date.now() - CUTOFF_168H_MS);
@@ -89,6 +101,8 @@ export async function queryCareersJobs(params: {
     ? extractNormalizedSkills(userSkills.join(" "))
     : [];
 
+  // For 'latest' mode we fetch ALL active careers jobs and sort purely by date.
+  // For 'relevance' mode we pre-filter to skill-matching candidates, then tier-sort.
   const candidateJobs = await prisma.job.findMany({
     where: {
       source: "careers",
@@ -97,7 +111,8 @@ export async function queryCareersJobs(params: {
         gte: cutoff168h,
         lte: clockSkewTolerance,
       },
-      ...(normalizedUserSkills.length > 0
+      // Only apply skill pre-filtering for relevance mode — latest shows everything.
+      ...(sortMode === 'relevance' && normalizedUserSkills.length > 0
         ? {
             OR: [
               { skills: { hasSome: normalizedUserSkills } },
@@ -108,40 +123,96 @@ export async function queryCareersJobs(params: {
           }
         : {}),
     },
+    // DB-level order: newest first (for latest mode this is the final order;
+    // for relevance mode we re-sort in memory after scoring).
     orderBy: [{ postedAtDate: "desc" }, { id: "desc" }],
   });
 
-  // Calculate dynamic user-specific relevance score
+  // Calculate dynamic user-specific suitability score
   const scoredCandidates = candidateJobs.map((job) => {
-    const score = normalizedUserSkills.length > 0
-      ? calculateRelevanceScore(
-          {
-            title: job.title,
-            skills: job.skills,
-            description: job.description,
-            requirements: job.requirements,
-          },
-          normalizedUserSkills
-        )
-      : 100;
+    const suitability = calculateCandidateSuitability(
+      {
+        title: job.title,
+        company: job.company,
+        skills: job.skills,
+        description: job.description,
+        requirements: job.requirements,
+        postedAtDate: job.postedAtDate,
+      },
+      {
+        userSkills: normalizedUserSkills,
+        userExperienceYears: params.userExperienceYears,
+      }
+    );
 
     return {
       ...job,
-      userMatchScore: score,
+      userMatchScore: suitability.baseRelevanceScore,
+      suitabilityScore: suitability.suitabilityScore,
+      rankingMetadata: suitability.metadata,
     };
   });
 
+  // --------------------------------------------------------------------------
+  // Sort Mode: 'latest'
+  // Pure chronological descending — no tier, no score influence.
+  // Jobs with null/invalid postedAtDate sort to the bottom.
+  // --------------------------------------------------------------------------
+  if (sortMode === 'latest') {
+    const withDate = scoredCandidates.filter((j) => j.postedAtDate != null);
+    const withoutDate = scoredCandidates.filter((j) => j.postedAtDate == null);
+    const relevantCandidates = [...withDate, ...withoutDate];
+
+    const totalFound = relevantCandidates.length;
+    const totalPages = Math.ceil(totalFound / limit) || 1;
+    const offset = (page - 1) * limit;
+    const pageJobs = relevantCandidates.slice(offset, offset + limit);
+
+    const now2 = Date.now();
+    let expandedBuckets2 = 0;
+    if (relevantCandidates.length > 0) {
+      const oldest = relevantCandidates[relevantCandidates.length - 1];
+      const oldestCandidateDate = oldest.postedAtDate ? new Date(oldest.postedAtDate).getTime() : now2;
+      const ageMs2 = now2 - oldestCandidateDate;
+      expandedBuckets2 = Math.min(7, Math.max(1, Math.ceil(ageMs2 / (24 * 60 * 60 * 1000))));
+    }
+
+    return {
+      jobs: pageJobs,
+      totalFound,
+      totalPages,
+      page,
+      limit,
+      expandedBuckets: expandedBuckets2,
+      newestJobAt: pageJobs[0]?.postedAtDate ?? null,
+      oldestJobAt: pageJobs[pageJobs.length - 1]?.postedAtDate ?? null,
+    };
+  }
+
+  // --------------------------------------------------------------------------
+  // Sort Mode: 'relevance' (default for skill matching)
   // Filter for relevant jobs (userMatchScore > 0 when user skills are present)
+  // Deterministic Ordering: suitabilityScore DESC → postedAtDate DESC → userMatchScore DESC → id DESC
+  // --------------------------------------------------------------------------
   const relevantCandidates = normalizedUserSkills.length > 0
     ? scoredCandidates.filter((j) => j.userMatchScore > 0)
     : scoredCandidates;
 
-  // Strict newest -> oldest ordering among relevant jobs
   relevantCandidates.sort((a, b) => {
+    if (b.suitabilityScore !== a.suitabilityScore) {
+      return b.suitabilityScore - a.suitabilityScore;
+    }
+
     const aDate = a.postedAtDate ? new Date(a.postedAtDate).getTime() : 0;
     const bDate = b.postedAtDate ? new Date(b.postedAtDate).getTime() : 0;
-    if (bDate !== aDate) return bDate - aDate;
-    if (b.userMatchScore !== a.userMatchScore) return b.userMatchScore - a.userMatchScore;
+    if (bDate !== aDate) {
+      return bDate - aDate;
+    }
+
+    if (b.userMatchScore !== a.userMatchScore) {
+      return b.userMatchScore - a.userMatchScore;
+    }
+
     return b.id.localeCompare(a.id);
   });
 
@@ -242,7 +313,7 @@ export async function queryUserJobs(
 export async function runSourceSync(
   source: JobSource,
   keywords: string[]
-): Promise<{ success: boolean; count: number; addedJobs?: number; updatedJobs?: number; skippedJobs?: number; newJobs?: any[]; error?: string }> {
+): Promise<{ success: boolean; count: number; addedJobs?: number; updatedJobs?: number; skippedJobs?: number; newJobs?: any[]; metrics?: any; error?: string }> {
   try {
     console.log(`[Pipeline] Starting sync for source: ${source}`);
 
@@ -317,9 +388,15 @@ export async function runSourceSync(
     let successCount = 0;
     let jobsAdded = 0;
     let jobsUpdated = 0;
+    let jobsUnchanged = 0;
     let rejectedNoDate = 0;
     let rejectedTooOld = 0;
     let rejectedNoSkill = 0;
+    let rawFetchedCount = 0;
+    let indiaEligibleCount = 0;
+    let normalizedCount = 0;
+    let freshWithin168hCount = 0;
+    let duplicatesRemovedCount = 0;
     const newJobsList: any[] = [];
 
     if (source === "careers") {
@@ -335,18 +412,30 @@ export async function runSourceSync(
         console.error(`[Pipeline] Fetch failed for ${source}:`, err.message);
       }
 
-      console.log(`[Pipeline] Total raw careers jobs acquired in single pass: ${allRawJobs.length}`);
+      rawFetchedCount = allRawJobs.length;
+      indiaEligibleCount = allRawJobs.length; // ATS APIs strictly filter countryCode === "IN" before returning
 
-      // Normalize all fetched jobs in memory
-      const mappedJobs = allRawJobs.map(raw => {
+      console.log(`[Pipeline] Total raw careers jobs acquired in single pass: ${rawFetchedCount}`);
+
+      // Normalize all fetched jobs in memory and deduplicate in-memory hash collisions
+      const seenHashesInCrawl = new Set<string>();
+      const mappedJobs: { raw: any; unified: any }[] = [];
+
+      for (const raw of allRawJobs) {
         try {
           const unified = adapter.mapToUnified(raw);
-          return { raw, unified };
+          if (seenHashesInCrawl.has(unified.dedupeHash)) {
+            duplicatesRemovedCount++;
+            continue;
+          }
+          seenHashesInCrawl.add(unified.dedupeHash);
+          mappedJobs.push({ raw, unified });
         } catch (err: any) {
           console.error(`[Pipeline] Mapping failed for raw career job:`, err.message);
-          return null;
         }
-      }).filter(Boolean) as { raw: any; unified: any }[];
+      }
+
+      normalizedCount = mappedJobs.length;
 
       // Progressive loop over 7 daily windows
       const requestNow = new Date();
@@ -383,6 +472,8 @@ export async function runSourceSync(
               continue;
             }
 
+            freshWithin168hCount++;
+
             const calculatedScore = calculateRelevanceScore(
               {
                 title: unified.title,
@@ -403,24 +494,39 @@ export async function runSourceSync(
               });
 
               if (existingJob) {
+                const targetApplyUrl = unified.applyUrl || existingJob.applyUrl;
+                const targetSourceUrl = unified.sourceUrl || existingJob.sourceUrl;
+                const targetPostedAtDate = jobDate || existingJob.postedAtDate;
+
+                const hasChanges =
+                  existingJob.applyUrl !== targetApplyUrl ||
+                  existingJob.sourceUrl !== targetSourceUrl ||
+                  existingJob.postedAtDate.getTime() !== targetPostedAtDate.getTime();
+
                 await prisma.job.update({
                   where: { id: existingJob.id },
                   data: {
                     fetchedAt: new Date(),
-                    applyUrl: unified.applyUrl || existingJob.applyUrl,
-                    sourceUrl: unified.sourceUrl || existingJob.sourceUrl,
+                    applyUrl: targetApplyUrl,
+                    sourceUrl: targetSourceUrl,
                     sourceCategory: classified.category,
                     sourceProvider: classified.provider,
-                    postedAtDate: jobDate || existingJob.postedAtDate,
-                    postedAt: toRelativeTimeString(jobDate || existingJob.postedAtDate),
+                    postedAtDate: targetPostedAtDate, // Retains employer ATS posting date; NEVER crawl time!
+                    postedAt: toRelativeTimeString(targetPostedAtDate),
                     matchScore: calculatedScore,
                     matchedSkill,
                     isActive: true,
                   },
                 });
-                jobsUpdated++;
+
+                if (hasChanges) {
+                  jobsUpdated++;
+                } else {
+                  jobsUnchanged++;
+                }
+
                 console.log(
-                  `[Pipeline] Updated existing job: ${unified.title} at ${unified.company} (${source})`
+                  `[Pipeline] Updated existing job (${hasChanges ? "modified" : "unchanged"}): ${unified.title} at ${unified.company} (${source})`
                 );
               } else {
                 const experienceString =
@@ -709,19 +815,26 @@ export async function runSourceSync(
           source,
           status: "success",
           jobsFetched: successCount,
-          errorMsg: JSON.stringify({
-            jobsAdded,
-            jobsUpdated,
-            rejectedNoDate,
-            rejectedTooOld,
-            rejectedNoSkill,
-            skillsUsed: keywordsToSearch,
-          }),
+          errorMsg: null, // Strictly reserved for errors/failures; null on success
         },
       });
     } catch (pgErr) {
       console.error("Error logging success in PG:", pgErr);
     }
+
+    const metrics = {
+      rawFetched: rawFetchedCount,
+      IndiaEligible: indiaEligibleCount,
+      freshWithin168h: freshWithin168hCount,
+      normalized: normalizedCount,
+      newInserted: jobsAdded,
+      existingUpdated: jobsUpdated,
+      existingUnchanged: jobsUnchanged,
+      rejected: rejectedNoDate + rejectedTooOld + rejectedNoSkill,
+      duplicatesRemoved: duplicatesRemovedCount,
+    };
+
+    console.log(`\n[Pipeline Acquisition Metrics Summary for ${source}]`, metrics);
 
     return { 
       success: true, 
@@ -729,7 +842,8 @@ export async function runSourceSync(
       addedJobs: jobsAdded,
       updatedJobs: jobsUpdated,
       skippedJobs: rejectedNoDate + rejectedTooOld + rejectedNoSkill,
-      newJobs: newJobsList
+      newJobs: newJobsList,
+      metrics,
     };
   } catch (error: any) {
     console.error(`[Pipeline] Fatal error syncing ${source}:`, error.message);

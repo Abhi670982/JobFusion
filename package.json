@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --webpack",
     "worker": "npx tsx --env-file=.env src/workers/crawl-worker.ts",
+    "schedule:trigger": "npx tsx --env-file=.env src/scripts/trigger-careers-crawl.ts",
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",

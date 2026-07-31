@@ -1,6 +1,7 @@
 import { Worker, Job } from "bullmq";
 import IORedis from "ioredis";
 import { executeBackgroundCrawl, EnqueueCrawlParams, CRAWL_QUEUE_NAME } from "../lib/queue";
+import { registerCareersScheduler } from "../lib/scheduler";
 
 const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
 const CONCURRENCY = parseInt(process.env.CRAWL_WORKER_CONCURRENCY || "3", 10);
@@ -19,6 +20,10 @@ const redisConnection = new IORedis(REDIS_URL, {
 
 redisConnection.on("connect", () => {
   console.log(`✅ [Crawl Worker] Redis connected successfully. Listening on queue: "${CRAWL_QUEUE_NAME}"`);
+  // Register recurring Company Careers 3x/day schedule idempotently
+  registerCareersScheduler().catch((err) => {
+    console.error("[Crawl Worker] Failed to register careers scheduler:", err.message);
+  });
 });
 
 redisConnection.on("error", (err) => {
