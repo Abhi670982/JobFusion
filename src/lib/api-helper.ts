@@ -596,3 +596,35 @@ export async function fetchDashboardMatches(): Promise<any> {
     return null;
   }
 }
+
+export async function fetchAnalyzerStatus(): Promise<any> {
+  try {
+    const res = await fetch('/api/resume-analyzer/status');
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+    const data = await res.json();
+    return data.success ? data.data : null;
+  } catch (error) {
+    console.error("[Frontend API] Error fetching analyzer status:", error);
+    return null;
+  }
+}
+
+export async function analyzeResumeFrontend(forceReanalyze = false): Promise<any> {
+  try {
+    const res = await fetch('/api/resume-analyzer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ forceReanalyze }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.error || `HTTP error! status: ${res.status}`);
+    }
+    const data = await res.json();
+    return data;
+  } catch (error) {
+    console.error("[Frontend API] Error running resume analyzer:", error);
+    throw error;
+  }
+}
+

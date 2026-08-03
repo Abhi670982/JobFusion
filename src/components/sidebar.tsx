@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Briefcase, FileText, Settings,
-  ChevronLeft, ChevronRight, Bookmark, HelpCircle
+  ChevronLeft, ChevronRight, Bookmark, HelpCircle, Sparkles
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -24,10 +24,11 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/jobs', label: 'Find Jobs', icon: Briefcase },
-  { href: '/jobs/saved', label: 'Saved Jobs', icon: Bookmark },
-  { href: '/resume', label: 'Resume', icon: FileText },
+  { href: '/dashboard',         label: 'Dashboard',        icon: LayoutDashboard },
+  { href: '/jobs',              label: 'Find Jobs',         icon: Briefcase },
+  { href: '/jobs/saved',        label: 'Saved Jobs',        icon: Bookmark },
+  { href: '/resume',            label: 'Resume',            icon: FileText },
+  { href: '/resume/analyzer',   label: 'Resume Analyzer',   icon: Sparkles },
 ];
 
 const bottomItems: NavItem[] = [

@@ -104,3 +104,84 @@ export async function generateAIJson<T>(prompt: string, config: AIProviderConfig
     throw error;
   }
 }
+
+export async function generateAISimpleText(prompt: string, config: AIProviderConfig): Promise<string> {
+  const { provider, key } = config;
+
+  if (!key) {
+    throw new Error(`[AI Client] No API key provided for ${provider}`);
+  }
+
+  try {
+    let outputText = "";
+
+    if (provider === "gemini") {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }]
+        })
+      });
+
+      if (!response.ok) throw new Error(`Gemini API error: ${response.status}`);
+      const data = await response.json();
+      outputText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+    } 
+    
+    else if (provider === "openai") {
+      const url = "https://api.openai.com/v1/chat/completions";
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${key}`
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "user", content: prompt }
+          ]
+        })
+      });
+
+      if (!response.ok) throw new Error(`OpenAI API error: ${response.status}`);
+      const data = await response.json();
+      outputText = data.choices?.[0]?.message?.content ?? "";
+    } 
+    
+    else if (provider === "claude") {
+      const url = "https://api.anthropic.com/v1/messages";
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": key,
+          "anthropic-version": "2023-06-01"
+        },
+        body: JSON.stringify({
+          model: "claude-3-haiku-20240307",
+          max_tokens: 4000,
+          messages: [
+            { role: "user", content: prompt }
+          ]
+        })
+      });
+
+      if (!response.ok) throw new Error(`Claude API error: ${response.status}`);
+      const data = await response.json();
+      outputText = data.content?.[0]?.text ?? "";
+    } 
+    
+    else {
+      throw new Error(`[AI Client] Unsupported provider: ${provider}`);
+    }
+
+    return outputText.trim();
+  } catch (error: any) {
+    console.error(`[AI Client] Error generating text with ${provider}:`, error);
+    throw error;
+  }
+}
+

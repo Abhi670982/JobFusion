@@ -6,7 +6,7 @@ import {
   Upload, FileText, Trash2,
   CheckCircle2, Clock, Plus, RefreshCw, AlertCircle,
   Lightbulb, Target, Code2,
-  XCircle, Info
+  XCircle, Info, Brain, Sparkles, ArrowRight, BarChart3
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -24,6 +24,13 @@ import {
 } from '@/lib/api-helper';
 import { cn } from '@/lib/utils';
 import { UpgradeModal } from '@/components/pricing/UpgradeModal';
+import Link from 'next/link';
+
+interface AnalyzerStatusBrief {
+  hasAccess: boolean;
+  existingAnalysis: { overallScore: number; atsScore: number; updatedAt: string } | null;
+}
+
 
 export default function ResumePage() {
   const [loading, setLoading]             = useState(true);
@@ -38,6 +45,7 @@ export default function ResumePage() {
   const [newSkillName, setNewSkillName]   = useState('');
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const [analyzerStatus, setAnalyzerStatus] = useState<AnalyzerStatusBrief | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Post-upload workflow states
@@ -55,6 +63,13 @@ export default function ResumePage() {
           setUser(currentUser);
           setProfile(await fetchProfile(currentUser._id));
         }
+        // Fetch analyzer status (non-blocking)
+        fetch('/api/resume-analyzer/status')
+          .then(r => r.json())
+          .then(d => {
+            if (d.success) setAnalyzerStatus(d.data);
+          })
+          .catch(() => {});
       } catch (err) {
         console.error("Error loading resume details:", err);
       } finally {
@@ -253,6 +268,56 @@ export default function ResumePage() {
 
           {/* ── LEFT COL ─────────────────────────────────────── */}
           <div className="lg:col-span-2 space-y-6">
+
+            {/* ── AI Resume Analyzer Banner ── */}
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/8 via-primary/5 to-transparent p-5"
+            >
+              <div className="absolute right-4 top-0 bottom-0 flex items-center opacity-10">
+                <Brain className="w-24 h-24 text-primary" />
+              </div>
+              <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl gradient-brand flex items-center justify-center flex-shrink-0 shadow-md">
+                    <Sparkles className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <h3 className="text-sm font-bold">AI Resume Analyzer</h3>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full gradient-brand text-white font-bold">NEW</span>
+                    </div>
+                    {analyzerStatus?.existingAnalysis ? (
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1.5">
+                          <BarChart3 className="w-3 h-3 text-primary" />
+                          <span className="text-xs font-bold text-primary">{analyzerStatus.existingAnalysis.overallScore}%</span>
+                          <span className="text-xs text-muted-foreground">overall</span>
+                        </div>
+                        <div className="w-px h-3 bg-border" />
+                        <div className="flex items-center gap-1.5">
+                          <Target className="w-3 h-3 text-emerald-500" />
+                          <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{analyzerStatus.existingAnalysis.atsScore}%</span>
+                          <span className="text-xs text-muted-foreground">ATS</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Get ATS score, keyword analysis, skill gaps & more</p>
+                    )}
+                  </div>
+                </div>
+                <Button asChild size="sm" className="rounded-xl gradient-brand text-white border-0 shadow-md gap-1.5 flex-shrink-0 touch-auto">
+                  <Link href="/resume/analyzer">
+                    {analyzerStatus?.existingAnalysis ? (
+                      <><BarChart3 className="w-3.5 h-3.5" />View Full Report</>
+                    ) : (
+                      <><Brain className="w-3.5 h-3.5" />Analyze Resume<ArrowRight className="w-3 h-3" /></>
+                    )}
+                  </Link>
+                </Button>
+              </div>
+            </motion.div>
 
             {/* Upload Zone */}
             <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".pdf,.docx" className="hidden" />

@@ -16,17 +16,18 @@ model User {
   status       UserStatus         @default(active)
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
-  activities   Activity[]
-  applications Application[]
-  profile      Profile?
-  reports      Report[]
-  parsingLogs  ResumeParsingLog[]
-  savedJobs    SavedJob[]
-  subscription Subscription?
-  usages       UserUsage[]
-  apiKeys      UserApiKey?
-  userJobs     UserJob[]
-  crawlState   UserCrawlState?
+  activities      Activity[]
+  applications    Application[]
+  profile         Profile?
+  reports         Report[]
+  parsingLogs     ResumeParsingLog[]
+  savedJobs       SavedJob[]
+  subscription    Subscription?
+  usages          UserUsage[]
+  apiKeys         UserApiKey?
+  userJobs        UserJob[]
+  crawlState      UserCrawlState?
+  resumeAnalyses  ResumeAnalysis[]
 
   @@map("users")
 }
@@ -203,6 +204,7 @@ model Profile {
   user                           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   projects                       Project[]
   experiences                    WorkExperience[]
+  resumeAnalysis                 ResumeAnalysis?
 
   @@map("profiles")
 }
@@ -682,4 +684,28 @@ model UserCrawlState {
 
   @@map("user_crawl_states")
 }
+
+// ============================================================
+// RESUME ANALYZER — Persisted analysis results
+// ============================================================
+
+model ResumeAnalysis {
+  id                   String   @id @default(uuid())
+  profileId            String   @unique
+  userId               String
+  analysisJson         Json     // Full AnalysisReport blob
+  overallScore         Int      @default(0)
+  atsScore             Int      @default(0)
+  resumeHash           String   @default("") // MD5-like hash of resumeText for cache invalidation
+  targetJobDescription String?  // Stores optional target Job Description text
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("resume_analyses")
+}
+
 
