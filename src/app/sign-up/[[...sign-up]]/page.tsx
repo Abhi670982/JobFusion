@@ -261,7 +261,7 @@ export default function CustomSignUpPage() {
           animate={{ opacity: 1, y: 0 }}
           className="w-full max-w-md py-8"
         >
-          <div className="lg:hidden flex items-center gap-2 mb-8">
+          <Link href="/" className="lg:hidden flex items-center gap-2 mb-8">
             <Image
               src="/logo-circle.png"
               alt="JobFusion Logo"
@@ -270,7 +270,7 @@ export default function CustomSignUpPage() {
               className="rounded-full object-cover border-[3px] border-border/70 shadow-sm"
             />
             <span className="font-bold text-xl gradient-brand-text font-sans">JobFusion</span>
-          </div>
+          </Link>
 
           {!verifying ? (
             // Phase 1: Sign Up Form
@@ -389,7 +389,7 @@ export default function CustomSignUpPage() {
                     </label>
                   </div>
                   <Label htmlFor="terms" className="text-sm text-muted-foreground leading-relaxed cursor-pointer select-none">
-                    I agree to the <Link href="/" className="text-primary font-semibold hover:underline">Terms of Service</Link> and <Link href="/" className="text-primary font-semibold hover:underline">Privacy Policy</Link>
+                    I agree to the <Link href="/terms-of-service" className="text-primary font-semibold hover:underline">Terms of Service</Link> and <Link href="/privacy-policy" className="text-primary font-semibold hover:underline">Privacy Policy</Link>
                   </Label>
                 </div>
 

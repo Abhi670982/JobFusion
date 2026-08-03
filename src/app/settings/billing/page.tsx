@@ -23,14 +23,14 @@ export default function BillingPage() {
       try {
         setLoading(true);
         // Fetch current subscription details
-        const subRes = await fetch('/api/subscription/current');
+        const subRes = await fetch('/api/user-plan/current');
         const subData = await subRes.json();
         if (subData && subData.subscription) {
           setSubscription(subData.subscription);
         }
 
         // Fetch payment history logs
-        const payRes = await fetch('/api/subscription/payments');
+        const payRes = await fetch('/api/user-plan/payments');
         const payData = await payRes.json();
         if (payData && payData.payments) {
           setPayments(payData.payments);

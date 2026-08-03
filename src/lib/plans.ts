@@ -11,25 +11,20 @@ import type { PricingPlan } from '@/types/subscription';
 export type { PricingPlan };
 
 export const FREE_PLAN_FEATURES = [
-  'Job Search & Discovery',
-  'Resume Upload (1 resume)',
-  '2 Match My Skills refreshes/day',
-  'Limited AI Usage (5/month)',
+  'Job Role Matching (Career Pages, LinkedIn, Wellfound)',
+  'Limited Resume Analysis',
+  'Limited ATS Resume Optimization',
   'Save up to 20 Jobs',
-  'Email Notifications',
+  'Email Support',
 ];
 
 export const PRO_PLAN_FEATURES = [
   'Everything in Free',
-  'Unlimited Match My Skills refreshes',
-  'Unlimited AI Features',
-  'Future AI Tools',
-  'Priority Processing',
-  'Unlimited ATS Optimization',
-  'Unlimited Cover Letter Generation',
+  'Unlimited Job Role Matching',
+  'Unlimited Resume Analysis',
+  'Unlimited ATS Resume Optimization',
   'Unlimited Saved Jobs',
-  'Smart Job Matching',
-  'Priority Notifications',
+  'Unlimited AI Features',
   'Priority Support',
 ];
 
@@ -102,22 +97,14 @@ export interface ComparisonRow {
 
 export const COMPARISON_ROWS: ComparisonRow[] = [
   // Core
-  { feature: 'Job Search', category: 'Core', free: true, pro: true, recruiter: true },
-  { feature: 'Resume Upload', category: 'Core', free: '1 resume', pro: 'Unlimited', recruiter: 'Unlimited' },
+  { feature: 'Job Role Matching (Career pages, LinkedIn, Wellfound)', category: 'Core', free: true, pro: 'Unlimited', recruiter: 'Unlimited' },
   { feature: 'Saved Jobs', category: 'Core', free: '20 max', pro: 'Unlimited', recruiter: 'Unlimited' },
-  { feature: 'Email Notifications', category: 'Core', free: true, pro: true, recruiter: true },
-  { feature: 'Priority Notifications', category: 'Core', free: false, pro: true, recruiter: true },
   // AI Features
-  { feature: 'AI Resume Builder', category: 'AI', free: '5/month', pro: 'Unlimited', recruiter: 'Unlimited' },
-  { feature: 'ATS Optimization', category: 'AI', free: 'Basic', pro: 'Unlimited', recruiter: 'Unlimited' },
-  { feature: 'Cover Letter Generation', category: 'AI', free: false, pro: 'Unlimited', recruiter: 'Unlimited' },
-  { feature: 'AI Skill Gap Analysis', category: 'AI', free: false, pro: true, recruiter: true },
-  { feature: 'Smart Job Matching', category: 'AI', free: false, pro: true, recruiter: true },
-  // Career Tools
-  { feature: 'Interview Preparation', category: 'Career', free: false, pro: true, recruiter: true },
-  { feature: 'Resume Version History', category: 'Career', free: false, pro: true, recruiter: true },
-  { feature: 'Resume Analysis', category: 'Career', free: '1/month', pro: 'Unlimited', recruiter: 'Unlimited' },
+  { feature: 'Resume Analysis', category: 'AI', free: 'Limited', pro: 'Unlimited', recruiter: 'Unlimited' },
+  { feature: 'ATS Resume Optimization', category: 'AI', free: 'Limited', pro: 'Unlimited', recruiter: 'Unlimited' },
+  { feature: 'Unlimited AI Features', category: 'AI', free: false, pro: true, recruiter: true },
   // Enterprise
+  { feature: 'Email Support', category: 'Support', free: true, pro: true, recruiter: true },
   { feature: 'Priority Support', category: 'Support', free: false, pro: true, recruiter: true },
   { feature: 'Dedicated Account Manager', category: 'Support', free: false, pro: false, recruiter: true },
   { feature: 'API Access', category: 'Enterprise', free: false, pro: false, recruiter: true },

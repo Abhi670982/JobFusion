@@ -388,10 +388,10 @@ export default function Navbar() {
                 </Link>
                 <div className="h-px bg-border my-2" />
                 <div className="flex flex-col gap-2 px-4">
-                  <Link href="/sign-in" onClick={() => setMobileMenuOpen(false)}>
+                  <Link href="/sign-in" onClick={() => setMobileMenuOpen(false)} className="w-full block">
                     <Button variant="outline" className="w-full rounded-xl font-medium justify-center h-10">Sign In</Button>
                   </Link>
-                  <Link href="/sign-up" onClick={() => setMobileMenuOpen(false)}>
+                  <Link href="/sign-up" onClick={() => setMobileMenuOpen(false)} className="w-full block">
                     <Button className="w-full rounded-xl gradient-brand text-white border-0 font-medium justify-center h-10 shadow-md">
                       Get Started
                     </Button>

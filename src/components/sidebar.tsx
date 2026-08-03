@@ -115,7 +115,7 @@ export default function Sidebar() {
       if (u) { setUser(u); sessionStorage.setItem('jobfusion_user', JSON.stringify(u)); }
     }).catch(() => { });
 
-    fetch('/api/subscription/status')
+    fetch('/api/user-plan/status')
       .then(res => res.json())
       .then(data => {
         if (data && data.status) {
