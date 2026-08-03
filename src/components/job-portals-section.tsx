@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   RefreshCw, AlertTriangle, ChevronLeft, ChevronRight,
   SlidersHorizontal, X, MapPin,
-  LayoutGrid, List, Activity, Sparkles
+  LayoutGrid, List, Activity, Sparkles, Lock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -24,6 +24,8 @@ import PortalJobCard from '@/components/portal-job-card';
 import { PortalUnifiedJob } from '@/lib/portal-fetcher/adapters/base-adapter';
 import { parsePostedDate } from '@/lib/parse-posted-date';
 import { JobsErrorBoundary } from '@/components/error-boundary';
+import { UpgradeModal } from '@/components/pricing/UpgradeModal';
+import { PremiumPortalModal } from '@/components/pricing/PremiumPortalModal';
 
 // ─── Types & Config ───────────────────────────────────────────────────────────
 
@@ -178,6 +180,19 @@ export default function JobPortalsSection({
     wellfound: null,
   });
   const [currentPage, setCurrentPage] = useState(1);
+  const [isPro, setIsPro] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [showPremiumPortalModal, setShowPremiumPortalModal] = useState(false);
+  const [targetPortalName, setTargetPortalName] = useState('Premium Portal');
+
+  useEffect(() => {
+    fetch('/api/subscription/status')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.success && data.isPro) setIsPro(true);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -694,27 +709,45 @@ export default function JobPortalsSection({
           <div className="flex flex-wrap gap-2">
             {PORTAL_TABS.map((tab) => {
               const isActive = tab.id === activePortal;
+              const isLocked = !isPro && ['indeed', 'internshala', 'foundit', 'naukri'].includes(tab.id);
               return (
                 <button
                   key={tab.id}
-                  onClick={() => handleTabChange(tab.id)}
+                  onClick={() => {
+                    if (isLocked) {
+                      setShowUpgradeModal(true);
+                      return;
+                    }
+                    handleTabChange(tab.id);
+                  }}
                   aria-pressed={isActive}
                   className={cn(
                     'flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all duration-200',
                     'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                    isActive
-                      ? `${tab.activeBg} ${tab.activeBorder} ${tab.activeText} shadow-sm`
-                      : 'border-border/60 bg-card/50 text-muted-foreground hover:border-border hover:bg-card hover:text-foreground'
+                    isLocked
+                      ? 'border-border/40 bg-muted/20 text-muted-foreground/70 cursor-pointer hover:border-amber-500/40 hover:bg-amber-500/5'
+                      : isActive
+                        ? `${tab.activeBg} ${tab.activeBorder} ${tab.activeText} shadow-sm`
+                        : 'border-border/60 bg-card/50 text-muted-foreground hover:border-border hover:bg-card hover:text-foreground'
                   )}
                 >
-                  <span className={cn(
-                    'flex-shrink-0',
-                    tab.id === 'all'
-                      ? `w-2 h-2 rounded-full bg-gradient-to-r ${tab.gradient} ${isActive ? '' : 'opacity-50'}`
-                      : `w-2 h-2 rounded-full ${tab.dotColor} ${isActive ? 'animate-pulse' : 'opacity-40'}`
-                  )} />
+                  {isLocked ? (
+                    <Lock className="w-3 h-3 text-amber-500 flex-shrink-0" />
+                  ) : (
+                    <span className={cn(
+                      'flex-shrink-0',
+                      tab.id === 'all'
+                        ? `w-2 h-2 rounded-full bg-gradient-to-r ${tab.gradient} ${isActive ? '' : 'opacity-50'}`
+                        : `w-2 h-2 rounded-full ${tab.dotColor} ${isActive ? 'animate-pulse' : 'opacity-40'}`
+                    )} />
+                  )}
                   {tab.label}
-          {isActive && !isAnyLoading && (portalJobs[tab.id]?.length || Object.values(portalJobs).flat().length) > 0 && (
+                  {isLocked && (
+                    <span className="px-1.5 py-0 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[9px] font-extrabold border border-amber-500/20">
+                      PRO
+                    </span>
+                  )}
+                  {!isLocked && isActive && !isAnyLoading && (portalJobs[tab.id]?.length || Object.values(portalJobs).flat().length) > 0 && (
                     <span className={cn('px-1.5 py-0 rounded-full text-[10px] font-bold', tab.activeBg, tab.activeText)}>
                       {tab.id === 'all' ? Object.values(portalJobs).flat().length : portalJobs[tab.id]?.length}
                     </span>
@@ -787,6 +820,11 @@ export default function JobPortalsSection({
                         key={`${job.sourceId || `${job.title}-${i}`}`}
                         job={job}
                         index={i}
+                        isPro={isPro}
+                        onRequirePremiumPortal={(pName) => {
+                          setTargetPortalName(pName);
+                          setShowPremiumPortalModal(true);
+                        }}
                       />
                     ))}
                   </motion.div>
@@ -865,6 +903,10 @@ export default function JobPortalsSection({
           )}
         </div>
       </div>
+
+      {/* Upgrade Modals for Locked Portals */}
+      <UpgradeModal open={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} />
+      <PremiumPortalModal open={showPremiumPortalModal} onClose={() => setShowPremiumPortalModal(false)} portalName={targetPortalName} />
     </div>
   );
 }

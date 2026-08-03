@@ -185,8 +185,44 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 2. Multi-source filter
-    if (source) {
+    // 2. Multi-source filter with Backend Subscription Gating
+    let isProUser = false;
+    let allowedSources: string[] | null = null;
+
+    try {
+      const { getOrCreateMongoUser } = await import("@/lib/auth-sync");
+      const { getPermittedJobSources } = await import("@/lib/subscription");
+      const authUser = await getOrCreateMongoUser();
+      if (authUser) {
+        const check = await getPermittedJobSources(authUser.id);
+        isProUser = check.isPro;
+        allowedSources = check.allowedSources;
+      } else {
+        allowedSources = ["linkedin", "wellfound", "careers", "company_career"];
+      }
+    } catch {
+      allowedSources = ["linkedin", "wellfound", "careers", "company_career"];
+    }
+
+    if (!isProUser && allowedSources) {
+      if (source) {
+        const requestedSources = source.split(",").map((s) => s.trim().toLowerCase());
+        const validSources = requestedSources.filter((s) => allowedSources!.includes(s));
+        andConditions.push({
+          OR: [
+            { source: { in: validSources.length > 0 ? validSources : allowedSources } },
+            { sourceCategory: JobSourceCategory.COMPANY_CAREER },
+          ],
+        });
+      } else {
+        andConditions.push({
+          OR: [
+            { source: { in: allowedSources } },
+            { sourceCategory: JobSourceCategory.COMPANY_CAREER },
+          ],
+        });
+      }
+    } else if (source) {
       const sources = source.split(",").map((s) => s.trim().toLowerCase());
       andConditions.push({
         source: { in: sources },

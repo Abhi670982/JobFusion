@@ -24,8 +24,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const { forceReanalyze = false, jobDescription = "" } = body;
 
-    // 2. Access gate — resolve AI config
-    //    getAIConfig checks: BYOK → Pro → Free credits
+    // 2. Access gate — resolve AI config & daily usage limit
     const rawConfig = await getAIConfig(
       mongoUser.id,
       "resume-analyzer",
@@ -40,7 +39,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Intercept free-credits route
+    // Intercept free-credits route & check daily limit for Free users
     if (!rawConfig.isBYOK) {
       const subscription = await prisma.subscription.findUnique({
         where: { userId: mongoUser.id },
@@ -53,10 +52,19 @@ export async function POST(req: NextRequest) {
         (subscription.status === "active" || subscription.status === "trialing");
 
       if (!isPro) {
-        return NextResponse.json(
-          { success: false, code: "REQUIRES_PREMIUM_OR_BYOK" },
-          { status: 403 }
-        );
+        const { usageService } = await import("@/lib/usageService");
+        const todayUsage = await usageService.getTodayUsage(mongoUser.id, "resume-analyzer");
+        if (todayUsage >= 2) {
+          return NextResponse.json(
+            {
+              success: false,
+              code: "LIMIT_REACHED",
+              error: "Free users can analyze up to 2 resumes per day. Upgrade to Premium for unlimited AI Resume Analysis OR connect your own API using BYOK.",
+              usage: { used: todayUsage, limit: 2 }
+            },
+            { status: 403 }
+          );
+        }
       }
     }
 
@@ -137,6 +145,12 @@ export async function POST(req: NextRequest) {
         targetJobDescription: normalizedJD || null,
       },
     });
+
+    // 8. Increment daily usage counter for non-BYOK users
+    if (!rawConfig.isBYOK) {
+      const { usageService } = await import("@/lib/usageService");
+      await usageService.incrementUsage(mongoUser.id, "resume-analyzer", mongoUser.clerkId || undefined);
+    }
 
     return NextResponse.json({ success: true, data: report, cached: false });
   } catch (err: unknown) {

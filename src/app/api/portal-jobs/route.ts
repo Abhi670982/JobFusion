@@ -148,7 +148,11 @@ async function processAndPersistPortalJobs(userId: string, jobs: any[], userSkil
 }
 
 // Retrieve cached JOB_PORTAL jobs from DB strictly matching sourceCategory = JOB_PORTAL
-async function getUserCachedPortalJobs(userId: string, portal: string, visibilityFrom: Date, visibilityTo: Date) {
+async function getUserCachedPortalJobs(userId: string, portal: string, visibilityFrom: Date, visibilityTo: Date, allowedSources: string[] | null = null) {
+  const sourceFilter = allowedSources 
+    ? (portal !== "all" && allowedSources.includes(portal) ? { source: portal } : { source: { in: allowedSources } })
+    : (portal !== "all" ? { source: portal } : {});
+
   const userJobs = await prisma.userJob.findMany({
     where: {
       userId,
@@ -159,7 +163,7 @@ async function getUserCachedPortalJobs(userId: string, portal: string, visibilit
           lte: visibilityTo,
         },
         isActive: true,
-        ...(portal !== "all" ? { source: portal } : {}),
+        ...sourceFilter,
       }
     },
     include: {
@@ -238,32 +242,39 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // 1. Authenticate user
+    // 1. Authenticate user & resolve permitted job sources
     const user = await getOrCreateMongoUser();
     if (!user) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
     const userId = user.id;
 
+    const { getPermittedJobSources } = await import("@/lib/subscription");
+    const { allowedSources } = await getPermittedJobSources(userId);
+
     // 2. Check Category-Isolated Redis Cache
     const cacheKey = buildCacheKey(JobSourceCategory.JOB_PORTAL, validatedKeyword || portal, validatedLocation, page);
     const redisCached = await getCachedCategoryJobs<any[]>(cacheKey);
     if (redisCached) {
+      const filteredRedis = allowedSources 
+        ? redisCached.filter((j: any) => allowedSources.includes((j.source || "").toLowerCase()))
+        : redisCached;
+
       return NextResponse.json({
         success: true,
         portal,
         keyword: validatedKeyword,
         location: validatedLocation,
         page,
-        data: redisCached,
-        jobs: redisCached,
+        data: filteredRedis,
+        jobs: filteredRedis,
         cached: true,
         sourceCategory: JobSourceCategory.JOB_PORTAL,
       });
     }
 
     // 3. Query PostgreSQL for matching JOB_PORTAL jobs strictly within 168-hour rolling window
-    const cachedJobs = await getUserCachedPortalJobs(userId, portal, visibilityFrom, visibilityTo);
+    const cachedJobs = await getUserCachedPortalJobs(userId, portal, visibilityFrom, visibilityTo, allowedSources);
 
     // 4. NON-BLOCKING DECOUPLED ARCHITECTURE:
     // If DB results are empty or stale, enqueue a background BullMQ refresh task asynchronously with deterministic lock.

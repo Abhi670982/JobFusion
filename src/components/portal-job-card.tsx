@@ -8,9 +8,15 @@ import { cn } from '@/lib/utils';
 import { PortalUnifiedJob } from '@/lib/portal-fetcher/adapters/base-adapter';
 import { openJob } from '@/lib/open-job';
 
+import { isPremiumPortal } from '@/lib/portal-gating';
+import { trackMonetizationEvent } from '@/lib/analytics';
+import { Lock } from 'lucide-react';
+
 interface PortalJobCardProps {
   job: PortalUnifiedJob;
   index?: number;
+  isPro?: boolean;
+  onRequirePremiumPortal?: (portalName: string) => void;
 }
 
 const portalSourceConfig: Record<string, { label: string; bg: string; text: string; border: string; dot: string }> = {
@@ -38,7 +44,7 @@ function formatRelativeTime(dateInput: Date | string | null | undefined): string
   return `${diffMonths}mo ago`;
 }
 
-export default function PortalJobCard({ job, index = 0 }: PortalJobCardProps) {
+export default function PortalJobCard({ job, index = 0, isPro = false, onRequirePremiumPortal }: PortalJobCardProps) {
   const srcConfig = portalSourceConfig[job.source] ?? {
     label: job.source,
     bg: 'bg-muted',
@@ -47,11 +53,43 @@ export default function PortalJobCard({ job, index = 0 }: PortalJobCardProps) {
     dot: 'bg-muted-foreground',
   };
 
+  const isPremium = isPremiumPortal(job.source, (job as any).sourceCategory);
+  const isLocked = isPremium && !isPro;
+
   const postedStr = formatRelativeTime(job.postedDate);
   const displaySkills = job.skills?.slice(0, 4) ?? [];
 
-  const handleApply = () => {
-    openJob(job.applyUrl || job.sourceUrl);
+  const handleApply = async (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+
+    if (isLocked) {
+      trackMonetizationEvent('Premium Job Click', { portal: job.source, title: job.title });
+    }
+
+    try {
+      const res = await fetch('/api/jobs/apply-gate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: job.sourceId, source: job.source }),
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.allowed) {
+        trackMonetizationEvent('Portal Click Attempt', { portal: job.source, allowed: false });
+        if (onRequirePremiumPortal) {
+          onRequirePremiumPortal(job.source || 'Premium');
+        }
+        return;
+      }
+
+      openJob(data.applyUrl || job.applyUrl || job.sourceUrl);
+    } catch {
+      if (isLocked && onRequirePremiumPortal) {
+        onRequirePremiumPortal(job.source || 'Premium');
+      } else {
+        openJob(job.applyUrl || job.sourceUrl);
+      }
+    }
   };
 
   return (
@@ -97,13 +135,20 @@ export default function PortalJobCard({ job, index = 0 }: PortalJobCardProps) {
         </div>
 
         {/* Portal Tag Badge */}
-        <span className={cn(
-          'flex-shrink-0 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full border',
-          srcConfig.bg, srcConfig.text, srcConfig.border
-        )}>
-          <span className={cn('w-1.5 h-1.5 rounded-full', srcConfig.dot)} />
-          {srcConfig.label}
-        </span>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {isLocked && (
+            <span className="inline-flex items-center gap-1 text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+              <Lock className="w-2.5 h-2.5" /> Premium
+            </span>
+          )}
+          <span className={cn(
+            'inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full border',
+            srcConfig.bg, srcConfig.text, srcConfig.border
+          )}>
+            <span className={cn('w-1.5 h-1.5 rounded-full', srcConfig.dot)} />
+            {srcConfig.label}
+          </span>
+        </div>
       </div>
 
       {/* Meta Indicators */}
@@ -177,7 +222,7 @@ export default function PortalJobCard({ job, index = 0 }: PortalJobCardProps) {
             'bg-primary/10 text-primary border border-primary/20 hover:bg-primary hover:text-primary-foreground',
             'transition-all duration-150'
           )}
-          onClick={(e) => { e.stopPropagation(); handleApply(); }}
+          onClick={(e) => handleApply(e)}
         >
           Apply
           <ExternalLink className="w-3.5 h-3.5" />

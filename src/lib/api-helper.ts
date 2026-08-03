@@ -109,6 +109,7 @@ export interface DbJob {
   featured: boolean;
   category: string;
   source?: string;
+  sourceCategory?: string;
   applyUrl?: string;
   dedupeHash?: string;
   createdAt: string;

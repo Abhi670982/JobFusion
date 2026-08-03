@@ -252,3 +252,116 @@ export function getStatusLabel(status: SubscriptionInfo['status']): string {
 export function handleUpgrade(_planId?: PlanId, _interval?: 'monthly' | 'yearly'): void {
   // handoff is managed by routing directly to create-checkout endpoint on client side
 }
+
+/**
+ * Check if a user can run an AI Resume Analysis.
+ * Free: 2/day limit per calendar day.
+ * Premium / BYOK: Unlimited.
+ */
+export async function canRunResumeAnalysis(userId?: string): Promise<{
+  allowed: boolean;
+  isPro: boolean;
+  used: number;
+  limit: number | null;
+  reason?: string;
+}> {
+  let targetUserId = userId;
+  if (!targetUserId) {
+    const user = await getOrCreateMongoUser();
+    if (!user) return { allowed: false, isPro: false, used: 0, limit: 2, reason: 'Authentication required.' };
+    targetUserId = user.id;
+  }
+
+  const isPro = await hasProAccess(targetUserId);
+  if (isPro) {
+    return { allowed: true, isPro: true, used: 0, limit: null };
+  }
+
+  const used = await usageService.getTodayUsage(targetUserId, 'resume-analyzer');
+  const limit = 2;
+
+  if (used < limit) {
+    return { allowed: true, isPro: false, used, limit };
+  }
+
+  return {
+    allowed: false,
+    isPro: false,
+    used,
+    limit,
+    reason: 'Free users can analyze up to 2 resumes per day. Upgrade to Premium for unlimited AI Resume Analysis OR connect your own API using BYOK.',
+  };
+}
+
+/**
+ * Get permitted job portal sources for a user based on subscription.
+ * Free: ['linkedin', 'wellfound']
+ * Premium: null (all portals allowed)
+ */
+export async function getPermittedJobSources(userId?: string): Promise<{
+  isPro: boolean;
+  allowedSources: string[] | null;
+}> {
+  const freeSources = ['linkedin', 'wellfound', 'careers', 'company_career', 'company_website'];
+
+  if (!userId) {
+    return { isPro: false, allowedSources: freeSources };
+  }
+
+  const isPro = await hasProAccess(userId);
+  if (isPro) {
+    return { isPro: true, allowedSources: null };
+  }
+
+  return { isPro: false, allowedSources: freeSources };
+}
+
+import { isPremiumPortal } from './portal-gating';
+export { isPremiumPortal };
+
+/**
+ * Check if a user can apply to a job on a specific portal.
+ * STRICTLY subscription-based. BYOK has NO role in unlocking Premium portals.
+ */
+export async function canApplyToJobPortal(
+  userId?: string,
+  source?: string | null,
+  sourceCategory?: string | null
+): Promise<{
+  allowed: boolean;
+  isPro: boolean;
+  isPremiumPortal: boolean;
+  code?: string;
+  message?: string;
+}> {
+  const isPremium = isPremiumPortal(source, sourceCategory);
+
+  // If it's a Free portal (LinkedIn / Wellfound) -> Everyone can apply
+  if (!isPremium) {
+    return { allowed: true, isPro: false, isPremiumPortal: false };
+  }
+
+  // If it's a Premium portal -> Check Pro subscription strictly. BYOK has NO role.
+  if (!userId) {
+    return {
+      allowed: false,
+      isPro: false,
+      isPremiumPortal: true,
+      code: 'PREMIUM_SUBSCRIPTION_REQUIRED',
+      message: 'Upgrade to Premium to access this job portal.',
+    };
+  }
+
+  const isPro = await hasProAccess(userId);
+  if (isPro) {
+    return { allowed: true, isPro: true, isPremiumPortal: true };
+  }
+
+  return {
+    allowed: false,
+    isPro: false,
+    isPremiumPortal: true,
+    code: 'PREMIUM_SUBSCRIPTION_REQUIRED',
+    message: 'Upgrade to Premium to access this job portal.',
+  };
+}

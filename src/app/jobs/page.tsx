@@ -28,6 +28,7 @@ import JobPortalsSection from '@/components/job-portals-section';
 import { JobsErrorBoundary } from '@/components/error-boundary';
 import { UpgradeModal } from '@/components/pricing/UpgradeModal';
 import { BYOKModal } from '@/components/pricing/BYOKModal';
+import { PremiumPortalModal } from '@/components/pricing/PremiumPortalModal';
 import { cn } from '@/lib/utils';
 import {
   fetchCurrentUser,
@@ -377,7 +378,19 @@ export default function JobsPage() {
   // Usage tracking and Modals
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showBYOKModal, setShowBYOKModal] = useState(false);
+  const [showPremiumPortalModal, setShowPremiumPortalModal] = useState(false);
+  const [targetPortalName, setTargetPortalName] = useState('Premium Portal');
   const [usageStats, setUsageStats] = useState<any>(null);
+  const [isPro, setIsPro] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/subscription/status')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.success && data.isPro) setIsPro(true);
+      })
+      .catch(() => {});
+  }, []);
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const initialDataLoaded = useRef(false);
@@ -1468,9 +1481,14 @@ export default function JobsPage() {
                       job={job}
                       index={i}
                       userId={user?._id}
+                      isPro={isPro}
                       initialIsSaved={savedJobIds.has(job._id)}
                       initialIsApplied={appliedJobIds.has(job._id)}
                       onSavedToggle={handleSavedToggle}
+                      onRequirePremiumPortal={(pName) => {
+                        setTargetPortalName(pName);
+                        setShowPremiumPortalModal(true);
+                      }}
                     />
                   ))
                 )}
@@ -1535,7 +1553,38 @@ export default function JobsPage() {
           </AnimatePresence>
         )}
 
-
+        {/* Premium Upgrade Banner for Free Users */}
+        {!isPro && (
+          <div className="mt-12 p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-indigo-900/40 via-purple-900/40 to-card border border-indigo-500/30 shadow-2xl relative overflow-hidden text-center sm:text-left flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div className="absolute -right-12 -top-12 w-48 h-48 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="space-y-2 max-w-xl relative z-10">
+              <span className="px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-400 text-xs font-black uppercase tracking-wider border border-indigo-500/30 inline-flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5" /> Unlock All Platforms
+              </span>
+              <h3 className="text-lg sm:text-xl font-bold text-foreground leading-snug">
+                Unlock jobs from 6+ platforms including Indeed, Internshala, Foundit, Naukri, Company Career Pages, and future integrations.
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Free members can access LinkedIn and Wellfound. Upgrade to Premium for full multi-platform aggregation.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 flex-shrink-0 relative z-10 w-full sm:w-auto">
+              <Button
+                onClick={() => setShowUpgradeModal(true)}
+                className="flex-1 sm:flex-none rounded-xl gradient-brand text-white font-bold h-11 px-6 shadow-lg hover:opacity-90"
+              >
+                Upgrade
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => router.push('/pricing')}
+                className="flex-1 sm:flex-none rounded-xl border-border h-11 px-6 font-semibold"
+              >
+                Compare Plans
+              </Button>
+            </div>
+          </div>
+        )}
 
       </main>
 
@@ -1692,6 +1741,12 @@ export default function JobsPage() {
       <BYOKModal
         open={showBYOKModal}
         onClose={() => setShowBYOKModal(false)}
+      />
+
+      <PremiumPortalModal
+        open={showPremiumPortalModal}
+        onClose={() => setShowPremiumPortalModal(false)}
+        portalName={targetPortalName}
       />
     </>
   );

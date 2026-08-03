@@ -38,6 +38,13 @@ export async function GET() {
       prisma.savedJob.count({ where: { userId: userIdStr } }),
     ]);
 
+    // Usage and monetization queries
+    const { hasProAccess } = await import("@/lib/subscription");
+    const { usageService } = await import("@/lib/usageService");
+
+    const isPro = await hasProAccess(userIdStr);
+    const todayUsage = await usageService.getTodayUsage(userIdStr, "resume-analyzer");
+
     return NextResponse.json({
       success: true,
       stats: {
@@ -47,6 +54,14 @@ export async function GET() {
         interviewCount,
         offerCount,
         savedCount,
+        monetization: {
+          isPro,
+          todayResumeAnalysisCount: todayUsage,
+          dailyLimit: isPro ? null : 2,
+          remainingAnalyses: isPro ? "Unlimited" : Math.max(0, 2 - todayUsage),
+          availablePortals: isPro ? ["LinkedIn", "Wellfound", "Indeed", "Internshala", "Foundit", "Naukri", "Company Careers"] : ["LinkedIn", "Wellfound"],
+          lockedPortalsCount: isPro ? 0 : 4,
+        }
       },
     });
   } catch (error: any) {

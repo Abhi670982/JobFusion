@@ -325,25 +325,29 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* AI usage bar */}
-          <div className="hidden sm:block flex-1 max-w-[200px]">
+          {/* AI & Portal Usage Metrics */}
+          <div className="hidden sm:block flex-1 max-w-[240px]">
             <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
-              <span>AI Usage</span>
-              <span>
-                {subscription?.usage?.aiOperations?.limit === null 
+              <span>Daily Resume Analysis</span>
+              <span className="font-bold text-foreground">
+                {subscription?.features?.hasProAccess 
                   ? 'Unlimited' 
-                  : `${subscription?.usage?.aiOperations?.used || 0} / ${subscription?.usage?.aiOperations?.limit || 5} used`}
+                  : `${stats?.monetization?.todayResumeAnalysisCount ?? 0} / 2 used`}
               </span>
             </div>
-            <div className="h-1.5 bg-muted rounded-full overflow-hidden" role="progressbar" aria-label="AI usage status">
+            <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-2" role="progressbar" aria-label="Resume analysis daily usage">
               <div 
                 className="h-full bg-primary rounded-full transition-all" 
                 style={{ 
-                  width: `${subscription?.usage?.aiOperations?.limit === null 
+                  width: `${subscription?.features?.hasProAccess 
                     ? 100 
-                    : Math.min(100, Math.round(((subscription?.usage?.aiOperations?.used || 0) / (subscription?.usage?.aiOperations?.limit || 5)) * 100))}%` 
+                    : Math.min(100, Math.round(((stats?.monetization?.todayResumeAnalysisCount ?? 0) / 2) * 100))}%` 
                 }} 
               />
+            </div>
+            <div className="flex items-center justify-between text-[9px] text-muted-foreground">
+              <span>Sources: <strong className="text-foreground">{subscription?.features?.hasProAccess ? 'All 6+' : 'LinkedIn, Wellfound'}</strong></span>
+              {!subscription?.features?.hasProAccess && <span className="text-amber-500 font-bold">4 Locked</span>}
             </div>
           </div>
 

@@ -14,14 +14,20 @@ import { DbJob, saveJob, unsaveJob, logActivity } from '@/lib/api-helper';
 import { trackVisitedJob } from '@/lib/visited-jobs';
 import { openJob } from '@/lib/open-job';
 
+import { isPremiumPortal } from '@/lib/portal-gating';
+import { trackMonetizationEvent } from '@/lib/analytics';
+import { Lock } from 'lucide-react';
+
 interface JobCardProps {
   job: DbJob;
   index?: number;
   variant?: 'default' | 'compact';
   userId?: string;
+  isPro?: boolean;
   initialIsSaved?: boolean;
   initialIsApplied?: boolean;
   onSavedToggle?: (jobId: string, nowSaved: boolean) => void;
+  onRequirePremiumPortal?: (portalName: string) => void;
 }
 
 const locationTypeConfig = {
@@ -31,8 +37,8 @@ const locationTypeConfig = {
 };
 
 export default function JobCard({
-  job, index = 0, userId,
-  initialIsSaved = false, initialIsApplied = false, onSavedToggle
+  job, index = 0, userId, isPro = false,
+  initialIsSaved = false, initialIsApplied = false, onSavedToggle, onRequirePremiumPortal
 }: JobCardProps) {
   const [saved, setSaved] = useState(initialIsSaved);
   const [loading, setLoading] = useState(false);
@@ -40,17 +46,57 @@ export default function JobCard({
 
   useEffect(() => { setSaved(initialIsSaved); }, [initialIsSaved]);
 
+  const isPremium = isPremiumPortal(job.source, job.sourceCategory);
+  const isLocked = isPremium && !isPro;
+
+  const processJobApply = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    trackVisitedJob(job);
+    if (userId) {
+      logActivity({ type: 'viewed', jobId: job._id, jobTitle: job.title, company: job.company }).catch(() => {});
+    }
+
+    if (isLocked) {
+      trackMonetizationEvent('Premium Job Click', { jobId: job._id, portal: job.source, title: job.title });
+    }
+
+    // Always validate on backend apply-gate for security
+    try {
+      const res = await fetch('/api/jobs/apply-gate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: job._id, source: job.source, sourceCategory: job.sourceCategory }),
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.allowed) {
+        trackMonetizationEvent('Portal Click Attempt', { jobId: job._id, portal: job.source, allowed: false });
+        if (onRequirePremiumPortal) {
+          onRequirePremiumPortal(job.source || 'Premium');
+        }
+        return;
+      }
+
+      if (data.applyUrl || job.applyUrl) {
+        openJob(data.applyUrl || job.applyUrl);
+      } else {
+        router.push(`/jobs/${job._id}`);
+      }
+    } catch {
+      if (isLocked && onRequirePremiumPortal) {
+        onRequirePremiumPortal(job.source || 'Premium');
+      } else if (job.applyUrl) {
+        openJob(job.applyUrl);
+      } else {
+        router.push(`/jobs/${job._id}`);
+      }
+    }
+  };
+
   const handleCardClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
     if (target.closest('button') || target.closest('a') || target.closest('input')) return;
-    trackVisitedJob(job);
-    if (userId) {
-      logActivity({ type: 'viewed', jobId: job._id, jobTitle: job.title, company: job.company })
-        .catch(() => {});
-    }
-    // Open apply URL directly (same as Apply button) — no internal page navigation
-    if (job.applyUrl) openJob(job.applyUrl);
-    else router.push(`/jobs/${job._id}`);
+    processJobApply(e);
   };
 
   const handleSaveToggle = async (e: React.MouseEvent) => {
@@ -72,13 +118,7 @@ export default function JobCard({
   };
 
   const handleApplyClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    trackVisitedJob(job);
-    if (userId) {
-      logActivity({ type: 'viewed', jobId: job._id, jobTitle: job.title, company: job.company }).catch(() => {});
-    }
-    if (job.applyUrl) openJob(job.applyUrl);
-    else router.push(`/jobs/${job._id}`);
+    processJobApply(e);
   };
 
   const locType = locationTypeConfig[job.locationType] || locationTypeConfig.remote;
@@ -150,6 +190,11 @@ export default function JobCard({
                 </h3>
                 {job.featured && (
                   <Badge className="text-[10px] h-4 px-1.5 gradient-brand text-white border-0 flex-shrink-0 rounded-full">Featured</Badge>
+                )}
+                {isLocked && (
+                  <Badge className="text-[9px] h-4 px-1.5 bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 flex-shrink-0 rounded-full font-bold gap-0.5">
+                    <Lock className="w-2.5 h-2.5" /> Premium Portal
+                  </Badge>
                 )}
                 {initialIsApplied && (
                   <Badge className="text-[10px] h-4 px-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 flex-shrink-0 rounded-full">Visited</Badge>
@@ -230,7 +275,7 @@ export default function JobCard({
           )}
 
           <div className="flex items-center gap-2">
-            {job.matchScore && (
+            {typeof job.matchScore === 'number' && job.matchScore > 0 ? (
               <div className={cn(
                 'text-xs font-bold px-2 py-0.5 rounded-full',
                 job.matchScore >= 85
@@ -239,7 +284,7 @@ export default function JobCard({
               )}>
                 {job.matchScore}% match
               </div>
-            )}
+            ) : null}
             <Button
               onClick={handleApplyClick}
               size="sm"
