@@ -25,7 +25,7 @@ export function UsageDashboard({ userId }: { userId?: string }) {
     const fetchData = async () => {
       try {
         // Fetch subscription
-        const subResponse = await fetch("/api/subscription/current");
+        const subResponse = await fetch("/api/user-plan/current");
         const subData = await subResponse.json();
         
         // Fetch usage

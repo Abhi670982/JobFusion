@@ -1,5 +1,5 @@
 // ============================================================
-// /api/subscription/plans — Get all available plans
+// /api/user-plan/plans — Get all available plans
 // ============================================================
 // Returns the config-driven plan list for the frontend.
 // No payment logic — safe to call from any client.

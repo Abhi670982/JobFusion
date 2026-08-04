@@ -31,7 +31,7 @@ export function CompanyMarquee() {
       <div className="flex items-center gap-4 mb-8 w-full max-w-md mx-auto opacity-70">
         <div className="h-px bg-gradient-to-r from-transparent to-border/80 flex-1"></div>
         <p className="text-[10px] md:text-xs text-muted-foreground font-bold uppercase tracking-[0.2em] text-center">
-          Trusted by companies
+          Land Job Offers From
         </p>
         <div className="h-px bg-gradient-to-l from-transparent to-border/80 flex-1"></div>
       </div>

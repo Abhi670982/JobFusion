@@ -9,7 +9,10 @@
  * - Passes windowsHide: true so no CMD window appears on Windows.
  */
 
-import type { Browser } from "puppeteer";
+type Browser = any;
+type Page = any;
+type HTTPRequest = any;
+
 
 let browserInstance: Browser | null = null;
 
@@ -60,14 +63,14 @@ async function getBrowser(): Promise<Browser> {
  * The browser instance itself is kept alive for reuse.
  */
 export async function withPage<T>(
-  fn: (page: import("puppeteer").Page) => Promise<T>
+  fn: (page: Page) => Promise<T>
 ): Promise<T> {
   const browser = await getBrowser();
   const page = await browser.newPage();
 
   // Block heavy assets — not needed for scraping
   await page.setRequestInterception(true);
-  page.on("request", (req) => {
+  page.on("request", (req: HTTPRequest) => {
     const type = req.resourceType();
     if (["image", "font", "media", "stylesheet"].includes(type)) {
       req.abort();

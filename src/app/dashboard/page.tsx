@@ -140,7 +140,7 @@ export default function DashboardPage() {
           const [actRes, matchRes, subRes, aiRes] = await Promise.all([
             fetchDashboardActivity(), 
             fetchDashboardMatches(),
-            fetch('/api/subscription/current').then(r => r.json()),
+            fetch('/api/user-plan/current').then(r => r.json()),
             fetch('/api/user/ai-provider').then(r => r.json())
           ]);
           if (actRes) { setActivities(actRes.recentActivities || []); setChartData(actRes.chartData || []); }

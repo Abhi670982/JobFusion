@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PricingCard } from '@/components/pricing/PricingCard';
-import { FeatureComparison } from '@/components/pricing/FeatureComparison';
+
 import { PricingFAQ } from '@/components/pricing/PricingFAQ';
 import { PricingCTA } from '@/components/pricing/PricingCTA';
 import { PricingSection } from '@/components/pricing/PricingSection';
@@ -68,13 +68,15 @@ export default function PricingPage() {
   useEffect(() => {
     async function loadStatus() {
       try {
-        const res = await fetch('/api/subscription/status');
+        const res = await fetch('/api/user-plan/status');
         const data = await res.json();
         if (data && data.status) {
           setCurrentPlanId(data.status.planId);
         }
       } catch (err) {
-        console.error('Error fetching subscription status:', err);
+        // Use console.warn instead of console.error to prevent Next.js dev overlay 
+        // when ad-blockers block the '/api/subscription/*' endpoints.
+        console.warn('Could not fetch subscription status. It might be blocked by an ad-blocker.', err);
       }
     }
     loadStatus();
@@ -235,18 +237,6 @@ export default function PricingPage() {
         </div>
       </section>
 
-      {/* ── FEATURE COMPARISON TABLE ── */}
-      <PricingSection
-        id="comparison"
-        title="Compare all features"
-        subtitle="See exactly what's included in each plan before you decide."
-      >
-        <div className="max-w-5xl mx-auto px-4 sm:px-6">
-          <div className="card-premium p-4 sm:p-6 lg:p-8">
-            <FeatureComparison />
-          </div>
-        </div>
-      </PricingSection>
 
 
 

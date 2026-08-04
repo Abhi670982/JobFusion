@@ -276,7 +276,7 @@ export default function CustomSignInPage() {
           animate={{ opacity: 1, y: 0 }}
           className="w-full max-w-md"
         >
-          <div className="lg:hidden flex items-center gap-2 mb-8">
+          <Link href="/" className="lg:hidden flex items-center gap-2 mb-8">
             <Image
               src="/logo-circle.png"
               alt="JobFusion Logo"
@@ -285,7 +285,7 @@ export default function CustomSignInPage() {
               className="rounded-full object-cover border-[3px] border-border/70 shadow-sm"
             />
             <span className="font-bold text-xl gradient-brand-text font-sans">JobFusion</span>
-          </div>
+          </Link>
 
           {/* ── VERIFICATION CODE STEP ── */}
           {verificationStep ? (
