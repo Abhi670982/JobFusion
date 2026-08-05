@@ -1,19 +1,17 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { MapPin, Clock, ExternalLink, Building2, Wifi, Star, DollarSign } from 'lucide-react';
+import { MapPin, Clock, ExternalLink, Building2, Wifi, Star, DollarSign, Lock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { PortalUnifiedJob } from '@/lib/portal-fetcher/adapters/base-adapter';
+import { PortalJobDTOV1 } from '@/lib/portal-fetcher/dto/v1';
 import { openJob } from '@/lib/open-job';
-
 import { isPremiumPortal } from '@/lib/portal-gating';
 import { trackMonetizationEvent } from '@/lib/analytics';
-import { Lock } from 'lucide-react';
 
 interface PortalJobCardProps {
-  job: PortalUnifiedJob;
+  job: PortalJobDTOV1;
   index?: number;
   isPro?: boolean;
   onRequirePremiumPortal?: (portalName: string) => void;
@@ -26,9 +24,9 @@ const portalSourceConfig: Record<string, { label: string; bg: string; text: stri
   wellfound:   { label: 'Wellfound',   bg: 'bg-teal-500/10',   text: 'text-teal-600 dark:text-teal-400',   border: 'border-teal-500/20',   dot: 'bg-teal-500' },
 };
 
-function formatRelativeTime(dateInput: Date | string | null | undefined): string | null {
-  if (!dateInput) return null;
-  const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+function formatRelativeTime(dateISO: string | null | undefined): string | null {
+  if (!dateISO) return null;
+  const d = new Date(dateISO);
   if (isNaN(d.getTime())) return null;
   
   const diffMs = Date.now() - d.getTime();
@@ -45,49 +43,50 @@ function formatRelativeTime(dateInput: Date | string | null | undefined): string
 }
 
 export default function PortalJobCard({ job, index = 0, isPro = false, onRequirePremiumPortal }: PortalJobCardProps) {
-  const srcConfig = portalSourceConfig[job.source] ?? {
-    label: job.source,
+  const portalKey = (job.sourcePortal || 'linkedin').toLowerCase();
+  const srcConfig = portalSourceConfig[portalKey] ?? {
+    label: job.sourcePortal,
     bg: 'bg-muted',
     text: 'text-muted-foreground',
     border: 'border-border',
     dot: 'bg-muted-foreground',
   };
 
-  const isPremium = isPremiumPortal(job.source, (job as any).sourceCategory);
+  const isPremium = isPremiumPortal(portalKey, "JOB_PORTAL");
   const isLocked = isPremium && !isPro;
 
-  const postedStr = formatRelativeTime(job.postedDate);
-  const displaySkills = job.skills?.slice(0, 4) ?? [];
+  const postedStr = formatRelativeTime(job.postedAtISO);
+  const displaySkills = job.matchedSkills?.slice(0, 4) ?? [];
 
   const handleApply = async (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
 
     if (isLocked) {
-      trackMonetizationEvent('Premium Job Click', { portal: job.source, title: job.title });
+      trackMonetizationEvent('Premium Job Click', { portal: portalKey, title: job.title });
     }
 
     try {
       const res = await fetch('/api/jobs/apply-gate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId: job.sourceId, source: job.source }),
+        body: JSON.stringify({ jobId: job.id, source: portalKey }),
       });
       const data = await res.json();
 
       if (!res.ok || !data.allowed) {
-        trackMonetizationEvent('Portal Click Attempt', { portal: job.source, allowed: false });
+        trackMonetizationEvent('Portal Click Attempt', { portal: portalKey, allowed: false });
         if (onRequirePremiumPortal) {
-          onRequirePremiumPortal(job.source || 'Premium');
+          onRequirePremiumPortal(portalKey || 'Premium');
         }
         return;
       }
 
-      openJob(data.applyUrl || job.applyUrl || job.sourceUrl);
+      openJob(data.applyUrl || job.applyUrl);
     } catch {
       if (isLocked && onRequirePremiumPortal) {
-        onRequirePremiumPortal(job.source || 'Premium');
+        onRequirePremiumPortal(portalKey || 'Premium');
       } else {
-        openJob(job.applyUrl || job.sourceUrl);
+        openJob(job.applyUrl);
       }
     }
   };
@@ -108,13 +107,12 @@ export default function PortalJobCard({ job, index = 0, isPro = false, onRequire
       {/* Header Info */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2.5 min-w-0">
-          {job.logo ? (
+          {job.companyLogo ? (
             <img 
-              src={job.logo} 
+              src={job.companyLogo} 
               alt={job.company} 
               className="w-9 h-9 rounded-xl object-contain bg-white p-1 border border-border/40 flex-shrink-0"
               onError={(e) => {
-                // Remove img and fallback to placeholder
                 (e.target as HTMLElement).style.display = 'none';
               }}
             />
@@ -170,10 +168,10 @@ export default function PortalJobCard({ job, index = 0, isPro = false, onRequire
             {job.employmentType}
           </Badge>
         )}
-        {job.experience && (
+        {job.experienceLevel && (
           <span className="flex items-center gap-1 text-[11px]">
             <Star className="w-3.5 h-3.5 text-amber-500" />
-            <span className="capitalize">{job.experience}</span>
+            <span className="capitalize">{job.experienceLevel}</span>
           </span>
         )}
       </div>
@@ -194,9 +192,9 @@ export default function PortalJobCard({ job, index = 0, isPro = false, onRequire
               {skill}
             </span>
           ))}
-          {(job.skills?.length ?? 0) > 4 && (
+          {(job.matchedSkills?.length ?? 0) > 4 && (
             <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-muted text-muted-foreground">
-              +{job.skills.length - 4} more
+              +{job.matchedSkills.length - 4} more
             </span>
           )}
         </div>
@@ -207,7 +205,7 @@ export default function PortalJobCard({ job, index = 0, isPro = false, onRequire
         <div className="flex items-center gap-3 min-w-0">
           <span className="flex items-center gap-1 text-xs font-bold text-foreground">
             <DollarSign className="w-3.5 h-3.5 text-primary" />
-            <span>{job.salary || "Not disclosed"}</span>
+            <span>{job.salaryText || "Not disclosed"}</span>
           </span>
           <span className="flex items-center gap-1 text-[10px] text-muted-foreground font-semibold">
             <Clock className="w-3.5 h-3.5" />

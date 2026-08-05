@@ -1,15 +1,9 @@
 import { BasePortalAdapter, PortalFetchQuery, PortalUnifiedJob } from "./base-adapter";
 import { extractSkills } from "@/lib/skills-extractor";
 import { parsePostedDate } from "@/lib/parse-posted-date";
+import { sanitizeJobDescription, validateExternalUrl } from "../sanitizers/sanitizer";
 import crypto from "crypto";
 
-/**
- * LinkedIn adapter — free Cheerio-based scraper using the public guest job search.
- * No API key, no RapidAPI, no cost.
- *
- * Primary:  https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search
- * Fallback: https://www.linkedin.com/jobs/search (standard search page)
- */
 export class LinkedInPortalAdapter extends BasePortalAdapter {
   readonly source = "linkedin" as const;
 
@@ -21,29 +15,22 @@ export class LinkedInPortalAdapter extends BasePortalAdapter {
     try {
       return await this.scrapeGuestApi(keyword, location, page);
     } catch (err: any) {
-      console.warn(
-        `[LinkedIn Adapter] Guest API failed (${err.message}). Trying search page fallback...`
-      );
+      this.logger.warn(`Guest API failed (${err.message}). Trying search page fallback...`, { portal: this.source });
       try {
         return await this.scrapeSearchPage(keyword, location, page);
       } catch (fallbackErr: any) {
-        console.warn(
-          `[LinkedIn Adapter] Search page fallback also failed (${fallbackErr.message}). Returning empty list.`
-        );
+        this.logger.warn(`Search page fallback failed (${fallbackErr.message}). Returning empty list.`, { portal: this.source });
         return [];
       }
     }
   }
 
-  /**
-   * Primary: LinkedIn's guest jobs API endpoint — returns job card HTML fragments.
-   */
   private async scrapeGuestApi(keyword: string, location: string, page: number): Promise<any[]> {
     const cheerio = require("cheerio");
     const start = (page - 1) * 25;
     const url = `https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=${encodeURIComponent(keyword)}&location=${encodeURIComponent(location)}&start=${start}&f_TPR=r604800`;
 
-    console.log(`[LinkedIn Adapter] Fetching via guest API (page ${page}, start ${start}): ${url}`);
+    this.logger.info(`Fetching via guest API (page ${page}, start ${start})`, { portal: this.source, url });
 
     const res = await fetch(url, {
       headers: {
@@ -109,19 +96,16 @@ export class LinkedInPortalAdapter extends BasePortalAdapter {
       }
     });
 
-    console.log(`[LinkedIn Adapter] Guest API returned ${jobs.length} jobs.`);
+    this.logger.info(`Guest API returned ${jobs.length} jobs.`, { portal: this.source });
     return jobs;
   }
 
-  /**
-   * Fallback: Standard public job search page.
-   */
   private async scrapeSearchPage(keyword: string, location: string, page: number): Promise<any[]> {
     const cheerio = require("cheerio");
     const start = (page - 1) * 25;
     const url = `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(keyword)}&location=${encodeURIComponent(location)}&start=${start}&f_TPR=r604800`;
 
-    console.log(`[LinkedIn Adapter] Fetching via search page (page ${page}, start ${start}): ${url}`);
+    this.logger.info(`Fetching via search page (page ${page}, start ${start})`, { portal: this.source, url });
 
     const res = await fetch(url, {
       headers: {
@@ -158,7 +142,7 @@ export class LinkedInPortalAdapter extends BasePortalAdapter {
       }
     });
 
-    console.log(`[LinkedIn Adapter] Search page returned ${jobs.length} jobs.`);
+    this.logger.info(`Search page returned ${jobs.length} jobs.`, { portal: this.source });
     return jobs;
   }
 
@@ -173,7 +157,8 @@ export class LinkedInPortalAdapter extends BasePortalAdapter {
       .update(rawHashInput)
       .digest("hex");
 
-    const description = `Job listing from LinkedIn: ${title} at ${company} located in ${location}.`;
+    const rawDescription = `Job listing from LinkedIn: ${title} at ${company} located in ${location}.`;
+    const description = sanitizeJobDescription(rawDescription);
     const extractedSkills = extractSkills(title + " " + description).map((s) =>
       s.name.toLowerCase()
     );
@@ -183,27 +168,27 @@ export class LinkedInPortalAdapter extends BasePortalAdapter {
       location.toLowerCase().includes("work from home") ||
       location.toLowerCase().includes("wfh");
 
-    // Extract LinkedIn job ID from URL for a clean sourceId
     let sourceId = dedupeHash.substring(0, 12);
     if (raw.applyUrl) {
       const match = raw.applyUrl.match(/-(\d+)\?/);
       if (match && match[1]) sourceId = match[1];
     }
 
-    // Parse posted date
-    let postedAt: Date | null = null;
+    let postedAtISO: string | null = null;
     if (raw.postedText) {
       const parsed = parsePostedDate(raw.postedText);
       if (parsed) {
-        postedAt = parsed.timestamp;
+        postedAtISO = parsed.timestamp.toISOString();
       }
     }
+
+    const validatedApplyUrl = validateExternalUrl(raw.applyUrl) || "https://www.linkedin.com";
 
     return {
       sourceId,
       source: this.source,
-      sourceUrl: raw.applyUrl || "https://www.linkedin.com",
-      applyUrl: raw.applyUrl || null,
+      sourceUrl: validatedApplyUrl,
+      applyUrl: validatedApplyUrl,
       title,
       company,
       logo: null,
@@ -225,7 +210,7 @@ export class LinkedInPortalAdapter extends BasePortalAdapter {
       salaryMin: null,
       salaryMax: null,
       description,
-      postedDate: postedAt,
+      postedDate: postedAtISO,
       skills: extractedSkills,
     };
   }

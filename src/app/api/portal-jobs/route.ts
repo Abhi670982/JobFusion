@@ -2,168 +2,95 @@ import { NextRequest, NextResponse } from "next/server";
 import { JobSourceCategory } from "@prisma/client";
 import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import { prisma } from "@/lib/prisma";
-import { classifySourceCategory } from "@/lib/source-category";
-import { enqueueCrawlJob } from "@/lib/queue";
 import { buildCacheKey, getCachedCategoryJobs, setCachedCategoryJobs } from "@/lib/redis-cache";
-import { calculateRelevanceScore } from "@/lib/relevance";
-import { canonicalizeUrl } from "@/lib/url-cleaner";
-import crypto from "crypto";
+import { normalizeSearchInput } from "@/lib/portal-fetcher/sanitizers/sanitizer";
+import { crawlPortalJobs } from "@/lib/portal-fetcher/crawler";
+import { portalRegistry } from "@/lib/portal-fetcher/registry";
+import { JobPortalSource } from "@/lib/portal-fetcher/adapters/base-adapter";
+import { PortalJobDTOV1, PortalJobsApiResponseV1 } from "@/lib/portal-fetcher/dto/v1";
 
 export const dynamic = "force-dynamic";
 
-// Calculate rolling 168-hour (7-day) visibility window
 function getRollingJobVisibilityWindow(now = new Date()) {
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   return {
     from: sevenDaysAgo,
-    to: new Date(now.getTime() + 5 * 60 * 1000), // 5-min clock skew tolerance
+    to: new Date(now.getTime() + 5 * 60 * 1000),
   };
 }
 
-// Process and save jobs in controlled in-memory deduplication and transaction batches
-async function processAndPersistPortalJobs(userId: string, jobs: any[], userSkills: string[]): Promise<number> {
-  if (!jobs || jobs.length === 0) return 0;
+async function getUserCachedPortalJobs(
+  userId: string,
+  portal: string,
+  keyword: string,
+  location: string,
+  visibilityFrom: Date,
+  visibilityTo: Date,
+  allowedSources: string[] | null = null
+): Promise<PortalJobDTOV1[]> {
+  const portalLower = portal.toLowerCase();
   
-  let savedCount = 0;
-  const lowerSkills = userSkills.map(s => s.toLowerCase().trim());
-  const BATCH_SIZE = 50;
-
-  // 1. In-Memory Deduplication and Classification
-  const preparedJobs: any[] = [];
-  const seenHashes = new Set<string>();
-
-  for (const job of jobs) {
-    const rawSource = job.source || "linkedin";
-    const classified = classifySourceCategory(rawSource, job.sourceProvider);
-
-    // GUARANTEE: Only process JOB_PORTAL jobs in this endpoint helper
-    if (classified.category !== JobSourceCategory.JOB_PORTAL) {
-      console.warn(`[Portal Jobs Pipeline] Skipping non-portal job category "${classified.category}" for source "${rawSource}".`);
-      continue;
+  // Defensive case-insensitive source filter
+  let sourceConditions: any = {};
+  if (allowedSources) {
+    if (portalLower !== "all" && allowedSources.includes(portalLower)) {
+      sourceConditions = {
+        OR: [
+          { source: { equals: portalLower, mode: "insensitive" } },
+          { sourceProvider: { equals: portalLower, mode: "insensitive" } },
+        ]
+      };
+    } else {
+      sourceConditions = {
+        OR: [
+          { source: { in: allowedSources } },
+          { sourceProvider: { in: allowedSources } },
+        ]
+      };
     }
+  } else if (portalLower !== "all") {
+    sourceConditions = {
+      OR: [
+        { source: { equals: portalLower, mode: "insensitive" } },
+        { sourceProvider: { equals: portalLower, mode: "insensitive" } },
+      ]
+    };
+  }
 
-    const matchScore = calculateRelevanceScore(
-      {
-        title: job.title,
-        skills: job.skills,
-        description: job.description,
-        requirements: job.requirements,
-      },
-      userSkills
-    );
+  // Mandatory keyword & location DB filters
+  const filterConditions: any[] = [];
 
-    const canonicalApplyUrl = canonicalizeUrl(job.applyUrl);
-    const hashInput = `job_portal-${rawSource}-${job.sourceId || ""}-${canonicalApplyUrl || ""}-${job.title}-${job.company}`.toLowerCase();
-    const dedupeHash = crypto.createHash("sha256").update(hashInput).digest("hex");
-
-    if (seenHashes.has(dedupeHash)) continue;
-    seenHashes.add(dedupeHash);
-
-    const parsedPostedDate = job.postedDate && !isNaN(new Date(job.postedDate).getTime())
-      ? new Date(job.postedDate)
-      : null;
-
-    preparedJobs.push({
-      job,
-      classified,
-      dedupeHash,
-      canonicalApplyUrl,
-      parsedPostedDate,
-      matchScore,
+  if (keyword.trim()) {
+    const k = keyword.trim();
+    filterConditions.push({
+      OR: [
+        { title: { contains: k, mode: "insensitive" } },
+        { company: { contains: k, mode: "insensitive" } },
+        { description: { contains: k, mode: "insensitive" } },
+        { skills: { has: k.toLowerCase() } },
+      ]
     });
   }
 
-  // 2. Controlled Transaction Batching (No giant single transaction)
-  for (let i = 0; i < preparedJobs.length; i += BATCH_SIZE) {
-    const batch = preparedJobs.slice(i, i + BATCH_SIZE);
-
-    try {
-      await prisma.$transaction(async (tx) => {
-        for (const item of batch) {
-          const { job, classified, dedupeHash, canonicalApplyUrl, parsedPostedDate, matchScore } = item;
-
-          const dbJob = await tx.job.upsert({
-            where: { dedupeHash },
-            update: {
-              title: job.title,
-              company: job.company,
-              location: job.location,
-              isRemote: job.isRemote,
-              applyUrl: canonicalApplyUrl || job.applyUrl,
-              postedAtDate: parsedPostedDate || undefined,
-              sourceCategory: JobSourceCategory.JOB_PORTAL,
-              sourceProvider: classified.provider,
-              isActive: true,
-              matchScore,
-            },
-            create: {
-              title: job.title,
-              company: job.company,
-              location: job.location,
-              isRemote: job.isRemote,
-              applyUrl: canonicalApplyUrl || job.applyUrl,
-              postedAtDate: parsedPostedDate || new Date(),
-              source: job.source || "linkedin",
-              sourceCategory: JobSourceCategory.JOB_PORTAL,
-              sourceProvider: classified.provider,
-              sourceId: job.sourceId,
-              sourceUrl: canonicalizeUrl(job.sourceUrl) || job.applyUrl,
-              dedupeHash,
-              skills: job.skills || [],
-              description: job.description || "",
-              isActive: true,
-              matchScore,
-            }
-          });
-
-          await tx.userJob.upsert({
-            where: {
-              userId_jobId: {
-                userId,
-                jobId: dbJob.id,
-              }
-            },
-            update: {
-              matchedSkills: lowerSkills,
-              matchScore,
-            },
-            create: {
-              userId,
-              jobId: dbJob.id,
-              matchedSkills: lowerSkills,
-              matchScore,
-              discoveredAt: new Date(),
-            }
-          });
-
-          savedCount++;
-        }
-      });
-    } catch (err: any) {
-      console.error(`[Portal Jobs Batch] Error persisting batch of ${batch.length} jobs:`, err.message);
-    }
+  if (location.trim() && location.toLowerCase() !== "india") {
+    const l = location.trim();
+    filterConditions.push({
+      location: { contains: l, mode: "insensitive" }
+    });
   }
-
-  return savedCount;
-}
-
-// Retrieve cached JOB_PORTAL jobs from DB strictly matching sourceCategory = JOB_PORTAL
-async function getUserCachedPortalJobs(userId: string, portal: string, visibilityFrom: Date, visibilityTo: Date, allowedSources: string[] | null = null) {
-  const sourceFilter = allowedSources 
-    ? (portal !== "all" && allowedSources.includes(portal) ? { source: portal } : { source: { in: allowedSources } })
-    : (portal !== "all" ? { source: portal } : {});
 
   const userJobs = await prisma.userJob.findMany({
     where: {
       userId,
       job: {
-        sourceCategory: JobSourceCategory.JOB_PORTAL, // STRICT ENFORCEMENT
+        sourceCategory: JobSourceCategory.JOB_PORTAL,
         postedAtDate: {
           gte: visibilityFrom,
           lte: visibilityTo,
         },
         isActive: true,
-        ...sourceFilter,
+        ...sourceConditions,
+        AND: filterConditions.length > 0 ? filterConditions : undefined,
       }
     },
     include: {
@@ -177,28 +104,25 @@ async function getUserCachedPortalJobs(userId: string, portal: string, visibilit
   });
 
   return userJobs.map(uj => {
-    const postedDateStr = uj.job.postedAtDate ? uj.job.postedAtDate.toISOString() : "";
+    const postedDateStr = uj.job.postedAtDate ? uj.job.postedAtDate.toISOString() : null;
     return {
-      sourceId: uj.job.sourceId || uj.job.id,
-      source: uj.job.source || "linkedin",
-      sourceCategory: uj.job.sourceCategory,
-      sourceProvider: uj.job.sourceProvider,
-      sourceUrl: uj.job.sourceUrl || uj.job.applyUrl || "",
-      applyUrl: uj.job.applyUrl,
+      id: uj.job.sourceId || uj.job.id,
       title: uj.job.title,
       company: uj.job.company,
-      logo: uj.job.companyLogo || null,
-      location: uj.job.location,
+      companyLogo: uj.job.companyLogo || null,
+      location: uj.job.location || "Remote",
       isRemote: uj.job.isRemote,
       employmentType: uj.job.type === "full_time" ? "full-time" : (uj.job.type === "part_time" ? "part-time" : (uj.job.type as any)),
-      experience: uj.job.experienceLevel as any,
-      salary: uj.job.salary,
+      experienceLevel: uj.job.experienceLevel as any,
+      salaryText: uj.job.salary || "Not disclosed",
       salaryMin: uj.job.salaryMin || null,
       salaryMax: uj.job.salaryMax || null,
       description: uj.job.description || "",
-      postedDate: postedDateStr,
+      applyUrl: uj.job.applyUrl || uj.job.sourceUrl || "https://jobfusion.com",
+      sourcePortal: uj.job.source || "linkedin",
+      postedAtISO: postedDateStr,
       isDateless: false,
-      skills: uj.job.skills,
+      matchedSkills: uj.job.skills,
     };
   });
 }
@@ -219,27 +143,16 @@ export async function GET(req: NextRequest) {
 
   const { from: visibilityFrom, to: visibilityTo } = getRollingJobVisibilityWindow(requestNow);
 
-  const portal = (searchParams.get("portal") || "all").toLowerCase();
-  const keyword = searchParams.get("keyword")?.trim() || "";
-  const location = searchParams.get("location")?.trim() || "India";
+  const rawPortal = searchParams.get("portal") || "all";
+  const rawKeyword = searchParams.get("keyword") || "";
+  const rawLocation = searchParams.get("location") || "India";
   const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+  const limit = Math.max(1, Math.min(50, parseInt(searchParams.get("pageLimit") || searchParams.get("limit") || "10", 10)));
 
-  // Input Sanitization
-  const validatedKeyword = keyword.trim().replace(/\s+/g, " ");
-  if (validatedKeyword.length > 200 || /[\x00-\x1F\x7F-\x9F]/.test(validatedKeyword)) {
-    return NextResponse.json(
-      { success: false, error: "Invalid keyword format or characters" },
-      { status: 400 }
-    );
-  }
-
-  const validatedLocation = location.trim().replace(/\s+/g, " ");
-  if (validatedLocation.length > 100 || /[\x00-\x1F\x7F-\x9F]/.test(validatedLocation)) {
-    return NextResponse.json(
-      { success: false, error: "Invalid location format or characters" },
-      { status: 400 }
-    );
-  }
+  // Stage 0: Search Input Normalization
+  const normalizedPortal = rawPortal.toLowerCase();
+  const normalizedKeyword = normalizeSearchInput(rawKeyword, 200);
+  const normalizedLocation = normalizeSearchInput(rawLocation, 100) || "India";
 
   try {
     // 1. Authenticate user & resolve permitted job sources
@@ -253,67 +166,105 @@ export async function GET(req: NextRequest) {
     const { allowedSources } = await getPermittedJobSources(userId);
 
     // 2. Check Category-Isolated Redis Cache
-    const cacheKey = buildCacheKey(JobSourceCategory.JOB_PORTAL, validatedKeyword || portal, validatedLocation, page);
-    const redisCached = await getCachedCategoryJobs<any[]>(cacheKey);
-    if (redisCached) {
+    const cacheKey = buildCacheKey(
+      JobSourceCategory.JOB_PORTAL,
+      normalizedKeyword || normalizedPortal,
+      normalizedLocation,
+      page
+    );
+    const redisCached = await getCachedCategoryJobs<PortalJobDTOV1[]>(cacheKey);
+    if (redisCached && Array.isArray(redisCached) && redisCached.length > 0) {
       const filteredRedis = allowedSources 
-        ? redisCached.filter((j: any) => allowedSources.includes((j.source || "").toLowerCase()))
+        ? redisCached.filter((j: any) => allowedSources.includes((j.sourcePortal || j.source || "").toLowerCase()))
         : redisCached;
 
-      return NextResponse.json({
+      const totalFound = filteredRedis.length;
+      const totalPages = Math.ceil(totalFound / limit) || 1;
+      const paginatedSlice = filteredRedis.slice((page - 1) * limit, page * limit);
+
+      const responsePayload = {
+        version: "v1" as const,
         success: true,
-        portal,
-        keyword: validatedKeyword,
-        location: validatedLocation,
+        portal: normalizedPortal,
+        keyword: normalizedKeyword,
+        location: normalizedLocation,
         page,
-        data: filteredRedis,
-        jobs: filteredRedis,
+        limit,
+        totalFound,
+        totalPages,
+        jobs: paginatedSlice,
+        data: paginatedSlice, // Alias for backward compatibility
         cached: true,
-        sourceCategory: JobSourceCategory.JOB_PORTAL,
-      });
+        healthStatus: portalRegistry.getHealthSummary(),
+      };
+
+      return NextResponse.json(responsePayload);
     }
 
     // 3. Query PostgreSQL for matching JOB_PORTAL jobs strictly within 168-hour rolling window
-    const cachedJobs = await getUserCachedPortalJobs(userId, portal, visibilityFrom, visibilityTo, allowedSources);
+    const cachedDbJobs = await getUserCachedPortalJobs(
+      userId,
+      normalizedPortal,
+      normalizedKeyword,
+      normalizedLocation,
+      visibilityFrom,
+      visibilityTo,
+      allowedSources
+    );
 
-    // 4. NON-BLOCKING DECOUPLED ARCHITECTURE:
-    // If DB results are empty or stale, enqueue a background BullMQ refresh task asynchronously with deterministic lock.
-    // Return available cached/empty response immediately to the client WITHOUT waiting for synchronous crawling!
-    let backgroundSyncQueued = false;
-    if (cachedJobs.length < 10) {
-      const enqueueRes = await enqueueCrawlJob({
-        category: JobSourceCategory.JOB_PORTAL,
-        provider: portal,
-        keyword: validatedKeyword || "software engineer",
-        location: validatedLocation,
-        userId,
+    // 4. Live Scrape Fallback via 10-Stage Pipeline if DB jobs are sparse
+    let pipelineResultJobs: PortalJobDTOV1[] = cachedDbJobs;
+    let errors: string[] = [];
+
+    if (cachedDbJobs.length < 5) {
+      const crawlRes = await crawlPortalJobs({
+        portal: (normalizedPortal === "all" ? "all" : normalizedPortal) as JobPortalSource | "all",
+        keyword: normalizedKeyword,
+        location: normalizedLocation,
+        page,
+        limit,
       });
-      backgroundSyncQueued = enqueueRes.enqueued;
+
+      if (crawlRes.dtoJobs && crawlRes.dtoJobs.length > 0) {
+        pipelineResultJobs = crawlRes.dtoJobs;
+      }
+      if (crawlRes.errors) {
+        errors = crawlRes.errors;
+      }
     }
 
     // Save to category-aware Redis cache if data is present
-    if (cachedJobs.length > 0) {
-      await setCachedCategoryJobs(cacheKey, cachedJobs, 600);
+    if (pipelineResultJobs.length > 0) {
+      await setCachedCategoryJobs(cacheKey, pipelineResultJobs, 600);
     }
 
-    return NextResponse.json({
+    const totalFound = pipelineResultJobs.length;
+    const totalPages = Math.max(1, Math.ceil(totalFound / limit));
+    const paginatedJobs = pipelineResultJobs.slice((page - 1) * limit, page * limit);
+
+    const responsePayload: PortalJobsApiResponseV1 & { data: PortalJobDTOV1[] } = {
+      version: "v1",
       success: true,
-      portal,
-      keyword: validatedKeyword,
-      location: validatedLocation,
+      portal: normalizedPortal,
+      keyword: normalizedKeyword,
+      location: normalizedLocation,
       page,
-      data: cachedJobs,
-      jobs: cachedJobs,
-      cached: true,
-      sourceCategory: JobSourceCategory.JOB_PORTAL,
-      backgroundSyncQueued,
-      message: backgroundSyncQueued ? "Returning cached results. Refreshing background pool." : "Returned fresh cached jobs.",
-    });
+      limit,
+      totalFound,
+      totalPages,
+      jobs: paginatedJobs,
+      data: paginatedJobs, // Backward compatible alias
+      cached: false,
+      errors: errors.length > 0 ? errors : undefined,
+      healthStatus: portalRegistry.getHealthSummary(),
+    };
+
+    return NextResponse.json(responsePayload);
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Failed retrieving portal jobs";
     console.error("[Portal Jobs API] Handler failed:", errorMessage);
     return NextResponse.json(
-      { success: false, error: errorMessage },
+      { success: false, error: errorMessage, version: "v1" },
       { status: 500 }
     );
   }

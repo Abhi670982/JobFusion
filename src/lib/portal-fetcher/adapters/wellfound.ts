@@ -1,6 +1,7 @@
 import { BasePortalAdapter, PortalFetchQuery, PortalUnifiedJob } from "./base-adapter";
 import { extractSkills } from "@/lib/skills-extractor";
 import { fetchHimalayasJobs, fetchArbeitnowJobs } from "@/lib/adapters/aggregator-apis";
+import { sanitizeJobDescription, validateExternalUrl } from "../sanitizers/sanitizer";
 import crypto from "crypto";
 
 export class WellfoundPortalAdapter extends BasePortalAdapter {
@@ -17,7 +18,7 @@ export class WellfoundPortalAdapter extends BasePortalAdapter {
     const query = `site:wellfound.com/jobs "${keyword}" "${location}"`;
     const url = `https://search.yahoo.com/search?p=${encodeURIComponent(query)}`;
     
-    console.log(`[Wellfound Portal Adapter] Crawling Yahoo: ${url}`);
+    this.logger.info(`Crawling Yahoo search for Wellfound jobs: ${url}`, { portal: this.source });
     
     try {
       const res = await fetch(url, {
@@ -103,11 +104,10 @@ export class WellfoundPortalAdapter extends BasePortalAdapter {
         }
       });
 
-      console.log(`[Wellfound Portal Adapter] Scraped ${jobs.length} jobs successfully from Yahoo search.`);
+      this.logger.info(`Scraped ${jobs.length} jobs from Yahoo search.`, { portal: this.source });
       return jobs;
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : "Yahoo crawl failed";
-      console.error("[Wellfound Portal Adapter] Yahoo crawl failed:", errorMessage);
+      this.logger.error("Yahoo crawl failed:", err, { portal: this.source });
       return [];
     }
   }
@@ -167,19 +167,17 @@ export class WellfoundPortalAdapter extends BasePortalAdapter {
             rawListings = body.data?.jobListings || [];
           }
         }
-      } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : "GraphQL fetch failed";
-        console.warn(`[Wellfound Portal Adapter] GraphQL fetch failed (${errorMessage}). Trying fallback...`);
+      } catch (_error: unknown) {
+        this.logger.warn("GraphQL fetch failed, trying Yahoo search fallback...", { portal: this.source });
       }
     }
 
     if (rawListings.length === 0) {
-      console.log("[Wellfound Portal Adapter] Session token is not set or API failed. Crawling live Wellfound jobs via Yahoo...");
       rawListings = await this.crawlYahoo(keyword, location);
     }
 
     if (rawListings.length === 0) {
-      console.log("[Wellfound Portal Adapter] Yahoo crawl returned 0. Falling back to Himalayas + Arbeitnow remote feeds...");
+      this.logger.info("Yahoo crawl returned 0. Falling back to Himalayas + Arbeitnow...", { portal: this.source });
       try {
         const [himalayas, arbeitnow] = await Promise.all([
           fetchHimalayasJobs(keyword),
@@ -188,8 +186,7 @@ export class WellfoundPortalAdapter extends BasePortalAdapter {
         const combined = [...himalayas, ...arbeitnow];
         return combined.map(j => ({ ...j, _isFallback: true }));
       } catch (err: unknown) {
-        const errorMessage = err instanceof Error ? err.message : "Fallback fetch failed";
-        console.error("[Wellfound Portal Adapter] Fallback fetch failed:", errorMessage);
+        this.logger.error("Fallback fetch failed:", err, { portal: this.source });
         return [];
       }
     }
@@ -217,11 +214,13 @@ export class WellfoundPortalAdapter extends BasePortalAdapter {
       else if (rawType.includes("intern")) employmentType = "internship";
       else if (rawType.includes("free") || rawType.includes("gig")) employmentType = "freelance";
 
+      const applyUrl = validateExternalUrl(raw.applyUrl) || `https://wellfound.com`;
+
       return {
         sourceId: dedupeHash.substring(0, 12),
         source: this.source,
-        sourceUrl: raw.applyUrl || `https://wellfound.com`,
-        applyUrl: raw.applyUrl || null,
+        sourceUrl: applyUrl,
+        applyUrl,
         title,
         company,
         logo: null,
@@ -232,7 +231,7 @@ export class WellfoundPortalAdapter extends BasePortalAdapter {
         salary: "Not disclosed",
         salaryMin: null,
         salaryMax: null,
-        description: raw.description || "",
+        description: sanitizeJobDescription(raw.description || ""),
         postedDate: null,
         skills: raw.description ? extractSkills(raw.description).map(s => s.name.toLowerCase()) : [],
       };
@@ -259,7 +258,7 @@ export class WellfoundPortalAdapter extends BasePortalAdapter {
         ? `₹${Math.round(raw.salaryMin / 100000)}L – ₹${Math.round(raw.salaryMax / 100000)}L`
         : "Not disclosed";
 
-      const targetUrl = raw.url || raw.applyUrl || `https://wellfound.com/jobs?keyword=${encodeURIComponent(title)}`;
+      const targetUrl = validateExternalUrl(raw.url || raw.applyUrl) || `https://wellfound.com`;
 
       return {
         sourceId: raw.id || dedupeHash.substring(0, 12),
@@ -268,7 +267,7 @@ export class WellfoundPortalAdapter extends BasePortalAdapter {
         applyUrl: targetUrl,
         title,
         company,
-        logo: raw.companyLogoUrl || null,
+        logo: validateExternalUrl(raw.companyLogoUrl) || null,
         location,
         isRemote,
         employmentType,
@@ -276,8 +275,8 @@ export class WellfoundPortalAdapter extends BasePortalAdapter {
         salary: salaryString,
         salaryMin: raw.salaryMin || null,
         salaryMax: raw.salaryMax || null,
-        description: (raw.description || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim(),
-        postedDate: raw.postedAt ? new Date(raw.postedAt) : null,
+        description: sanitizeJobDescription(raw.description || ""),
+        postedDate: raw.postedAt ? new Date(raw.postedAt).toISOString() : null,
         skills: raw.description ? extractSkills(raw.description).map(s => s.name.toLowerCase()) : [],
       };
     }
@@ -291,7 +290,7 @@ export class WellfoundPortalAdapter extends BasePortalAdapter {
     const rawHashInput = `${title}${company}${location}`.toLowerCase();
     const dedupeHash = crypto.createHash("sha256").update(rawHashInput).digest("hex");
 
-    const description = raw.description || "";
+    const description = sanitizeJobDescription(raw.description || "");
     const extractedSkills = extractSkills(description).map(s => s.name.toLowerCase());
 
     let salaryMin: number | null = null;
@@ -348,14 +347,16 @@ export class WellfoundPortalAdapter extends BasePortalAdapter {
       ? `₹${Math.round(salaryMin / 100000)}L – ₹${Math.round(salaryMax / 100000)}L`
       : comp || "Not disclosed";
 
+    const applyUrl = validateExternalUrl(raw.applyUrl) || `https://wellfound.com/jobs/${raw.id || dedupeHash.substring(0, 8)}`;
+
     return {
       sourceId: raw.id || dedupeHash.substring(0, 12),
       source: this.source,
-      sourceUrl: raw.applyUrl || `https://wellfound.com/jobs/${raw.id}`,
-      applyUrl: raw.applyUrl || `https://wellfound.com/jobs/${raw.id}`,
+      sourceUrl: applyUrl,
+      applyUrl,
       title,
       company,
-      logo: raw.company?.logoUrl || null,
+      logo: validateExternalUrl(raw.company?.logoUrl) || null,
       location,
       isRemote,
       employmentType,
@@ -363,8 +364,8 @@ export class WellfoundPortalAdapter extends BasePortalAdapter {
       salary: salaryString,
       salaryMin,
       salaryMax,
-      description: description.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim(),
-      postedDate: raw.createdAt ? new Date(raw.createdAt) : null,
+      description,
+      postedDate: raw.createdAt ? new Date(raw.createdAt).toISOString() : null,
       skills: extractedSkills,
     };
   }
