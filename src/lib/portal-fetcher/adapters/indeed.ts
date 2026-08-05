@@ -2,6 +2,7 @@ import { BasePortalAdapter, PortalFetchQuery, PortalUnifiedJob } from "./base-ad
 import { extractSkills } from "@/lib/skills-extractor";
 import { fetchJobicyJobs, fetchRemotiveJobs } from "@/lib/adapters/aggregator-apis";
 import { parsePostedDate } from "@/lib/parse-posted-date";
+import { sanitizeJobDescription, validateExternalUrl } from "../sanitizers/sanitizer";
 import crypto from "crypto";
 
 export class IndeedPortalAdapter extends BasePortalAdapter {
@@ -19,11 +20,11 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
     const page = query.page || 1;
 
     if (!this.apiKey) {
-      console.warn("[Indeed Portal Adapter] SERPAPI_KEY is not set. Checking environment compatibility for Puppeteer crawl...");
+      this.logger.warn("SERPAPI_KEY is not set. Checking environment compatibility for Puppeteer crawl...", { portal: this.source });
       
       const isServerless = process.env.VERCEL || process.env.NEXT_RUNTIME === "edge" || process.env.NODE_ENV === "production";
       if (isServerless) {
-        console.warn("[Indeed Portal Adapter] Serverless environment detected. Puppeteer not supported. Falling back to Jobicy + Remotive...");
+        this.logger.warn("Serverless environment detected. Falling back to Jobicy + Remotive...", { portal: this.source });
         try {
           const [jobicy, remotive] = await Promise.all([
             fetchJobicyJobs(keyword),
@@ -32,17 +33,15 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
           const combined = [...jobicy, ...remotive];
           return combined.map(j => ({ ...j, _isFallback: true }));
         } catch (err: any) {
-          console.error("[Indeed Portal Adapter] Fallback aggregator fetch failed:", err.message);
+          this.logger.error("Fallback aggregator fetch failed:", err, { portal: this.source });
           return [];
         }
       }
 
-      // Local/dev environment: Run Puppeteer to crawl Indeed directly
       try {
         return await this.scrapeWithPuppeteer(keyword, location, page);
       } catch (err: any) {
-        console.error("[Indeed Portal Adapter] Puppeteer crawl failed:", err.message);
-        console.log("[Indeed Portal Adapter] Falling back to Jobicy + Remotive...");
+        this.logger.error("Puppeteer crawl failed, trying Jobicy + Remotive fallback...", err, { portal: this.source });
         try {
           const [jobicy, remotive] = await Promise.all([
             fetchJobicyJobs(keyword),
@@ -51,7 +50,7 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
           const combined = [...jobicy, ...remotive];
           return combined.map(j => ({ ...j, _isFallback: true }));
         } catch (fallbackErr: any) {
-          console.error("[Indeed Portal Adapter] Fallback aggregator fetch failed:", fallbackErr.message);
+          this.logger.error("Fallback aggregator fetch failed:", fallbackErr, { portal: this.source });
           return [];
         }
       }
@@ -60,7 +59,7 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
     const start = (page - 1) * 10;
     const url = `https://serpapi.com/search?engine=google_jobs&q=${encodeURIComponent(keyword)}&location=${encodeURIComponent(location)}&start=${start}&api_key=${this.apiKey}`;
 
-    console.log(`[Indeed Portal Adapter] Fetching Indeed jobs via SerpAPI (page ${page}, start ${start}): ${url}`);
+    this.logger.info(`Fetching Indeed jobs via SerpAPI (page ${page}, start ${start})`, { portal: this.source });
 
     try {
       const response = await fetch(url);
@@ -71,16 +70,15 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
       const data = await response.json();
       const results = data.jobs_results || [];
 
-      // Filter results to only keep those coming from Indeed (via Indeed or Indeed.com)
       const indeedJobs = results.filter((job: any) => {
         const via = (job.via || "").toLowerCase();
         return via.includes("indeed");
       });
 
-      console.log(`[Indeed Portal Adapter] Found ${indeedJobs.length} indeed-specific jobs out of ${results.length} total Google Jobs results.`);
+      this.logger.info(`Found ${indeedJobs.length} indeed-specific jobs out of ${results.length} results.`, { portal: this.source });
       return indeedJobs;
     } catch (error: any) {
-      console.error(`[Indeed Portal Adapter] Error fetching data:`, error.message);
+      this.logger.error("Error fetching data via SerpAPI:", error, { portal: this.source });
       throw error;
     }
   }
@@ -99,19 +97,21 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
         location.toLowerCase().includes("work from home") ||
         location.toLowerCase().includes("wfh");
 
-      let postedAt: Date | null = null;
+      let postedAtISO: string | null = null;
       if (raw.postedText) {
         const parsed = parsePostedDate(raw.postedText);
         if (parsed) {
-          postedAt = parsed.timestamp;
+          postedAtISO = parsed.timestamp.toISOString();
         }
       }
+
+      const applyUrl = validateExternalUrl(raw.applyUrl) || `https://in.indeed.com`;
 
       return {
         sourceId: raw.jk || dedupeHash.substring(0, 12),
         source: this.source,
-        sourceUrl: raw.applyUrl || `https://in.indeed.com`,
-        applyUrl: raw.applyUrl || null,
+        sourceUrl: applyUrl,
+        applyUrl,
         title,
         company,
         logo: null,
@@ -122,8 +122,8 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
         salary: "Not disclosed",
         salaryMin: null,
         salaryMax: null,
-        description: raw.description || "",
-        postedDate: postedAt,
+        description: sanitizeJobDescription(raw.description || ""),
+        postedDate: postedAtISO,
         skills: raw.description ? extractSkills(raw.description).map(s => s.name.toLowerCase()) : [],
       };
     }
@@ -150,16 +150,23 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
         : "Not disclosed";
 
       const searchTerms = `${title} ${company}`;
-      const indeedUrl = `https://in.indeed.com/jobs?q=${encodeURIComponent(searchTerms)}`;
+      const fallbackUrl = `https://in.indeed.com/jobs?q=${encodeURIComponent(searchTerms)}`;
+      const applyUrl = validateExternalUrl(raw.url || raw.applyUrl) || fallbackUrl;
+
+      let postedAtISO: string | null = null;
+      if (raw.postedAt) {
+        const parsed = parsePostedDate(raw.postedAt);
+        if (parsed) postedAtISO = parsed.timestamp.toISOString();
+      }
 
       return {
         sourceId: raw.id || dedupeHash.substring(0, 12),
         source: this.source,
-        sourceUrl: indeedUrl,
-        applyUrl: indeedUrl,
+        sourceUrl: applyUrl,
+        applyUrl,
         title,
         company,
-        logo: raw.companyLogoUrl || null,
+        logo: validateExternalUrl(raw.companyLogoUrl) || null,
         location,
         isRemote,
         employmentType,
@@ -167,12 +174,8 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
         salary: salaryString,
         salaryMin: raw.salaryMin || null,
         salaryMax: raw.salaryMax || null,
-        description: (raw.description || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim(),
-        postedDate: (() => {
-          if (!raw.postedAt) return null;
-          const parsed = parsePostedDate(raw.postedAt);
-          return parsed ? parsed.timestamp : null;
-        })(),
+        description: sanitizeJobDescription(raw.description || ""),
+        postedDate: postedAtISO,
         skills: raw.description ? extractSkills(raw.description).map(s => s.name.toLowerCase()) : [],
       };
     }
@@ -184,13 +187,15 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
     const rawHashInput = `${title}${company}${location}`.toLowerCase();
     const dedupeHash = crypto.createHash("sha256").update(rawHashInput).digest("hex");
 
-    const description = raw.description || "";
+    const description = sanitizeJobDescription(raw.description || "");
     const extractedSkills = extractSkills(description).map(s => s.name.toLowerCase());
 
-    let applyUrl: string | null = null;
+    let rawApply: string | null = null;
     if (raw.apply_options && Array.isArray(raw.apply_options) && raw.apply_options.length > 0) {
-      applyUrl = raw.apply_options[0].link || null;
+      rawApply = raw.apply_options[0].link || null;
     }
+
+    const applyUrl = validateExternalUrl(rawApply || raw.link) || `https://www.indeed.com`;
 
     const ext = raw.detected_extensions || {};
     const isRemote =
@@ -234,12 +239,12 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
       }
     }
 
-    let postedAt: Date | null = null;
+    let postedAtISO: string | null = null;
     const rawPosted = raw.posted_at || ext.posted_at || "";
     if (rawPosted) {
       const parsed = parsePostedDate(rawPosted);
       if (parsed) {
-        postedAt = parsed.timestamp;
+        postedAtISO = parsed.timestamp.toISOString();
       }
     }
 
@@ -257,11 +262,11 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
     return {
       sourceId: raw.job_id || dedupeHash.substring(0, 12),
       source: this.source,
-      sourceUrl: raw.link || applyUrl || `https://www.indeed.com`,
+      sourceUrl: applyUrl,
       applyUrl,
       title,
       company,
-      logo: raw.thumbnail || null,
+      logo: validateExternalUrl(raw.thumbnail) || null,
       location,
       isRemote,
       employmentType,
@@ -269,8 +274,8 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
       salary: salaryString,
       salaryMin,
       salaryMax,
-      description: description.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim(),
-      postedDate: postedAt,
+      description,
+      postedDate: postedAtISO,
       skills: extractedSkills,
     };
   }
@@ -280,14 +285,13 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
     const start = (pageNum - 1) * 10;
     const url = `https://in.indeed.com/jobs?q=${encodeURIComponent(keyword)}&l=${encodeURIComponent(location)}&start=${start}&f_TPR=r604800&fromage=7&sort=date`;
 
-    console.log(`[Indeed Portal Adapter] Launching Puppeteer to scrape Indeed (page ${pageNum}, start ${start}): ${url}`);
+    this.logger.info(`Launching Puppeteer for Indeed search (page ${pageNum}, start ${start})`, { portal: this.source });
 
     return withPage(async (page) => {
       await page.setUserAgent(
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
       );
 
-      console.log(`[Indeed Portal Adapter] Navigating to Indeed search...`);
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: 25000 });
 
       const pageTitle = await page.title();
@@ -295,7 +299,6 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
         throw new Error("Indeed crawl blocked by Cloudflare challenge");
       }
 
-      console.log(`[Indeed Portal Adapter] Scraped page successfully. Extracting cards...`);
       const jobs = await page.evaluate(() => {
         const cards = document.querySelectorAll(".job_seen_beacon");
         const list: any[] = [];
@@ -338,7 +341,7 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
         return list;
       });
 
-      console.log(`[Indeed Portal Adapter] Scraped ${jobs.length} jobs directly from Indeed.`);
+      this.logger.info(`Scraped ${jobs.length} jobs directly from Indeed.`, { portal: this.source });
       return jobs;
     });
   }

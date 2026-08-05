@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import PortalJobCard from '@/components/portal-job-card';
-import { PortalUnifiedJob } from '@/lib/portal-fetcher/adapters/base-adapter';
+import { PortalJobDTOV1 } from '@/lib/portal-fetcher/dto/v1';
 import { parsePostedDate } from '@/lib/parse-posted-date';
 import { JobsErrorBoundary } from '@/components/error-boundary';
 import { UpgradeModal } from '@/components/pricing/UpgradeModal';
@@ -104,8 +104,6 @@ const EXP_LEVELS = [
 
 const JOBS_PER_PAGE = 8;
 
-// ─── Skeletons ────────────────────────────────────────────────────────────────
-
 function PortalJobSkeleton() {
   return (
     <div className="rounded-2xl border border-border/60 bg-card/50 p-4 space-y-3 animate-pulse">
@@ -134,13 +132,10 @@ function PortalJobSkeleton() {
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
-
 interface JobPortalsSectionProps {
   keyword?: string;
   locationInput?: string;
   profileSkills?: string[];
-  // Shared layout states from page.tsx to ensure identical feel and behavior
   mobileFilters: boolean;
   setMobileFilters: React.Dispatch<React.SetStateAction<boolean>>;
   filtersCollapsed: boolean;
@@ -161,7 +156,7 @@ export default function JobPortalsSection({
   setViewMode,
 }: JobPortalsSectionProps) {
   const [activePortal, setActivePortal] = useState('all');
-  const [portalJobs, setPortalJobs] = useState<Record<string, PortalUnifiedJob[]>>({
+  const [portalJobs, setPortalJobs] = useState<Record<string, PortalJobDTOV1[]>>({
     linkedin: [],
     indeed: [],
     internshala: [],
@@ -204,7 +199,6 @@ export default function JobPortalsSection({
     }
   }, [currentPage]);
 
-  // Filters State matching company careers structure
   const [selectedJobTypes, setSelectedJobTypes] = useState<string[]>([]);
   const [selectedExpLevels, setSelectedExpLevels] = useState<string[]>([]);
   const [remoteOnly, setRemoteOnly] = useState(false);
@@ -216,7 +210,6 @@ export default function JobPortalsSection({
   const lastFetchedKeys = useRef<Record<string, string>>({});
   const abortControllersRef = useRef<Record<string, AbortController | null>>({});
 
-  // Helper toggle functions
   const toggleJobType = (val: string) => {
     setSelectedJobTypes(prev =>
       prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]
@@ -237,58 +230,45 @@ export default function JobPortalsSection({
     setLocationOverride('');
   };
 
-  // ── Client-side filter + sort logic ──────────────────────────────────────
-  // resolveTs: convert postedDate (any format) to a sortable ms timestamp.
-  // Returns 0 for dateless jobs — they sort to the very bottom on DESC order.
-  const resolveTs = (job: PortalUnifiedJob): number => {
-    if (!job.postedDate) return 0;
-    const parsed = parsePostedDate(String(job.postedDate));
+  const resolveTs = (job: PortalJobDTOV1): number => {
+    if (!job.postedAtISO) return 0;
+    const parsed = parsePostedDate(String(job.postedAtISO));
     if (parsed) return parsed.timestamp.getTime();
-    // Try native Date as last resort (works for ISO strings)
-    const d = new Date(job.postedDate as any);
+    const d = new Date(job.postedAtISO);
     return isNaN(d.getTime()) ? 0 : d.getTime();
   };
 
   const rawJobs = useMemo(() => {
-    let jobs: PortalUnifiedJob[];
+    let jobs: PortalJobDTOV1[];
     if (activePortal === 'all') {
       jobs = Object.values(portalJobs).flat();
     } else {
       jobs = portalJobs[activePortal] || [];
     }
-    // Pre-sort the merged list by resolved timestamp descending (newest first).
-    // Dateless jobs (ts = 0) float to the bottom.
     return [...jobs].sort((a, b) => resolveTs(b) - resolveTs(a));
   }, [portalJobs, activePortal]);
 
   const filteredJobs = useMemo(() => {
     let jobs = [...rawJobs];
 
-    // Job Types
     if (selectedJobTypes.length > 0) {
       jobs = jobs.filter((j) => j.employmentType && selectedJobTypes.includes(j.employmentType));
     }
 
-    // Experience Levels
     if (selectedExpLevels.length > 0) {
-      jobs = jobs.filter((j) => j.experience && selectedExpLevels.includes(j.experience));
+      jobs = jobs.filter((j) => j.experienceLevel && selectedExpLevels.includes(j.experienceLevel));
     }
 
-    // Remote
     if (remoteOnly) {
       jobs = jobs.filter((j) => j.isRemote);
     }
 
-    // Salary Min
     if (salaryRange > 0) {
       const minInUnits = salaryRange * 100000;
       jobs = jobs.filter((j) => (j.salaryMin ?? 0) >= minInUnits || (j.salaryMax ?? 0) >= minInUnits);
     }
 
-    // Sort — uses pre-resolved timestamps for correctness
     if (sortBy === 'postedAt') {
-      // rawJobs is already sorted newest-first; only re-sort when user picks 'postedAt'
-      // No-op here since rawJobs pre-sort already did it, but re-run to handle filter changes
       jobs.sort((a, b) => resolveTs(b) - resolveTs(a));
     } else if (sortBy === 'salaryMin') {
       jobs.sort((a, b) => (b.salaryMin ?? b.salaryMax ?? 0) - (a.salaryMin ?? a.salaryMax ?? 0));
@@ -297,11 +277,9 @@ export default function JobPortalsSection({
     return jobs;
   }, [rawJobs, selectedJobTypes, selectedExpLevels, remoteOnly, salaryRange, sortBy]);
 
-  // ── Pagination ───────────────────────────────────────────────────────────
   const totalPages = Math.max(1, Math.ceil(filteredJobs.length / JOBS_PER_PAGE));
   const pagedJobs  = filteredJobs.slice((currentPage - 1) * JOBS_PER_PAGE, currentPage * JOBS_PER_PAGE);
 
-  // ── Fetch ────────────────────────────────────────────────────────────────
   const fetchSinglePortal = useCallback(async (
     portal: string,
     kw: string,
@@ -315,12 +293,11 @@ export default function JobPortalsSection({
     const cacheKey = `${PORTAL_CACHE_PREFIX}${portal}_${kw}_${loc}_${skillsQuery}`;
     
     if (!forceRefresh) {
-      // 1. Check client-side sessionStorage cache
       const cached = sessionStorage.getItem(cacheKey);
       if (cached) {
         try {
           const { jobs, timestamp } = JSON.parse(cached);
-          const isFresh = (Date.now() - timestamp) < 5 * 60 * 1000; // 5 min TTL
+          const isFresh = (Date.now() - timestamp) < 5 * 60 * 1000;
           
           if (isFresh) {
             setPortalJobs(prev => ({ ...prev, [portal]: jobs || [] }));
@@ -329,27 +306,21 @@ export default function JobPortalsSection({
             lastFetchedKeys.current[portal] = queryKey;
             return;
           } else {
-            // Stale cache: display immediately but refresh in background
             setPortalJobs(prev => ({ ...prev, [portal]: jobs || [] }));
           }
-        } catch (_) {
-          // ignore parsing errors
-        }
+        } catch (_) {}
       }
 
-      // 2. Prevent redundant in-flight duplicate triggers
       if (lastFetchedKeys.current[portal] === queryKey) {
         return;
       }
     } else {
-      // Manual refresh: invalidate cache
       sessionStorage.removeItem(cacheKey);
       delete lastFetchedKeys.current[portal];
     }
     
     lastFetchedKeys.current[portal] = queryKey;
 
-    // Abort previous in-flight request for this portal if any
     if (abortControllersRef.current[portal]) {
       abortControllersRef.current[portal]?.abort();
     }
@@ -376,10 +347,9 @@ export default function JobPortalsSection({
       const data = await res.json();
 
       if (data.success) {
-        const jobsList = data.data || [];
+        const jobsList: PortalJobDTOV1[] = data.jobs || data.data || [];
         setPortalJobs(prev => ({ ...prev, [portal]: jobsList }));
         
-        // Save to cache
         sessionStorage.setItem(cacheKey, JSON.stringify({
           jobs: jobsList,
           timestamp: Date.now()
@@ -392,10 +362,7 @@ export default function JobPortalsSection({
         setPortalErrors(prev => ({ ...prev, [portal]: data.error || 'Failed to fetch jobs' }));
       }
     } catch (err: any) {
-      if (err.name === 'AbortError') {
-        console.log(`[JobPortalsSection] Fetch for ${portal} was aborted.`);
-        return;
-      }
+      if (err.name === 'AbortError') return;
       setPortalErrors(prev => ({ ...prev, [portal]: 'Network error' }));
     } finally {
       setPortalLoading(prev => ({ ...prev, [portal]: false }));
@@ -431,15 +398,14 @@ export default function JobPortalsSection({
     triggerFetch(activePortal, keyword, effectiveLocation, optimizeWithSkills);
   }, [activePortal, keyword, effectiveLocation, optimizeWithSkills, triggerFetch]);
 
-  // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedJobTypes, selectedExpLevels, remoteOnly, salaryRange, locationOverride]);
 
-  // Clean up active abort controllers on unmount
   useEffect(() => {
+    const currentControllers = abortControllersRef.current;
     return () => {
-      Object.values(abortControllersRef.current).forEach(ctrl => ctrl?.abort());
+      Object.values(currentControllers).forEach(ctrl => ctrl?.abort());
     };
   }, []);
 
@@ -503,7 +469,6 @@ export default function JobPortalsSection({
           </Button>
         </div>
 
-        {/* Optimize with Resume Skills */}
         {profileSkills.length > 0 && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -519,7 +484,7 @@ export default function JobPortalsSection({
               />
             </div>
             <p className="text-[10px] text-muted-foreground leading-normal">
-              Intelligently query portals using your expanded resume skills: <strong className="text-foreground">{profileSkills.slice(0, 3).join(", ")}</strong>.
+              Query portals using resume skills: <strong className="text-foreground">{profileSkills.slice(0, 3).join(", ")}</strong>.
             </p>
           </div>
         )}
@@ -590,7 +555,7 @@ export default function JobPortalsSection({
         <div className="flex items-center justify-between">
           <div>
             <Label htmlFor="portal-remote-toggle" className="text-xs font-bold cursor-pointer select-none">Remote Only</Label>
-            <p className="text-[10px] text-muted-foreground mt-0.5">Show only work-from-home roles</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">Show work-from-home roles</p>
           </div>
           <Checkbox
             id="portal-remote-toggle"
@@ -630,7 +595,6 @@ export default function JobPortalsSection({
         
         {/* Toolbar row matching Careers */}
         <div className="flex items-center justify-between bg-card/60 backdrop-blur-md p-3 rounded-2xl border border-border/85 shadow-sm">
-          {/* Mobile Filter toggle button */}
           <Button 
             variant="outline" 
             size="sm" 
@@ -641,7 +605,6 @@ export default function JobPortalsSection({
             Filters
           </Button>
 
-          {/* Desktop Filter toggle button */}
           <Button 
             variant="outline" 
             size="sm" 
@@ -657,7 +620,6 @@ export default function JobPortalsSection({
           </p>
 
           <div className="flex items-center gap-3.5">
-            {/* Sorting dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="rounded-xl border-border h-9 font-medium gap-1 text-xs select-none hover:bg-accent touch-auto">
@@ -682,7 +644,6 @@ export default function JobPortalsSection({
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Grid/List View switcher */}
             <div className="hidden sm:flex items-center gap-1">
               <Button 
                 variant="ghost" 
@@ -704,7 +665,7 @@ export default function JobPortalsSection({
           </div>
         </div>
 
-        {/* Portal selection tabs (LinkedIn, Indeed, Internshala, Wellfound, All) */}
+        {/* Portal selection tabs */}
         <div className="flex items-center justify-between">
           <div className="flex flex-wrap gap-2">
             {PORTAL_TABS.map((tab) => {
@@ -769,7 +730,6 @@ export default function JobPortalsSection({
 
         {/* Main listing container */}
         <div className="rounded-2xl border border-border/70 bg-card/30 p-4 min-h-[320px]">
-          {/* Status info bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-3 mb-4">
             {!isAnyLoading && filteredJobs.length > 0 && totalPages > 1 && (
               <span className="text-[10px] text-muted-foreground font-semibold">
@@ -778,7 +738,6 @@ export default function JobPortalsSection({
             )}
           </div>
 
-          {/* Error Banner */}
           <AnimatePresence>
             {portalErrorMessage && (
               <motion.div
@@ -793,7 +752,6 @@ export default function JobPortalsSection({
             )}
           </AnimatePresence>
 
-          {/* Skeletons / Cards / Empty States */}
           <JobsErrorBoundary
             fallback={
               <div className="flex flex-col items-center justify-center py-10 bg-destructive/10 text-destructive rounded-2xl border border-destructive/20 p-8 space-y-4">
@@ -817,7 +775,7 @@ export default function JobPortalsSection({
                   >
                     {pagedJobs.map((job, i) => (
                       <PortalJobCard
-                        key={`${job.sourceId || `${job.title}-${i}`}`}
+                        key={`${job.id || `${job.title}-${i}`}`}
                         job={job}
                         index={i}
                         isPro={isPro}
@@ -875,7 +833,6 @@ export default function JobPortalsSection({
             )}
           </JobsErrorBoundary>
 
-          {/* Pagination Controls matching Careers style */}
           {!isAnyLoading && filteredJobs.length > 0 && totalPages > 1 && (
             <div className="flex items-center justify-between pt-6 border-t border-border/70 mt-6">
               <Button
@@ -904,7 +861,6 @@ export default function JobPortalsSection({
         </div>
       </div>
 
-      {/* Upgrade Modals for Locked Portals */}
       <UpgradeModal open={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} />
       <PremiumPortalModal open={showPremiumPortalModal} onClose={() => setShowPremiumPortalModal(false)} portalName={targetPortalName} />
     </div>
