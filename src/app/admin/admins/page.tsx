@@ -60,10 +60,12 @@ export default function AdminManagement() {
   const [actionLoading, setActionLoading] = useState(false);
   const [successToast, setSuccessToast] = useState("");
 
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
+
   const fetchAdmins = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/admins?q=${encodeURIComponent(search)}`);
+      const res = await fetch(`/api/admin/admins?q=${encodeURIComponent(debouncedSearch)}`);
       const data = await res.json();
       if (data.success) {
         setAdmins(data.data);
@@ -76,18 +78,16 @@ export default function AdminManagement() {
   };
 
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
     fetchAdmins();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Debounced search
-  useEffect(() => {
-    const delay = setTimeout(() => {
-      fetchAdmins();
-    }, 400);
-    return () => clearTimeout(delay);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }, [debouncedSearch]);
 
   // Toast auto-clear
   useEffect(() => {

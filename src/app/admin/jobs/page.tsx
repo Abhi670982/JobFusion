@@ -64,11 +64,13 @@ export default function AdminJobs() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
+
   const fetchJobs = async () => {
     setLoading(true);
     try {
       const url = `/api/admin/jobs?page=${page}&q=${encodeURIComponent(
-        search
+        debouncedSearch
       )}&source=${sourceFilter}&status=${statusFilter}`;
       
       const [jobsRes, statsRes] = await Promise.all([
@@ -95,19 +97,17 @@ export default function AdminJobs() {
   };
 
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
     fetchJobs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, sourceFilter, statusFilter]);
-
-  // Debounced search
-  useEffect(() => {
-    const delay = setTimeout(() => {
-      setPage(1);
-      fetchJobs();
-    }, 400);
-    return () => clearTimeout(delay);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }, [page, sourceFilter, statusFilter, debouncedSearch]);
 
   // Trigger scraper sync
   const handleScraperSync = async () => {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
-import { Prisma, User, UserStatus } from "@prisma/client";
+import { Prisma, UserStatus } from "@prisma/client";
 import { usageService } from "@/lib/usageService";
 
 export const dynamic = "force-dynamic";
@@ -17,8 +17,10 @@ export async function GET(req: NextRequest) {
     const query = searchParams.get("q") || "";
     const status = searchParams.get("status") || "";
     const role = searchParams.get("role") || "";
-    const page = parseInt(searchParams.get("page") || "1", 10);
-    const limit = parseInt(searchParams.get("limit") || "10", 10);
+    const plan = searchParams.get("plan") || "";
+    const byok = searchParams.get("byok") || "";
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "10", 10)));
 
     const filter: Prisma.UserWhereInput = {};
 
@@ -37,8 +39,36 @@ export async function GET(req: NextRequest) {
     if (role) {
       filter.role = role;
     }
+    if (plan) {
+      if (plan === "free") {
+        filter.NOT = { subscription: { status: "active", planId: { not: "free" } } };
+      } else {
+        filter.subscription = { status: "active", planId: { contains: plan, mode: "insensitive" } };
+      }
+    }
+    if (byok === "true") {
+      filter.apiKeys = {
+        OR: [
+          { openaiKey: { not: null } },
+          { geminiKey: { not: null } },
+          { claudeKey: { not: null } },
+        ]
+      };
+    } else if (byok === "false") {
+      filter.OR = [
+        { apiKeys: null },
+        {
+          apiKeys: {
+            openaiKey: null,
+            geminiKey: null,
+            claudeKey: null,
+          }
+        }
+      ];
+    }
 
     const skip = (page - 1) * limit;
+    const todayStr = usageService.getTodayDateString();
 
     const [pgUsers, total] = await Promise.all([
       prisma.user.findMany({
@@ -46,13 +76,25 @@ export async function GET(req: NextRequest) {
         orderBy: { createdAt: "desc" },
         skip,
         take: limit,
-        include: {
-          subscription: true,
-          apiKeys: true,
+        select: {
+          id: true,
+          clerkId: true,
+          fullName: true,
+          email: true,
+          profileImage: true,
+          role: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          subscription: {
+            select: { planId: true, status: true }
+          },
+          apiKeys: {
+            select: { openaiKey: true, geminiKey: true, claudeKey: true }
+          },
           usages: {
-            where: {
-              usageDate: usageService.getTodayDateString()
-            }
+            where: { usageDate: todayStr },
+            select: { usageCount: true }
           }
         }
       }),
@@ -61,17 +103,17 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
-    // Map to MongoDB-like payload
-    const users = pgUsers.map((u: any) => {
+    const users = pgUsers.map((u) => {
       let isBYOK = false;
-      let connectedProvider = null;
+      let connectedProvider: string | null = null;
       if (u.apiKeys) {
         if (u.apiKeys.openaiKey) { isBYOK = true; connectedProvider = "openai"; }
         else if (u.apiKeys.geminiKey) { isBYOK = true; connectedProvider = "gemini"; }
         else if (u.apiKeys.claudeKey) { isBYOK = true; connectedProvider = "claude"; }
       }
       
-      const aiUsageToday = u.usages.reduce((acc: number, curr: any) => acc + curr.usageCount, 0);
+      const aiUsageToday = u.usages.reduce((acc, curr) => acc + curr.usageCount, 0);
+      const planId = u.subscription?.status === "active" ? (u.subscription.planId || "free") : "free";
 
       return {
         _id: u.id,
@@ -83,13 +125,9 @@ export async function GET(req: NextRequest) {
         status: u.status,
         createdAt: u.createdAt,
         updatedAt: u.updatedAt,
-        subscription: {
-          planId: u.subscription?.planId || "free",
-        },
-        aiProvider: {
-          isBYOK,
-          provider: connectedProvider
-        },
+        subscription: planId, // String return type!
+        isBYOK,
+        aiProvider: connectedProvider,
         aiUsageToday
       };
     });
@@ -105,6 +143,7 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Failed to load users";
+    console.error("[Users API Error]:", error);
     return NextResponse.json(
       { success: false, error: errorMessage },
       { status: 500 }

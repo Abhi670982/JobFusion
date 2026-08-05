@@ -83,11 +83,20 @@ export default function AdminUsers() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
+
+  const getPlanDisplay = (sub: any): string => {
+    if (!sub) return "free";
+    if (typeof sub === "string") return sub;
+    if (typeof sub === "object" && sub.planId) return String(sub.planId);
+    return "free";
+  };
+
   const fetchUsers = async () => {
     setLoading(true);
     try {
       const url = `/api/admin/users?page=${page}&q=${encodeURIComponent(
-        search
+        debouncedSearch
       )}&status=${statusFilter}&role=${roleFilter}&plan=${planFilter}&byok=${byokFilter}`;
       const res = await fetch(url);
       const data = await res.json();
@@ -103,20 +112,19 @@ export default function AdminUsers() {
     }
   };
 
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Single unified fetch effect
   useEffect(() => {
     fetchUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, statusFilter, roleFilter, planFilter, byokFilter]);
-
-  // Debounced search
-  useEffect(() => {
-    const delay = setTimeout(() => {
-      setPage(1);
-      fetchUsers();
-    }, 400);
-    return () => clearTimeout(delay);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }, [page, statusFilter, roleFilter, planFilter, byokFilter, debouncedSearch]);
 
   const loadUserDetails = async (user: UserItem) => {
     setSelectedUser(user);
@@ -325,9 +333,9 @@ export default function AdminUsers() {
                     <td className="px-6 py-4">
                       <div className="flex flex-col gap-1">
                         <span className={`w-fit px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
-                          user.subscription === "pro" ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" : "bg-slate-500/10 text-slate-400 border border-slate-500/20"
+                          getPlanDisplay(user.subscription).includes("pro") ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" : "bg-slate-500/10 text-slate-400 border border-slate-500/20"
                         }`}>
-                          {user.subscription}
+                          {getPlanDisplay(user.subscription)}
                         </span>
                         {user.isBYOK && (
                           <span className="w-fit px-1.5 py-0.5 rounded text-[8px] font-bold uppercase bg-violet-500/10 text-violet-400 border border-violet-500/20">
@@ -339,7 +347,7 @@ export default function AdminUsers() {
 
                     {/* AI Usage */}
                     <td className="px-6 py-4 text-[#71717a] font-medium text-xs">
-                      {user.aiUsageToday} {user.isBYOK || user.subscription === 'pro' ? '' : '/ 2'} reqs
+                      {user.aiUsageToday} {user.isBYOK || getPlanDisplay(user.subscription).includes('pro') ? '' : '/ 2'} reqs
                     </td>
 
                     {/* Registered Date */}
@@ -484,9 +492,9 @@ export default function AdminUsers() {
                       <div className="p-4 rounded-xl border border-[#27272a]/50 bg-[#18181b]/5 flex flex-col items-center justify-center text-center">
                         <span className="text-[10px] text-[#71717a] font-bold uppercase tracking-wider mb-1">Plan</span>
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                          selectedUser.subscription === "pro" ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" : "bg-slate-500/10 text-slate-400 border border-slate-500/20"
+                          getPlanDisplay(selectedUser.subscription).includes("pro") ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" : "bg-slate-500/10 text-slate-400 border border-slate-500/20"
                         }`}>
-                          {selectedUser.subscription}
+                          {getPlanDisplay(selectedUser.subscription)}
                         </span>
                       </div>
                       <div className="p-4 rounded-xl border border-[#27272a]/50 bg-[#18181b]/5 flex flex-col items-center justify-center text-center">
@@ -496,7 +504,7 @@ export default function AdminUsers() {
                             BYOK Active
                           </span>
                         ) : (
-                          <span className="text-xs font-bold text-[#e4e4e7]">{selectedUser.aiUsageToday} {selectedUser.subscription === 'pro' ? '' : '/ 2'} reqs today</span>
+                          <span className="text-xs font-bold text-[#e4e4e7]">{selectedUser.aiUsageToday} {getPlanDisplay(selectedUser.subscription).includes('pro') ? '' : '/ 2'} reqs today</span>
                         )}
                       </div>
                     </div>

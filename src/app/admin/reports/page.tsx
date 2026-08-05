@@ -51,11 +51,13 @@ export default function AdminReports() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
+
   const fetchReports = async () => {
     setLoading(true);
     try {
       const url = `/api/admin/reports?page=${page}&q=${encodeURIComponent(
-        search
+        debouncedSearch
       )}&type=${typeFilter}&status=${statusFilter}`;
       const res = await fetch(url);
       const data = await res.json();
@@ -72,19 +74,16 @@ export default function AdminReports() {
   };
 
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
     fetchReports();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, typeFilter, statusFilter]);
-
-  // Debounced search
-  useEffect(() => {
-    const delay = setTimeout(() => {
-      setPage(1);
-      fetchReports();
-    }, 400);
-    return () => clearTimeout(delay);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }, [page, typeFilter, statusFilter, debouncedSearch]);
 
   // Toggle report status to resolved
   const handleResolveReport = async (report: ReportItem) => {

@@ -48,11 +48,13 @@ export default function AdminContactMessages() {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
+
   const fetchMessages = async () => {
     setLoading(true);
     try {
       const url = `/api/admin/contact-messages?page=${page}&q=${encodeURIComponent(
-        search
+        debouncedSearch
       )}&status=${statusFilter}&sort=${sortOrder}`;
       const res = await fetch(url);
       const data = await res.json();
@@ -69,19 +71,16 @@ export default function AdminContactMessages() {
   };
 
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
     fetchMessages();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, statusFilter, sortOrder]);
-
-  // Debounced search
-  useEffect(() => {
-    const delay = setTimeout(() => {
-      setPage(1);
-      fetchMessages();
-    }, 450);
-    return () => clearTimeout(delay);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }, [page, statusFilter, sortOrder, debouncedSearch]);
 
   // Mark message status
   const handleUpdateStatus = async (msg: ContactMessageItem, targetStatus: 'read' | 'replied') => {

@@ -11,28 +11,24 @@ export async function getOrCreateMongoUser() {
   }
 
   if (!clerkId) {
-    console.log("[Auth Sync] Using fallback mock user (Rahul Sharma)");
-    const mockClerkId = "user_123";
-    const mockEmail = "rahul@example.com";
+    console.log("[Auth Sync] No active Clerk session.");
+    const mockClerkId = "user_dev_guest";
+    const mockEmail = "devuser@jobfusion.local";
 
     let user = await prisma.user.findUnique({
       where: { clerkId: mockClerkId },
     });
 
-    // Seed (or prior runs) may already have this email under a different clerkId
     if (!user) {
       user = await prisma.user.findFirst({
         where: { email: { equals: mockEmail, mode: "insensitive" } },
       });
       if (user) {
-        console.log(
-          `[Auth Sync] Linking existing seed/dev user email: ${mockEmail} to mock clerkId: ${mockClerkId}`
-        );
         user = await prisma.user.update({
           where: { id: user.id },
           data: {
             clerkId: mockClerkId,
-            fullName: user.fullName || "Rahul Sharma",
+            fullName: user.fullName || "Demo User",
           },
         });
       }
@@ -41,9 +37,9 @@ export async function getOrCreateMongoUser() {
     if (!user) {
       user = await prisma.user.create({
         data: {
-          id: "65c3b9b4f123456789abcdef", // Static 24-char hex string to mimic MongoDB ObjectID format
+          id: "65c3b9b4f123456789abcdef",
           clerkId: mockClerkId,
-          fullName: "Rahul Sharma",
+          fullName: "Demo User",
           email: mockEmail,
           profileImage: "",
           role: "jobseeker",

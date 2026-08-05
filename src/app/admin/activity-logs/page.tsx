@@ -30,11 +30,13 @@ export default function AdminActivityLogs() {
   const [typeFilter, setTypeFilter] = useState("");
   const [loading, setLoading] = useState(true);
 
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
+
   const fetchActivities = async () => {
     setLoading(true);
     try {
       const url = `/api/admin/activity-logs?page=${page}&limit=15&q=${encodeURIComponent(
-        search
+        debouncedSearch
       )}&type=${typeFilter}`;
       const res = await fetch(url);
       const data = await res.json();
@@ -51,19 +53,16 @@ export default function AdminActivityLogs() {
   };
 
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
     fetchActivities();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, typeFilter]);
-
-  // Debounced search
-  useEffect(() => {
-    const delay = setTimeout(() => {
-      setPage(1);
-      fetchActivities();
-    }, 400);
-    return () => clearTimeout(delay);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }, [page, typeFilter, debouncedSearch]);
 
   const getActivityTypeStyles = (type: string) => {
     switch (type) {

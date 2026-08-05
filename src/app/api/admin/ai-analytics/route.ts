@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
-import { usageService } from "@/lib/usageService";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +40,6 @@ export async function GET() {
     // 2. Daily AI usage chart (last 14 days)
     const now = new Date();
     const dailyUsage = [];
-    const dateLabels = [];
     for (let i = 13; i >= 0; i--) {
       const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
       const yyyy = d.getFullYear();

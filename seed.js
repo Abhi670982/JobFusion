@@ -328,12 +328,12 @@ async function seed() {
 
   // Seed a demo user + profile
   const demoUser = await prisma.user.upsert({
-    where: { email: "rahul@example.com" },
+    where: { email: "demo.jobseeker@example.com" },
     update: {},
     create: {
       clerkId: "user_demo_seed_123",
-      fullName: "Rahul Sharma",
-      email: "rahul@example.com",
+      fullName: "Demo Jobseeker",
+      email: "demo.jobseeker@example.com",
       role: "jobseeker",
     },
   });
@@ -347,11 +347,11 @@ async function seed() {
     const profile = await prisma.profile.create({
       data: {
         userId: demoUser.id,
-        headline: "Senior Frontend Engineer at Razorpay",
-        bio: "Passionate frontend engineer with expertise in building scalable, performant web applications. Previously at Razorpay and Flipkart. Open to senior IC and lead roles.",
+        headline: "Senior Frontend Engineer",
+        bio: "Passionate frontend engineer with expertise in building scalable, performant web applications.",
         location: "Bengaluru, Karnataka",
         experience: "6 years",
-        resumeUrl: "https://jobfusion-resumes.s3.amazonaws.com/rahul-sharma-eng.pdf",
+        resumeUrl: "https://jobfusion-resumes.s3.amazonaws.com/demo-resume-eng.pdf",
         expectedSalary: "₹28L – ₹45L",
         isOnboarded: true,
         skills: {

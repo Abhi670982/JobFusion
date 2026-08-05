@@ -74,10 +74,10 @@ export const jobs: Job[] = [];
 export const candidates: Candidate[] = [
   {
     id: 'c1',
-    name: 'Rahul Sharma',
+    name: 'Aarav Sharma',
     title: 'Senior Frontend Engineer',
     avatar: '',
-    initials: 'RS',
+    initials: 'AS',
     location: 'Bengaluru, Karnataka',
     experience: '6 years',
     skills: ['React', 'TypeScript', 'Next.js', 'GraphQL', 'Tailwind CSS'],

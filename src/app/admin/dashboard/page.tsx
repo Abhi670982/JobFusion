@@ -91,26 +91,41 @@ export default function AdminDashboard() {
   const loadData = async (isManual = false) => {
     if (isManual) setRefreshing(true);
     try {
-      const [statsRes, healthRes, analyticsRes, billingRes] = await Promise.all([
-        fetch("/api/admin/stats"),
-        fetch("/api/admin/system-health"),
-        fetch("/api/admin/analytics"),
-        fetch("/api/admin/billing"),
+      const results = await Promise.allSettled([
+        fetch("/api/admin/stats").then(res => res.json()),
+        fetch("/api/admin/system-health").then(res => res.json()),
+        fetch("/api/admin/analytics").then(res => res.json()),
+        fetch("/api/admin/billing").then(res => res.json()),
       ]);
 
-      const statsData = await statsRes.json();
-      const healthData = await healthRes.json();
-      const analyticsData = await analyticsRes.json();
-      const billingData = await billingRes.json();
+      const statsRes = results[0].status === "fulfilled" ? results[0].value : null;
+      const healthRes = results[1].status === "fulfilled" ? results[1].value : null;
+      const analyticsRes = results[2].status === "fulfilled" ? results[2].value : null;
+      const billingRes = results[3].status === "fulfilled" ? results[3].value : null;
 
-      if (statsData.success && healthData.success && analyticsData.success) {
-        setStats(statsData.data);
-        setHealth(healthData.data);
-        setActivities(analyticsData.data.activityFeed || []);
-        if (billingData.success) setRevenue(billingData.data.revenue);
+      let hasAnyData = false;
+
+      if (statsRes?.success && statsRes?.data) {
+        setStats(statsRes.data);
+        hasAnyData = true;
+      }
+      if (healthRes?.success && healthRes?.data) {
+        setHealth(healthRes.data);
+        hasAnyData = true;
+      }
+      if (analyticsRes?.success && analyticsRes?.data) {
+        setActivities(analyticsRes.data.activityFeed || []);
+        hasAnyData = true;
+      }
+      if (billingRes?.success && billingRes?.data) {
+        setRevenue(billingRes.data.revenue);
+        hasAnyData = true;
+      }
+
+      if (hasAnyData) {
         setError(null);
       } else {
-        setError("Failed to load dashboard statistics.");
+        setError("Failed to load dashboard statistics from backend database.");
       }
     } catch (err: any) {
       setError(err.message || "An unexpected connection error occurred.");

@@ -172,7 +172,7 @@ export const TESTIMONIALS = [
   },
   {
     quote: "The ATS optimization alone is worth every rupee. My resume pass rate went from 20% to 80%.",
-    name: 'Rahul Verma',
+    name: 'Rohan Verma',
     role: 'Product Manager at Razorpay',
     avatar: 'RV',
     color: '#10b981',

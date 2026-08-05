@@ -32,11 +32,13 @@ export default function AdminCompanies() {
   const [loading, setLoading] = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
+
   const fetchCompanies = async () => {
     setLoading(true);
     try {
       const url = `/api/admin/companies?page=${page}&q=${encodeURIComponent(
-        search
+        debouncedSearch
       )}&isEnabled=${enabledFilter}`;
       const res = await fetch(url);
       const data = await res.json();
@@ -53,19 +55,16 @@ export default function AdminCompanies() {
   };
 
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
     fetchCompanies();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, enabledFilter]);
-
-  // Debounced search
-  useEffect(() => {
-    const delay = setTimeout(() => {
-      setPage(1);
-      fetchCompanies();
-    }, 400);
-    return () => clearTimeout(delay);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }, [page, enabledFilter, debouncedSearch]);
 
   // Toggle company enabled/disabled state
   const handleToggleEnable = async (company: CompanyItem) => {

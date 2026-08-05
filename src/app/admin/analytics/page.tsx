@@ -16,7 +16,7 @@ import {
   Tooltip,
   Legend,
 } from "recharts";
-import { Loader2, HelpCircle, Activity, Zap, CreditCard, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { Loader2, HelpCircle, Activity, Zap, CreditCard } from "lucide-react";
 
 interface ChartData {
   date: string;

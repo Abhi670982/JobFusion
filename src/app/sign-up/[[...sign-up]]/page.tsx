@@ -311,7 +311,7 @@ export default function CustomSignUpPage() {
                     <Label htmlFor="fname">First name</Label>
                     <Input
                       id="fname"
-                      placeholder="Rahul"
+                      placeholder="Alex"
                       value={firstName}
                       onChange={(e) => setFirstName(e.target.value)}
                       className="rounded-xl h-11 border-border focus-visible:ring-primary focus-visible:border-primary"
@@ -323,7 +323,7 @@ export default function CustomSignUpPage() {
                     <Label htmlFor="lname">Last name</Label>
                     <Input
                       id="lname"
-                      placeholder="Sharma"
+                      placeholder="Morgan"
                       value={lastName}
                       onChange={(e) => setLastName(e.target.value)}
                       className="rounded-xl h-11 border-border focus-visible:ring-primary focus-visible:border-primary"
