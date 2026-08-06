@@ -19,7 +19,6 @@ export const FREE_PLAN_FEATURES = [
 ];
 
 export const PRO_PLAN_FEATURES = [
-  'Everything in Free',
   'Unlimited Job Role Matching',
   'Unlimited Resume Analysis',
   'Unlimited ATS Resume Optimization',
