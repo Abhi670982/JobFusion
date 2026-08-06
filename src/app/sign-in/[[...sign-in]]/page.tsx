@@ -10,6 +10,8 @@ import { Eye, EyeOff, ArrowRight, Lock, Mail, CheckCircle2, AlertCircle, ShieldC
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { mapSignInError } from '@/lib/auth-errors';
+import { validateEmailInput, validatePasswordInput } from '@/lib/auth-validation';
 
 const GoogleIcon = () => (
   <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -131,12 +133,12 @@ export default function CustomSignInPage() {
         redirectCallbackUrl: '/sso-callback',
       });
       if (ssoErr) {
-        setError(ssoErr.message || 'OAuth error occurred.');
+        setError(mapSignInError(ssoErr));
         setLoading(false);
       }
     } catch (err: any) {
       console.error('Google sign-in error:', err);
-      setError(err.message || 'OAuth error occurred.');
+      setError(mapSignInError(err));
       setLoading(false);
     }
   };
@@ -145,17 +147,29 @@ export default function CustomSignInPage() {
     e.preventDefault();
     if (!signIn) return;
 
+    const emailVal = validateEmailInput(email, true);
+    if (!emailVal.isValid) {
+      setError(emailVal.error || 'The email or password you entered is incorrect.');
+      return;
+    }
+
+    const passVal = validatePasswordInput(password, true);
+    if (!passVal.isValid) {
+      setError(passVal.error || 'The email or password you entered is incorrect.');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
     try {
       const { error: signInErr } = await signIn.password({
-        identifier: email,
+        identifier: emailVal.normalizedValue || email.trim(),
         password: password,
       });
 
       if (signInErr) {
-        setError(signInErr.message || 'Invalid email or password.');
+        setError(mapSignInError(signInErr));
         setLoading(false);
         return;
       }
@@ -163,7 +177,7 @@ export default function CustomSignInPage() {
       await handlePostAuthStatus();
     } catch (err: any) {
       console.error('Email sign-in error:', err);
-      setError(err.message || 'An unexpected error occurred.');
+      setError(mapSignInError(err));
       setLoading(false);
     }
   };
@@ -419,8 +433,9 @@ export default function CustomSignInPage() {
                       id="email"
                       type="email"
                       placeholder="you@example.com"
+                      maxLength={254}
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => { setEmail(e.target.value); setError(''); }}
                       className="pl-10 rounded-xl h-11 border-border focus-visible:ring-primary focus-visible:border-primary"
                       required
                       disabled={loading}
@@ -441,8 +456,9 @@ export default function CustomSignInPage() {
                       id="password"
                       type={show ? 'text' : 'password'}
                       placeholder="••••••••"
+                      maxLength={128}
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => { setPassword(e.target.value); setError(''); }}
                       className="pl-10 pr-10 rounded-xl h-11 border-border focus-visible:ring-primary focus-visible:border-primary"
                       required
                       disabled={loading}
