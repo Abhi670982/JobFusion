@@ -30,14 +30,17 @@ export default function CustomSignInPage() {
   const [dynamicRedirect, setDynamicRedirect] = useState(redirectUrl);
 
   useEffect(() => {
-    const guestSearchStr = sessionStorage.getItem('guestSearch');
-    if (guestSearchStr) {
-      try {
-        const { role, location } = JSON.parse(guestSearchStr);
-        setDynamicRedirect(`/jobs?q=${encodeURIComponent(role || '')}&location=${encodeURIComponent(location || '')}`);
-      } catch {}
+    const explicitRedirect = searchParams.get('redirect_url');
+    if (!explicitRedirect) {
+      const guestSearchStr = sessionStorage.getItem('guestSearch');
+      if (guestSearchStr) {
+        try {
+          const { role, location } = JSON.parse(guestSearchStr);
+          setDynamicRedirect(`/jobs?q=${encodeURIComponent(role || '')}&location=${encodeURIComponent(location || '')}`);
+        } catch {}
+      }
     }
-  }, []);
+  }, [searchParams]);
 
   const [show, setShow] = useState(false);
   const [email, setEmail] = useState('');

@@ -150,7 +150,7 @@ export default function Navbar() {
                     <DropdownMenuContent align="center" className="w-48 rounded-2xl p-1.5 shadow-xl border-border bg-popover/95 backdrop-blur-md">
                       {link.children?.map(child => (
                         <DropdownMenuItem key={child.href} asChild className="rounded-xl px-3 py-2 text-sm cursor-pointer transition-colors">
-                          <Link href={isSignedIn ? child.href : '/sign-in'}>
+                          <Link href={child.href}>
                             {child.label}
                           </Link>
                         </DropdownMenuItem>
@@ -163,7 +163,7 @@ export default function Navbar() {
               return (
                 <Link
                   key={link.href}
-                  href={link.href === '/jobs' ? (isSignedIn ? '/jobs' : '/sign-in') : (link.href || '')}
+                  href={link.href || ''}
                   className={cn(
                     'px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 inline-flex items-center justify-center',
                     pathname === link.href
@@ -351,7 +351,7 @@ export default function Navbar() {
                 {navLinks.find(l => l.isDropdown)?.children?.map(child => (
                   <Link
                     key={child.href}
-                    href={isSignedIn ? child.href : '/sign-in'}
+                    href={child.href}
                     onClick={() => setMobileMenuOpen(false)}
                     className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent rounded-xl transition-all"
                   >

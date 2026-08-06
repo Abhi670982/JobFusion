@@ -99,3 +99,75 @@ export async function triggerManualScheduledCrawl(): Promise<{ enqueued: boolean
     location: "India",
   });
 }
+
+/**
+ * BullMQ Scheduler Configuration for Job Portals
+ * Cadence: Daily at 12:00 AM IST (Asia/Kolkata timezone)
+ */
+export const PORTALS_SCHEDULER_ID = "portals-scheduled-crawl-scheduler";
+export const PORTALS_SCHEDULE_EVERY_MS = 24 * 60 * 60 * 1000; // 24 hours in ms
+
+export async function registerPortalsScheduler(): Promise<SchedulerRegisterResult> {
+  const queue = getCrawlQueue();
+
+  if (!queue) {
+    console.warn("[Scheduler] Redis unavailable. Recurring Job Portals schedule could not be registered in BullMQ.");
+    return {
+      registered: false,
+      schedulerId: PORTALS_SCHEDULER_ID,
+      cadenceMs: PORTALS_SCHEDULE_EVERY_MS,
+      cadenceHours: 24,
+      runsPerDay: 1,
+    };
+  }
+
+  try {
+    await queue.upsertJobScheduler(
+      PORTALS_SCHEDULER_ID,
+      {
+        pattern: "0 0 * * *",
+        tz: "Asia/Kolkata",
+      },
+      {
+        name: "scheduled-portals-crawl",
+        data: {
+          category: JobSourceCategory.JOB_PORTAL,
+          provider: "ALL",
+          keyword: "tech_roles_daily_crawl",
+          location: "India",
+        },
+        opts: {
+          attempts: 3,
+          backoff: {
+            type: "exponential",
+            delay: 5000,
+          },
+          removeOnComplete: { age: 3600 },
+          removeOnFail: { age: 86400 },
+        },
+      }
+    );
+
+    console.log(
+      `[Scheduler] Idempotently registered recurring Job Portals acquisition scheduler: "${PORTALS_SCHEDULER_ID}" (Cadence: Daily at 12:00 AM IST, Asia/Kolkata).`
+    );
+
+    return {
+      registered: true,
+      schedulerId: PORTALS_SCHEDULER_ID,
+      cadenceMs: PORTALS_SCHEDULE_EVERY_MS,
+      cadenceHours: 24,
+      runsPerDay: 1,
+    };
+  } catch (err: any) {
+    console.error(`[Scheduler Error] Failed to register portals scheduler: ${err.message}`);
+    return {
+      registered: false,
+      schedulerId: PORTALS_SCHEDULER_ID,
+      cadenceMs: PORTALS_SCHEDULE_EVERY_MS,
+      cadenceHours: 24,
+      runsPerDay: 1,
+    };
+  }
+}
+
