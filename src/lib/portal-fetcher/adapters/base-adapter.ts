@@ -29,6 +29,7 @@ export interface PortalUnifiedJob {
   postedDate: string | null; // ISO 8601 string or null
   isDateless?: boolean;
   skills: string[];          // extracted skill tags
+  dedupeHash?: string;
 }
 
 export abstract class BasePortalAdapter {

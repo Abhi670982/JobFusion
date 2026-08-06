@@ -1,49 +1,20 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-const isPublicRoute = createRouteMatcher([
-  "/",
-  "/about",
-  "/company",
-  "/privacy-policy",
-  "/terms-of-service",
-  "/refund-policy",
-  "/cookie-policy",
-  "/gdpr-compliance",
-  "/gdpr-compliance(.*)",
-  "/contact",
-  "/api/contact(.*)",
-  "/jobs",
-  "/jobs/(.*)",
-  "/about-us(.*)",
-  "/privacy-policy(.*)",
-  "/terms-of-service(.*)",
-  "/cookie-policy(.*)",
-  "/refund-policy(.*)",
-  "/sign-in(.*)",
-  "/sign-up(.*)",
-  "/auth/signin(.*)",
-  "/auth/signup(.*)",
-  "/auth/forgot-password(.*)",
-  "/sso-callback(.*)",
-  "/api/webhooks(.*)",
-  "/api/jobs(.*)",
-  "/api/portal-jobs(.*)",
-  "/api/parse-resume(.*)",
-  "/api/upload-resume(.*)",
-  "/api/cron(.*)",
-  "/api/admin/track-visit(.*)",
-  "/api/test-db(.*)",
-  "/api/users(.*)",
-  "/api/profile(.*)",
-  "/api/dashboard(.*)",
-  "/api/applications(.*)",
-  "/api/saved-jobs(.*)",
-  "/api/suggestions(.*)",
-  "/pricing(.*)",
+// Protected UI pages that require authentication and redirect guests to Sign In
+const isProtectedUIRoute = createRouteMatcher([
+  "/dashboard(.*)",
+  "/saved-jobs(.*)",
+  "/jobs/saved(.*)",
+  "/settings(.*)",
+  "/profile(.*)",
+  "/resume(.*)",
+  "/applications(.*)",
+  "/onboarding(.*)",
+  "/admin(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
-  if (!isPublicRoute(request)) {
+  if (isProtectedUIRoute(request)) {
     await auth.protect();
   }
 });
@@ -54,3 +25,5 @@ export const config = {
     "/(api|trpc)(.*)",
   ],
 };
+
+

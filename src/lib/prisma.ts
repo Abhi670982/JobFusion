@@ -8,7 +8,7 @@ const globalForPrisma = globalThis as unknown as {
 
 let prismaInstance: PrismaClient;
 
-if (globalForPrisma.prisma) {
+if (globalForPrisma.prisma && (globalForPrisma.prisma as any).portalJob) {
   prismaInstance = globalForPrisma.prisma;
 } else {
   const connectionString = process.env.DATABASE_URL;

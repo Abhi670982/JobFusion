@@ -181,10 +181,13 @@ export default function JobPortalsSection({
   const [targetPortalName, setTargetPortalName] = useState('Premium Portal');
 
   useEffect(() => {
-    fetch('/api/subscription/status')
-      .then((r) => r.json())
+    fetch('/api/user-plan/status')
+      .then((r) => {
+        if (!r.ok) return null;
+        return r.json();
+      })
       .then((data) => {
-        if (data.success && data.isPro) setIsPro(true);
+        if (data && (data.status?.isPro || data.isPro)) setIsPro(true);
       })
       .catch(() => {});
   }, []);

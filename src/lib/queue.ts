@@ -199,11 +199,85 @@ export async function executeBackgroundCrawl(params: EnqueueCrawlParams): Promis
     if (portalSource === "aggregator") {
       await runSourceSync("aggregator", [keyword]);
     } else {
-      await crawlPortalJobs({
-        portal: portalSource === "all" ? "all" : (portalSource as any),
-        keyword,
-        location: location || "India",
-        page: 1,
+      const { getTechnologyRolesToCrawl, isTechnologyRole } = await import("./portal-fetcher/config/tech-roles");
+      const { upsertPortalJobs } = await import("./portal-fetcher/persistence/upsert");
+      const { applyPortalJobLifecycleCleanup } = await import("./portal-fetcher/persistence/cleanup");
+      const { prisma } = await import("./prisma");
+      const { FetchStatus } = await import("@prisma/client");
+
+      const startTime = Date.now();
+      let totalFetched = 0;
+      let totalUpserted = 0;
+      let totalErrors = 0;
+
+      // Incremental Crawl Window Calculation:
+      // Fetch latest successful crawl timestamp from fetch_logs or portal_jobs table.
+      // Apply a 6-hour overlap window to prevent missing jobs due to indexing delays.
+      const lastFetchLog = await prisma.fetchLog.findFirst({
+        where: { source: "JOB_PORTAL_DAILY_CRAWL", status: FetchStatus.success },
+        orderBy: { timestamp: "desc" },
+      });
+
+      const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+      let crawlFrom: Date | undefined;
+
+      if (lastFetchLog?.timestamp) {
+        crawlFrom = new Date(lastFetchLog.timestamp.getTime() - SIX_HOURS_MS);
+        console.log(`[Portal Worker] Incremental crawl active. Crawling jobs published since: ${crawlFrom.toISOString()}`);
+      } else {
+        console.log(`[Portal Worker] Initial full crawl active. Crawling rolling 7-day window.`);
+      }
+
+      const techRoles = getTechnologyRolesToCrawl();
+      const rolesToProcess = keyword === "tech_roles_daily_crawl"
+        ? techRoles
+        : techRoles.filter((r) => r.role.toLowerCase().includes(keyword.toLowerCase()));
+
+      const targetRoles = rolesToProcess.length > 0
+        ? rolesToProcess
+        : [{ role: keyword, enabled: true, priority: 1, maxLimit: 20 }];
+
+      for (const roleConfig of targetRoles) {
+        try {
+          const crawlRes = await crawlPortalJobs({
+            portal: portalSource === "all" ? "all" : (portalSource as any),
+            keyword: roleConfig.role,
+            location: location || "India",
+            page: 1,
+            limit: roleConfig.maxLimit || 20,
+            crawlFrom,
+          });
+
+          if (crawlRes.jobs && crawlRes.jobs.length > 0) {
+            // Strictly filter out non-technical roles
+            const techOnlyJobs = crawlRes.jobs.filter((j) => isTechnologyRole(j.title, j.description));
+            totalFetched += techOnlyJobs.length;
+
+            const upsertRes = await upsertPortalJobs(techOnlyJobs);
+            totalUpserted += upsertRes.upsertedCount;
+            totalErrors += upsertRes.errorCount;
+          }
+        } catch (err: any) {
+          totalErrors++;
+          console.error(`[Portal Worker Error] Failed crawl for technology role "${roleConfig.role}": ${err.message}`);
+        }
+      }
+
+      // Execute soft lifecycle expiration & 14-day record purge
+      const cleanupRes = await applyPortalJobLifecycleCleanup();
+
+      const durationMs = Date.now() - startTime;
+      console.log(`[Portal Worker] Scheduled daily crawl completed in ${durationMs}ms. Fetched: ${totalFetched}, Upserted: ${totalUpserted}, Expired: ${cleanupRes.deactivatedCount}, Purged: ${cleanupRes.purgedCount}`);
+
+      // Persist telemetry operational statistics into FetchLog
+      await prisma.fetchLog.create({
+        data: {
+          source: "JOB_PORTAL_DAILY_CRAWL",
+          status: totalErrors === 0 ? FetchStatus.success : FetchStatus.failed,
+          jobsFetched: totalUpserted,
+          errorMsg: totalErrors > 0 ? `${totalErrors} errors encountered during portal crawl` : null,
+          timestamp: new Date(),
+        },
       });
     }
   } else {
