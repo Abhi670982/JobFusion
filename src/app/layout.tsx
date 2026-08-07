@@ -69,7 +69,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </LayoutWrapper>
           </TooltipProvider>
           </ThemeProvider>
-          <Toaster position="bottom-right" richColors />
+          <Toaster position="bottom-right" richColors className="max-lg:mb-20" />
         </ClerkProvider>
       </body>
     </html>

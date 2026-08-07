@@ -72,16 +72,16 @@ export default function Footer() {
           ))}
         </div>
 
-        <div className="mt-12 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-sm text-muted-foreground">
+        <div className="mt-12 pt-8 flex flex-col-reverse md:flex-row items-center justify-between gap-6 border-t border-border/10">
+          <p className="text-sm text-muted-foreground text-center md:text-left">
             © 2026 JobFusion, All rights reserved.
           </p>
-          <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 text-sm text-muted-foreground">
             <span className="flex items-center gap-1.5">
               <Globe className="w-4 h-4 text-muted-foreground" />
               English (US)
             </span>
-            <span>•</span>
+            <span className="hidden sm:inline">•</span>
             <span className="flex items-center gap-1.5">
               Built with
               <Heart className="w-3.5 h-3.5 text-red-500 fill-red-500 animate-pulse" />

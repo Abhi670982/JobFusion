@@ -47,9 +47,7 @@ export function UpgradeModal({
     onClose();
     window.location.href = '/pricing';
   };
-
-  const highlightedFeatures = PRO_PLAN_FEATURES.slice(1, 6); // skip "Everything in Free"
-
+  const highlightedFeatures = PRO_PLAN_FEATURES.slice(0, 5);
   const displayTitle = title || `Unlock ${featureName}`;
   const displaySubtitle = subtitle || "This is a Pro feature. Upgrade to access it.";
 

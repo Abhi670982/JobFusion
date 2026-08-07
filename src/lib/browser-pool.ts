@@ -13,7 +13,6 @@ type Browser = any;
 type Page = any;
 type HTTPRequest = any;
 
-
 let browserInstance: Browser | null = null;
 
 async function getBrowser(): Promise<Browser> {
