@@ -1,10 +1,13 @@
-import { BasePortalAdapter, JobPortalSource } from "./adapters/base-adapter";
+import { BasePortalAdapter, JobPortalSource, Logger, defaultLogger } from "./adapters/base-adapter";
 import { LinkedInPortalAdapter } from "./adapters/linkedin";
 import { IndeedPortalAdapter } from "./adapters/indeed";
 import { InternshalaPortalAdapter } from "./adapters/internshala";
 import { WellfoundPortalAdapter } from "./adapters/wellfound";
 import { NaukriPortalAdapter } from "./adapters/naukri";
 import { FounditPortalAdapter } from "./adapters/foundit";
+
+export type { JobPortalSource };
+export type AdapterHealthStatus = "Healthy" | "Degraded" | "Offline";
 
 class PortalAdapterRegistry {
   private registry = new Map<JobPortalSource, () => BasePortalAdapter>();
@@ -38,6 +41,10 @@ class PortalAdapterRegistry {
     return Array.from(this.registry.keys());
   }
 
+  getRegisteredSources(): JobPortalSource[] {
+    return Array.from(this.registry.keys());
+  }
+
   updateHealth(source: JobPortalSource, status: AdapterHealthStatus) {
     this.healthMap.set(source, status);
   }
@@ -45,12 +52,7 @@ class PortalAdapterRegistry {
   getHealthSummary(): Record<string, AdapterHealthStatus> {
     const summary: Record<string, AdapterHealthStatus> = {};
     for (const source of this.getAvailableSources()) {
-      const cb = getCircuitBreaker(source);
-      if (cb.getState() === "OPEN") {
-        summary[source] = "Offline";
-      } else {
-        summary[source] = this.healthMap.get(source) || "Healthy";
-      }
+      summary[source] = this.healthMap.get(source) || "Healthy";
     }
     return summary;
   }

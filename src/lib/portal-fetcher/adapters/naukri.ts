@@ -5,12 +5,6 @@ import { extractSkills } from "@/lib/skills-extractor";
 import { parsePostedDate } from "@/lib/parse-posted-date";
 import crypto from "crypto";
 
-/**
- * Naukri Portal Adapter
- * Primary: Apify Naukri Jobs Scraper (`APIFY_TOKEN`)
- * Secondary: Direct HTML/JSON scraping via Bright Data Proxy (`BRIGHTDATA_API_KEY`)
- * Fails loudly with clear diagnostic messages on anti-bot or structural blocks.
- */
 export class NaukriPortalAdapter extends BasePortalAdapter {
   readonly source = "naukri" as const;
 
@@ -19,13 +13,11 @@ export class NaukriPortalAdapter extends BasePortalAdapter {
     const location = query.location || "India";
     const page = query.page || 1;
 
-    // 1. Try Primary: Apify Naukri Jobs Scraper
     if (process.env.APIFY_TOKEN) {
       try {
         console.log(`[Naukri Adapter] Sourcing jobs via Apify Actor for keyword: "${keyword}"`);
         const apifyJobs = await crawlNaukriViaApify({ keyword, location, maxItems: 30 });
         if (apifyJobs && apifyJobs.length > 0) {
-          console.log(`[Naukri Adapter Diagnostics] Provider: Apify, Jobs Parsed: ${apifyJobs.length}`);
           return apifyJobs;
         }
       } catch (apifyErr: any) {
@@ -33,13 +25,10 @@ export class NaukriPortalAdapter extends BasePortalAdapter {
       }
     }
 
-    // 2. Secondary: Direct HTML/JSON tuple fetch via Bright Data Proxy
     const slug = keyword.toLowerCase().replace(/[^a-z0-9]+/g, "-");
     const url = page === 1
       ? `https://www.naukri.com/${slug}-jobs-in-india`
       : `https://www.naukri.com/${slug}-jobs-in-india-${page}`;
-
-    console.log(`[Naukri Adapter] Fetching page ${page} with Bright Data Proxy: ${url}`);
 
     try {
       const res = await fetchWithBrightDataProxy(url, {
@@ -57,7 +46,6 @@ export class NaukriPortalAdapter extends BasePortalAdapter {
       const html = await res.text();
       const antiBot = inspectHtmlForAntiBot(html);
       if (antiBot.isBlocked) {
-        console.error(`[Naukri Adapter Anti-Bot Blocked] ${antiBot.reason} detected on ${url} (HTML Size: ${html.length} bytes)`);
         throw new Error(`ANTI_BOT_BLOCKED: ${antiBot.reason}`);
       }
 
@@ -65,7 +53,6 @@ export class NaukriPortalAdapter extends BasePortalAdapter {
       const $ = cheerio.load(html);
       const jobs: any[] = [];
 
-      // Extract embedded window._INITIAL_STATE JSON if present
       const scripts = $("script").toArray();
       for (const script of scripts) {
         const text = $(script).html() || "";
@@ -97,7 +84,6 @@ export class NaukriPortalAdapter extends BasePortalAdapter {
         }
       }
 
-      // Cheerio DOM fallback if script state returned 0
       if (jobs.length === 0) {
         $(".srp-jobtuple-wrapper, article.jobTuple").each((_: number, elem: any) => {
           const title = $(elem).find("a.title, .title").text().trim();
@@ -119,7 +105,6 @@ export class NaukriPortalAdapter extends BasePortalAdapter {
         });
       }
 
-      console.log(`[Naukri Adapter Diagnostics] Provider: BrightData Proxy, HTML Size: ${html.length} bytes, Jobs Parsed: ${jobs.length}`);
       return jobs;
     } catch (err: any) {
       console.error(`[Naukri Adapter Error] Execution failed: ${err.message}`);
@@ -143,7 +128,7 @@ export class NaukriPortalAdapter extends BasePortalAdapter {
       location.toLowerCase().includes("work from home") ||
       location.toLowerCase().includes("wfh");
 
-    let postedAt: Date = new Date();
+    let postedAt: Date | null = new Date();
     if (raw.postedText) {
       const parsed = parsePostedDate(String(raw.postedText));
       if (parsed) postedAt = parsed.timestamp;
@@ -165,7 +150,7 @@ export class NaukriPortalAdapter extends BasePortalAdapter {
       salaryMin: null,
       salaryMax: null,
       description: descText || `Job listing from Naukri: ${title} at ${company}.`,
-      postedDate: postedAt,
+      postedDate: postedAt ? postedAt.toISOString() : null,
       skills: extractedSkills,
     };
   }

@@ -1,5 +1,8 @@
 export type JobPortalSource = "linkedin" | "indeed" | "internshala" | "wellfound" | "naukri" | "foundit";
 
+export type Logger = any;
+export const defaultLogger: Logger = console;
+
 export interface PortalFetchQuery {
   keywords: string[];
   location?: string;
@@ -10,23 +13,30 @@ export interface PortalFetchQuery {
 
 export interface PortalUnifiedJob {
   sourceId: string;
+  id?: string;
   source: JobPortalSource;
+  sourcePortal?: string;
   sourceUrl: string;
   applyUrl: string | null;
   title: string;
   company: string;
   logo: string | null;
+  companyLogo?: string | null;
   location: string | null;
   isRemote: boolean;
   employmentType: "full-time" | "part-time" | "contract" | "internship" | "freelance" | null;
   experience: "entry" | "mid" | "senior" | "lead" | null;
-  salary: string | null;     // normalized text description of salary
-  salaryMin: number | null;  // numeric representation for filter calculations
+  experienceLevel?: "entry" | "mid" | "senior" | "lead" | null;
+  salary: string | null;
+  salaryText?: string | null;
+  salaryMin: number | null;
   salaryMax: number | null;
   description: string;
-  postedDate: string | null; // ISO 8601 string or null
+  postedDate: string | null;
+  postedAtISO?: string | null;
   isDateless?: boolean;
-  skills: string[];          // extracted skill tags
+  skills: string[];
+  matchedSkills?: string[];
   dedupeHash?: string;
 }
 

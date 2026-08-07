@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import PortalJobCard from '@/components/portal-job-card';
-import { PortalJobDTOV1 } from '@/lib/portal-fetcher/dto/v1';
+import { PortalUnifiedJob as PortalJobDTOV1 } from '@/lib/portal-fetcher/adapters/base-adapter';
 import { parsePostedDate } from '@/lib/parse-posted-date';
 import { JobsErrorBoundary } from '@/components/error-boundary';
 import { UpgradeModal } from '@/components/pricing/UpgradeModal';

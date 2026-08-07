@@ -5,7 +5,7 @@ import { MapPin, Clock, ExternalLink, Building2, Wifi, Star, DollarSign, Lock } 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { PortalJobDTOV1 } from '@/lib/portal-fetcher/dto/v1';
+import { PortalUnifiedJob as PortalJobDTOV1 } from '@/lib/portal-fetcher/adapters/base-adapter';
 import { openJob } from '@/lib/open-job';
 import { isPremiumPortal } from '@/lib/portal-gating';
 import { trackMonetizationEvent } from '@/lib/analytics';
@@ -184,7 +184,7 @@ export default function PortalJobCard({ job, index = 0, isPro = false, onRequire
       {/* Extracted Skills */}
       {displaySkills.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          {displaySkills.map((skill) => (
+          {displaySkills.map((skill: string) => (
             <span
               key={skill}
               className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-muted text-muted-foreground capitalize"
@@ -194,7 +194,7 @@ export default function PortalJobCard({ job, index = 0, isPro = false, onRequire
           ))}
           {(job.matchedSkills?.length ?? 0) > 4 && (
             <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-muted text-muted-foreground">
-              +{job.matchedSkills.length - 4} more
+              +{(job.matchedSkills?.length ?? 0) - 4} more
             </span>
           )}
         </div>

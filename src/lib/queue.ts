@@ -199,9 +199,8 @@ export async function executeBackgroundCrawl(params: EnqueueCrawlParams): Promis
     } else {
       const crawlResult = await crawlPortalJobs({
         portal: portalSource === "all" ? "all" : (portalSource as any),
-        keyword,
+        keywords: [keyword],
         location: location || "India",
-        page: 1,
         maxPages: 10,
       });
 

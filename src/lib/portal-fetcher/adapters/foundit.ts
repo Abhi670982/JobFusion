@@ -5,12 +5,6 @@ import { extractSkills } from "@/lib/skills-extractor";
 import { parsePostedDate } from "@/lib/parse-posted-date";
 import crypto from "crypto";
 
-/**
- * Foundit Portal Adapter (formerly Monster India)
- * Primary: Apify Foundit Actor (`APIFY_TOKEN`)
- * Secondary: Direct HTML card scraping via Bright Data Proxy (`BRIGHTDATA_API_KEY`)
- * Zero Yahoo dependency! Fails loudly with clear diagnostics on anti-bot blocks.
- */
 export class FounditPortalAdapter extends BasePortalAdapter {
   readonly source = "foundit" as const;
 
@@ -19,13 +13,11 @@ export class FounditPortalAdapter extends BasePortalAdapter {
     const location = query.location || "India";
     const page = query.page || 1;
 
-    // 1. Try Primary: Apify Foundit Actor
     if (process.env.APIFY_TOKEN) {
       try {
         console.log(`[Foundit Adapter] Sourcing jobs via Apify Actor for keyword: "${keyword}"`);
         const apifyJobs = await crawlFounditViaApify({ keyword, location, maxItems: 30 });
         if (apifyJobs && apifyJobs.length > 0) {
-          console.log(`[Foundit Adapter Diagnostics] Provider: Apify, Jobs Parsed: ${apifyJobs.length}`);
           return apifyJobs;
         }
       } catch (apifyErr: any) {
@@ -33,11 +25,8 @@ export class FounditPortalAdapter extends BasePortalAdapter {
       }
     }
 
-    // 2. Secondary: Direct HTML card fetch via Bright Data Proxy
     const start = (page - 1) * 15;
     const url = `https://www.foundit.in/seeker/job-search?query=${encodeURIComponent(keyword)}&locations=${encodeURIComponent(location)}&start=${start}`;
-
-    console.log(`[Foundit Adapter] Fetching page ${page} via Bright Data Proxy: ${url}`);
 
     try {
       const res = await fetchWithBrightDataProxy(url, {
@@ -54,7 +43,6 @@ export class FounditPortalAdapter extends BasePortalAdapter {
       const html = await res.text();
       const antiBot = inspectHtmlForAntiBot(html);
       if (antiBot.isBlocked) {
-        console.error(`[Foundit Adapter Anti-Bot Blocked] ${antiBot.reason} detected on ${url} (HTML Size: ${html.length} bytes)`);
         throw new Error(`ANTI_BOT_BLOCKED: ${antiBot.reason}`);
       }
 
@@ -81,7 +69,6 @@ export class FounditPortalAdapter extends BasePortalAdapter {
         }
       });
 
-      console.log(`[Foundit Adapter Diagnostics] Provider: BrightData Proxy, HTML Size: ${html.length} bytes, Jobs Parsed: ${jobs.length}`);
       return jobs;
     } catch (err: any) {
       console.error(`[Foundit Adapter Error] Execution failed: ${err.message}`);
@@ -105,7 +92,7 @@ export class FounditPortalAdapter extends BasePortalAdapter {
       location.toLowerCase().includes("work from home") ||
       location.toLowerCase().includes("wfh");
 
-    let postedAt: Date = new Date();
+    let postedAt: Date | null = new Date();
     if (raw.postedText) {
       const parsed = parsePostedDate(String(raw.postedText));
       if (parsed) postedAt = parsed.timestamp;
@@ -127,7 +114,7 @@ export class FounditPortalAdapter extends BasePortalAdapter {
       salaryMin: null,
       salaryMax: null,
       description: descText || `Job listing from Foundit: ${title} at ${company}.`,
-      postedDate: postedAt,
+      postedDate: postedAt ? postedAt.toISOString() : null,
       skills: extractedSkills,
     };
   }
