@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { JobSourceCategory } from "@prisma/client";
 import { enqueueCrawlJob } from "@/lib/queue";
 import { classifySourceCategory } from "@/lib/source-category";
 

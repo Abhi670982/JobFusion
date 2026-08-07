@@ -16,7 +16,6 @@ const perks = [
   'Access aggregated job opportunities',
   'AI-powered job matching',
   'One-click applications',
-  'Free forever for job seekers',
 ];
 
 const GoogleIcon = () => (
@@ -53,6 +52,13 @@ export default function CustomSignUpPage() {
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+
+  // Field Validation Errors
+  const [firstNameError, setFirstNameError] = useState('');
+  const [lastNameError, setLastNameError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [termsError, setTermsError] = useState('');
   
   // Sign up state
   const [loading, setLoading] = useState(false);
@@ -65,6 +71,13 @@ export default function CustomSignUpPage() {
   const [verifyingError, setVerifyingError] = useState('');
   const [resendMessage, setResendMessage] = useState('');
 
+  // Live Password Requirements evaluation
+  const reqMinLen = password.length >= 8;
+  const reqUpper = /[A-Z]/.test(password);
+  const reqLower = /[a-z]/.test(password);
+  const reqNum = /[0-9]/.test(password);
+  const reqSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+
   // Redirect if already signed in
   useEffect(() => {
     if (isUserLoaded && isSignedIn) {
@@ -75,20 +88,52 @@ export default function CustomSignUpPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!signUp) return;
+
+    // Reset inline errors
+    setFirstNameError('');
+    setLastNameError('');
+    setEmailError('');
+    setPasswordError('');
+    setTermsError('');
+    setError('');
+
+    let hasValidationError = false;
+    if (!firstName.trim()) {
+      setFirstNameError('Please enter your first name.');
+      hasValidationError = true;
+    }
+    if (!lastName.trim()) {
+      setLastNameError('Please enter your last name.');
+      hasValidationError = true;
+    }
+    if (!email.trim()) {
+      setEmailError('Email is required.');
+      hasValidationError = true;
+    } else if (!/\S+@\S+\.\S+/.test(email.trim())) {
+      setEmailError('Please enter a valid email address.');
+      hasValidationError = true;
+    }
+    if (!password) {
+      setPasswordError('Password is required.');
+      hasValidationError = true;
+    }
     if (!termsAccepted) {
-      setError('You must accept the Terms of Service and Privacy Policy.');
+      setTermsError('You must accept the Terms of Service and Privacy Policy.');
+      hasValidationError = true;
+    }
+
+    if (hasValidationError) {
       return;
     }
 
     setLoading(true);
-    setError('');
 
     try {
       const { error: signUpErr } = await signUp.password({
-        emailAddress: email,
+        emailAddress: email.trim(),
         password: password,
-        firstName: firstName,
-        lastName: lastName,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
       });
 
       if (signUpErr) {
@@ -221,47 +266,47 @@ export default function CustomSignUpPage() {
   };
 
   return (
-    <div className="min-h-screen grid lg:grid-cols-2 bg-background">
+    <div className="min-h-screen grid lg:grid-cols-2 bg-background lg:h-screen lg:overflow-hidden">
       {/* Left Panel */}
-      <div className="hidden lg:flex flex-col justify-between p-10 gradient-brand relative overflow-hidden">
+      <div className="hidden lg:flex flex-col justify-between p-6 xl:p-10 gradient-brand relative overflow-hidden h-full">
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_bottom_right,white,transparent_60%)]" />
 
         <Link href="/" className="flex items-center gap-2.5 relative z-10">
           <Image
             src="/logo-circle.png"
             alt="JobFusion Logo"
-            width={36}
-            height={36}
+            width={32}
+            height={32}
             className="rounded-full object-cover border-[3px] border-white/40 shadow-sm"
           />
-          <span className="font-bold text-xl text-white font-sans">JobFusion</span>
+          <span className="font-bold text-lg xl:text-xl text-white font-sans">JobFusion</span>
         </Link>
 
-        <div className="relative z-10 space-y-6">
-          <h2 className="text-4xl font-extrabold text-white font-sans">
+        <div className="relative z-10 space-y-4 xl:space-y-5 my-auto">
+          <h2 className="text-xl xl:text-3xl font-extrabold text-white font-sans leading-snug">
             Start your journey to your dream job.
           </h2>
-          <div className="space-y-3">
+          <div className="space-y-2 xl:space-y-3">
             {perks.map((perk) => (
-              <div key={perk} className="flex items-center gap-3">
-                <CheckCircle2 className="w-5 h-5 text-white/80 flex-shrink-0" />
-                <span className="text-white/80">{perk}</span>
+              <div key={perk} className="flex items-center gap-2.5">
+                <CheckCircle2 className="w-4 h-4 xl:w-4.5 xl:h-4.5 text-white/80 flex-shrink-0" />
+                <span className="text-white/80 text-xs xl:text-sm font-medium">{perk}</span>
               </div>
             ))}
           </div>
         </div>
 
-        <p className="text-white/50 text-sm relative z-10">© 2026 JobFusion Inc.</p>
+        <p className="text-white/50 text-xs xl:text-sm relative z-10">© 2026 JobFusion Inc.</p>
       </div>
 
       {/* Right Panel */}
-      <div className="flex items-center justify-center p-6 bg-background overflow-y-auto">
+      <div className="flex items-center justify-center p-4 xl:p-8 bg-background h-full lg:overflow-hidden">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-md py-8"
+          className="w-full max-w-[370px] xl:max-w-md my-auto py-0"
         >
-          <Link href="/" className="lg:hidden flex items-center gap-2 mb-8">
+          <Link href="/" className="lg:hidden flex items-center gap-2 mb-5">
             <Image
               src="/logo-circle.png"
               alt="JobFusion Logo"
@@ -275,13 +320,12 @@ export default function CustomSignUpPage() {
           {!verifying ? (
             // Phase 1: Sign Up Form
             <>
-              <div className="mb-8">
-                <h1 className="text-3xl font-bold mb-2 font-sans">Create your account</h1>
-                <p className="text-muted-foreground text-sm">Free forever. No credit card required.</p>
+              <div className="mb-3 xl:mb-4">
+                <h1 className="text-2xl xl:text-3xl font-bold font-sans">Create your account</h1>
               </div>
 
               {error && (
-                <div className="p-3 mb-6 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-start gap-2 animate-shake">
+                <div className="p-2 mb-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs flex items-start gap-2 animate-shake">
                   <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
                   <span>{error}</span>
                 </div>
@@ -291,7 +335,7 @@ export default function CustomSignUpPage() {
               <Button
                 type="button"
                 variant="outline"
-                className="w-full h-11 rounded-xl mb-4 font-medium transition-all duration-200 border-border hover:bg-accent"
+                className="w-full h-8.5 xl:h-9 rounded-xl mb-2 font-medium text-xs transition-all duration-200 border-border hover:bg-accent cursor-pointer"
                 onClick={handleGoogleSignUp}
                 disabled={loading || fetchStatus === 'fetching' || !signUp}
               >
@@ -299,69 +343,103 @@ export default function CustomSignUpPage() {
                 Sign up with Google
               </Button>
 
-              <div className="flex items-center gap-3 my-6">
+              <div className="flex items-center gap-3 my-2 xl:my-2.5">
                 <div className="h-px flex-1 bg-border/60" />
-                <span className="text-xs text-muted-foreground uppercase font-semibold">Or email</span>
+                <span className="text-[10px] xl:text-xs text-muted-foreground uppercase font-semibold">Or email</span>
                 <div className="h-px flex-1 bg-border/60" />
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="fname">First name</Label>
+              <form onSubmit={handleSubmit} noValidate className="space-y-2 xl:space-y-2.5">
+                <div className="grid grid-cols-2 gap-2 xl:gap-2.5">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="fname" className="text-xs">First name</Label>
                     <Input
                       id="fname"
                       placeholder="Alex"
                       value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      className="rounded-xl h-11 border-border focus-visible:ring-primary focus-visible:border-primary"
-                      required
+                      onChange={(e) => {
+                        setFirstName(e.target.value);
+                        if (firstNameError) setFirstNameError('');
+                      }}
+                      className={`rounded-xl h-8 xl:h-8.5 text-xs border-border focus-visible:ring-primary focus-visible:border-primary ${
+                        firstNameError ? 'border-destructive focus-visible:ring-destructive' : ''
+                      }`}
                       disabled={loading}
                     />
+                    {firstNameError && (
+                      <p className="text-[10px] text-destructive flex items-center gap-1 mt-0.5 font-medium">
+                        <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                        {firstNameError}
+                      </p>
+                    )}
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lname">Last name</Label>
+                  <div className="space-y-0.5">
+                    <Label htmlFor="lname" className="text-xs">Last name</Label>
                     <Input
                       id="lname"
                       placeholder="Morgan"
                       value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      className="rounded-xl h-11 border-border focus-visible:ring-primary focus-visible:border-primary"
-                      required
+                      onChange={(e) => {
+                        setLastName(e.target.value);
+                        if (lastNameError) setLastNameError('');
+                      }}
+                      className={`rounded-xl h-8 xl:h-8.5 text-xs border-border focus-visible:ring-primary focus-visible:border-primary ${
+                        lastNameError ? 'border-destructive focus-visible:ring-destructive' : ''
+                      }`}
                       disabled={loading}
                     />
+                    {lastNameError && (
+                      <p className="text-[10px] text-destructive flex items-center gap-1 mt-0.5 font-medium">
+                        <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                        {lastNameError}
+                      </p>
+                    )}
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email address</Label>
+                <div className="space-y-0.5">
+                  <Label htmlFor="email" className="text-xs">Email address</Label>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                     <Input
                       id="email"
                       type="email"
                       placeholder="you@example.com"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="pl-10 rounded-xl h-11 border-border focus-visible:ring-primary focus-visible:border-primary"
-                      required
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        if (emailError) setEmailError('');
+                      }}
+                      className={`pl-8.5 rounded-xl h-8 xl:h-8.5 text-xs border-border focus-visible:ring-primary focus-visible:border-primary ${
+                        emailError ? 'border-destructive focus-visible:ring-destructive' : ''
+                      }`}
                       disabled={loading}
                     />
                   </div>
+                  {emailError && (
+                    <p className="text-[10px] text-destructive flex items-center gap-1 mt-0.5 font-medium">
+                      <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                      {emailError}
+                    </p>
+                  )}
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
+                <div className="space-y-0.5">
+                  <Label htmlFor="password" className="text-xs">Password</Label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                     <Input
                       id="password"
                       type={show ? 'text' : 'password'}
                       placeholder="Min. 8 characters"
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="pl-10 pr-10 rounded-xl h-11 border-border focus-visible:ring-primary focus-visible:border-primary"
-                      required
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        if (passwordError) setPasswordError('');
+                      }}
+                      className={`pl-8.5 pr-8.5 rounded-xl h-8 xl:h-8.5 text-xs border-border focus-visible:ring-primary focus-visible:border-primary ${
+                        passwordError ? 'border-destructive focus-visible:ring-destructive' : ''
+                      }`}
                       disabled={loading}
                     />
                     <button
@@ -370,46 +448,81 @@ export default function CustomSignUpPage() {
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                       disabled={loading}
                     >
-                      {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {show ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                     </button>
+                  </div>
+                  {passwordError && (
+                    <p className="text-[10px] text-destructive flex items-center gap-1 mt-0.5 font-medium">
+                      <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                      {passwordError}
+                    </p>
+                  )}
+
+                  {/* ── LIVE PASSWORD REQUIREMENTS CHECKER (ULTRA-COMPACT 2-COLUMN GRID) ── */}
+                  <div className="mt-1 p-1.5 px-2.5 rounded-lg bg-accent/40 border border-border/50 text-[10px] xl:text-[11px]">
+                    <p className="font-semibold text-muted-foreground mb-0.5 text-[10px]">Password requirements:</p>
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                      {[
+                        { label: 'Min 8 characters', met: reqMinLen },
+                        { label: 'One uppercase', met: reqUpper },
+                        { label: 'One lowercase', met: reqLower },
+                        { label: 'One number', met: reqNum },
+                        { label: 'One special char', met: reqSpecial },
+                      ].map((req, idx) => (
+                        <div key={idx} className={`flex items-center gap-1 transition-colors ${req.met ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-muted-foreground'}`}>
+                          {req.met ? (
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                          ) : (
+                            <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 ml-0.5 mr-1 flex-shrink-0" />
+                          )}
+                          <span className="truncate">{req.label}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-start gap-2.5">
-                  <div className="relative w-4 h-4 md:w-[18px] md:h-[18px] flex-shrink-0 mt-0.5">
-                    <label className="absolute -inset-3.5 flex items-center justify-center cursor-pointer">
-                      <Checkbox
-                        id="terms"
-                        className="w-full h-full border-border focus-visible:ring-primary data-[state=checked]:bg-primary transition-all duration-200"
-                        checked={termsAccepted}
-                        onCheckedChange={(checked) => setTermsAccepted(!!checked)}
-                        required
-                        disabled={loading}
-                      />
-                    </label>
+                <div className="space-y-0.5">
+                  <div className="flex items-start gap-2 pt-0.5">
+                    <Checkbox
+                      id="terms"
+                      checked={termsAccepted}
+                      onCheckedChange={(checked) => {
+                        setTermsAccepted(!!checked);
+                        if (termsError) setTermsError('');
+                      }}
+                      disabled={loading}
+                      className="w-[18px] h-[18px] sm:w-[18px] sm:h-[18px] rounded border-border focus-visible:ring-primary data-[state=checked]:bg-primary transition-all duration-200 mt-0.5 flex-shrink-0"
+                    />
+                    <Label htmlFor="terms" className="text-xs text-muted-foreground leading-tight cursor-pointer select-none">
+                      I agree to the <Link href="/terms-of-service" className="text-primary font-semibold hover:underline">Terms of Service</Link> and <Link href="/privacy-policy" className="text-primary font-semibold hover:underline">Privacy Policy</Link>
+                    </Label>
                   </div>
-                  <Label htmlFor="terms" className="text-sm text-muted-foreground leading-relaxed cursor-pointer select-none">
-                    I agree to the <Link href="/terms-of-service" className="text-primary font-semibold hover:underline">Terms of Service</Link> and <Link href="/privacy-policy" className="text-primary font-semibold hover:underline">Privacy Policy</Link>
-                  </Label>
+                  {termsError && (
+                    <p className="text-[10px] text-destructive flex items-center gap-1 mt-0.5 font-medium">
+                      <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                      {termsError}
+                    </p>
+                  )}
                 </div>
 
                 <Button
                   type="submit"
-                  className="w-full h-11 rounded-xl gradient-brand text-white border-0 font-semibold hover:opacity-90 shadow-md hover:shadow-lg transition-all"
+                  className="w-full h-8.5 xl:h-9 rounded-xl gradient-brand text-white border-0 font-semibold text-xs xl:text-sm hover:opacity-90 shadow-md hover:shadow-lg transition-all mt-0.5"
                   disabled={loading || fetchStatus === 'fetching' || !signUp}
                 >
                   {loading ? (
-                    <div className="w-5 h-5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
                   ) : (
                     <>
                       Create Account
-                      <ArrowRight className="w-4 h-4 ml-2" />
+                      <ArrowRight className="w-3.5 h-3.5 xl:w-4 xl:h-4 ml-2" />
                     </>
                   )}
                 </Button>
               </form>
 
-              <p className="text-center text-sm text-muted-foreground mt-6">
+              <p className="text-center text-xs xl:text-sm text-muted-foreground mt-2.5 xl:mt-3.5">
                 Already have an account?{' '}
                 <Link href="/sign-in" className="text-primary font-semibold hover:underline">Sign in</Link>
               </p>
@@ -417,30 +530,30 @@ export default function CustomSignUpPage() {
           ) : (
             // Phase 2: OTP Verification
             <>
-              <div className="mb-8">
-                <h1 className="text-3xl font-bold mb-2 font-sans">Verify your email</h1>
-                <p className="text-muted-foreground text-sm">
+              <div className="mb-4 xl:mb-5">
+                <h1 className="text-2xl xl:text-3xl font-bold mb-1 font-sans">Verify your email</h1>
+                <p className="text-xs text-muted-foreground">
                   We sent a 6-digit verification code to <span className="font-semibold text-foreground">{email}</span>. Please enter it below.
                 </p>
               </div>
 
               {verifyingError && (
-                <div className="p-3 mb-6 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-start gap-2 animate-shake">
+                <div className="p-2 mb-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs flex items-start gap-2 animate-shake">
                   <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
                   <span>{verifyingError}</span>
                 </div>
               )}
 
               {resendMessage && (
-                <div className="p-3 mb-6 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 text-sm flex items-start gap-2">
+                <div className="p-2 mb-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 text-xs flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" />
                   <span>{resendMessage}</span>
                 </div>
               )}
 
-              <form onSubmit={handleVerify} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="code">Verification Code</Label>
+              <form onSubmit={handleVerify} className="space-y-3">
+                <div className="space-y-1">
+                  <Label htmlFor="code" className="text-xs">Verification Code</Label>
                   <Input
                     id="code"
                     type="text"
@@ -450,7 +563,7 @@ export default function CustomSignUpPage() {
                     placeholder="123456"
                     value={code}
                     onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, ''))}
-                    className="text-center text-xl tracking-widest rounded-xl h-12 border-border focus-visible:ring-primary focus-visible:border-primary font-mono font-semibold"
+                    className="text-center text-lg tracking-widest rounded-xl h-9 xl:h-9.5 border-border focus-visible:ring-primary focus-visible:border-primary font-mono font-semibold"
                     required
                     disabled={verifyingLoading}
                   />
@@ -458,25 +571,25 @@ export default function CustomSignUpPage() {
 
                 <Button
                   type="submit"
-                  className="w-full h-11 rounded-xl gradient-brand text-white border-0 font-semibold hover:opacity-90 shadow-md hover:shadow-lg transition-all"
+                  className="w-full h-8.5 xl:h-9 rounded-xl gradient-brand text-white border-0 font-semibold text-xs xl:text-sm hover:opacity-90 shadow-md hover:shadow-lg transition-all"
                   disabled={verifyingLoading || code.length < 6}
                 >
                   {verifyingLoading ? (
-                    <div className="w-5 h-5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
                   ) : (
                     <>
                       Verify Code
-                      <ArrowRight className="w-4 h-4 ml-2" />
+                      <ArrowRight className="w-3.5 h-3.5 xl:w-4 xl:h-4 ml-2" />
                     </>
                   )}
                 </Button>
               </form>
 
-              <div className="flex flex-col gap-3 mt-8">
+              <div className="flex flex-col gap-2 mt-5">
                 <button
                   type="button"
                   onClick={handleResendCode}
-                  className="text-sm font-semibold text-primary hover:underline focus:outline-none"
+                  className="text-xs font-semibold text-primary hover:underline focus:outline-none"
                   disabled={verifyingLoading}
                 >
                   I need a new code
@@ -485,7 +598,7 @@ export default function CustomSignUpPage() {
                 <button
                   type="button"
                   onClick={handleBackToSignUp}
-                  className="inline-flex items-center justify-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors focus:outline-none mt-2"
+                  className="inline-flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors focus:outline-none mt-1"
                   disabled={verifyingLoading}
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />

@@ -7,66 +7,12 @@ export async function getOrCreateMongoUser() {
     const authData = await auth();
     clerkId = authData?.userId || null;
   } catch {
-    console.warn("[Auth Sync] Clerk auth() failed or is not configured. Falling back to dev mode mock user.");
+    console.warn("[Auth Sync] Clerk auth() failed or is not configured.");
   }
 
+  // Strictly enforce authentication: No mock/guest/seed fallback user
   if (!clerkId) {
-    console.log("[Auth Sync] No active Clerk session.");
-    const mockClerkId = "user_dev_guest";
-    const mockEmail = "devuser@jobfusion.local";
-
-    let user = await prisma.user.findUnique({
-      where: { clerkId: mockClerkId },
-    });
-
-    if (!user) {
-      user = await prisma.user.findFirst({
-        where: { email: { equals: mockEmail, mode: "insensitive" } },
-      });
-      if (user) {
-        user = await prisma.user.update({
-          where: { id: user.id },
-          data: {
-            clerkId: mockClerkId,
-            fullName: user.fullName || "Demo User",
-          },
-        });
-      }
-    }
-
-    if (!user) {
-      user = await prisma.user.create({
-        data: {
-          id: "65c3b9b4f123456789abcdef",
-          clerkId: mockClerkId,
-          fullName: "Demo User",
-          email: mockEmail,
-          profileImage: "",
-          role: "jobseeker",
-        },
-      });
-    }
-
-    // Ensure profile exists in Postgres
-    const profile = await prisma.profile.findUnique({
-      where: { userId: user.id },
-    });
-    if (!profile) {
-      await prisma.profile.create({
-        data: {
-          user: { connect: { id: user.id } },
-          resumeText: "",
-          resumeSkillMode: "merge",
-          resumeCategory: "",
-          resumeSummary: "",
-        },
-      });
-    }
-
-    return {
-      ...user,
-      _id: user.id,
-    };
+    return null;
   }
 
   // Find user in PostgreSQL by clerkId
@@ -137,7 +83,7 @@ export async function getOrCreateMongoUser() {
 
     // Create User in PostgreSQL
     const crypto = await import("crypto");
-    const generatedId = crypto.randomBytes(12).toString("hex"); // Generate 24-char hex string to mimic MongoDB ObjectID
+    const generatedId = crypto.randomBytes(12).toString("hex"); // Generate 24-char hex string
 
     user = await prisma.user.create({
       data: {

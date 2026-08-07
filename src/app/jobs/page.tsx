@@ -27,7 +27,6 @@ import JobCard from '@/components/job-card';
 import JobPortalsSection from '@/components/job-portals-section';
 import { JobsErrorBoundary } from '@/components/error-boundary';
 import { UpgradeModal } from '@/components/pricing/UpgradeModal';
-import { BYOKModal } from '@/components/pricing/BYOKModal';
 import { PremiumPortalModal } from '@/components/pricing/PremiumPortalModal';
 import { cn } from '@/lib/utils';
 import {
@@ -377,7 +376,6 @@ export default function JobsPage() {
 
   // Usage tracking and Modals
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [showBYOKModal, setShowBYOKModal] = useState(false);
   const [showPremiumPortalModal, setShowPremiumPortalModal] = useState(false);
   const [targetPortalName, setTargetPortalName] = useState('Premium Portal');
   const [usageStats, setUsageStats] = useState<any>(null);
@@ -556,97 +554,7 @@ export default function JobsPage() {
         await optimisticFetchPromise;
 
         if (!hasExplicitFilters && profVal) {
-
-          // ── inferExpLevel ──────────────────────────────────────────────────
-          // Converts a free-text experience string OR a work history array into
-          // one of: 'entry' | 'mid' | 'senior' | 'lead' | null
-          const inferExpLevel = (expStr?: string | null, expHistory?: any[]): string | null => {
-            const yearsToLevel = (y: number): string => {
-              if (y <= 2)  return 'entry';
-              if (y <= 5)  return 'mid';
-              if (y <= 8)  return 'senior';
-              return 'lead';
-            };
-
-            // 1️⃣  Try the free-text experience field first
-            if (expStr && expStr.trim()) {
-              const s = expStr.toLowerCase().trim();
-
-              // Direct keyword matches (fast path)
-              if (/\b(fresher|0\s*year|no\s*exp|intern)\b/.test(s)) return 'entry';
-              if (/\b(junior|jr\.?)\b/.test(s)) return 'entry';
-              if (/\b(entry[\s-]?level)\b/.test(s)) return 'entry';
-              if (/\b(mid[\s-]?level|intermediate)\b/.test(s)) return 'mid';
-              if (/\b(senior|sr\.?)\b/.test(s)) return 'senior';
-              if (/\b(lead|principal|staff|architect)\b/.test(s)) return 'lead';
-              if (/\b(manager|director|vp|head\s+of)\b/.test(s)) return 'lead';
-
-              // Extract numeric year value — handles:
-              //   "6 years", "6+ years", "6-8 years", "1.5 years", "~3 years"
-              //   "3 to 5 years", "around 4 years"
-              const numMatch = s.match(/(\d+(?:\.\d+)?)\s*(?:to|-|–|and)?\s*(\d+)?\s*(?:\+|plus)?\s*(?:yr|year|yrs|years)/);
-              if (numMatch) {
-                // Use the lower bound of a range (more conservative)
-                const years = parseFloat(numMatch[1]);
-                return yearsToLevel(years);
-              }
-
-              // Bare number fallback: "6", "2+"
-              const bareNum = s.match(/^(\d+(?:\.\d+)?)\s*\+?$/);
-              if (bareNum) return yearsToLevel(parseFloat(bareNum[1]));
-            }
-
-            // 2️⃣  Fall back to counting work history entries
-            if (expHistory && expHistory.length > 0) {
-              // Each job entry ≈ ~2 years on average; cap at reasonable max
-              const estimatedYears = Math.min(expHistory.length * 2, 15);
-              return yearsToLevel(estimatedYears);
-            }
-
-            return null; // Can't infer — leave filter unselected
-          };
-
-          // ── inferSalaryMin ─────────────────────────────────────────────────
-          // Parses expected salary free text → minimum salary in lakhs (integer)
-          // Returns 0 if nothing can be parsed → salary filter stays unset
-          const inferSalaryMin = (salStr?: string | null): number => {
-            if (!salStr || !salStr.trim()) return 0;
-
-            // Strip currency symbols, commas, spaces → work with digits and units only
-            const s = salStr.replace(/[₹$€£,\s]/g, '').toLowerCase();
-
-            // Pattern: number (optional decimal) optionally followed by unit
-            // Captures the FIRST (minimum) value in a range like "28l–45l" → 28
-            const match = s.match(/(\d+(?:\.\d+)?)\s*(?:l(?:pa|akh)?|k|cr)?/);
-            if (!match) return 0;
-
-            const raw = parseFloat(match[1]);
-            const unit = match[0].replace(/[\d.]/g, '').trim(); // e.g. "l", "lpa", "k", "cr"
-
-            let lakhs: number;
-            if (raw > 100000) {
-              // Looks like a full rupee amount (e.g. 2800000)
-              lakhs = Math.floor(raw / 100000);
-            } else if (unit.startsWith('cr')) {
-              // Crore → lakhs
-              lakhs = Math.floor(raw * 100);
-            } else if (unit === 'k') {
-              // Thousands (USD context) — convert roughly: ₹1000k ≈ unlikely, skip
-              lakhs = 0;
-            } else {
-              // Already in lakhs (L / LPA / lakh)
-              lakhs = Math.floor(raw);
-            }
-
-            // Sanity check: ignore implausible values (< 1L or > 500L)
-            if (lakhs < 1 || lakhs > 500) return 0;
-            return lakhs;
-          };
-
-          // ── Apply inferred filters ─────────────────────────────────────────
-          const hasSkills = profVal.skills && profVal.skills.length > 0;
-          const inferredExpLevel = inferExpLevel(profVal.experience, profVal.experiences);
-          const inferredSalaryMin = inferSalaryMin(profVal.expectedSalary);
+          // Default load: fetch all fresh Company Careers inventory without restrictive AND gate
 
           // Default load: fetch all fresh Company Careers inventory without restrictive AND gate
           setSkillWarning(false);
@@ -810,12 +718,17 @@ export default function JobsPage() {
       // Request relevance ordering: tier DESC → score DESC → date DESC.
       params.set('sortBy', 'relevance');
       params.set('order', 'desc');
-      const effectiveSources = selectedSources.length > 0 ? selectedSources : ['careers'];
+      const effectiveSources = selectedSources.length > 0 ? selectedSources : ['linkedin', 'wellfound', 'indeed', 'internshala', 'foundit', 'naukri', 'careers'];
       params.set('source', effectiveSources.join(','));
       // Also send skill names as a query-param fallback (belt-and-suspenders).
       params.set('skills', userSkills.join(','));
       if (datePosted) params.set('datePosted', datePosted);
       params.set('page', '1');
+
+      // Asynchronously trigger background refresh without blocking instant database search
+      fetch(`/api/portal-jobs?portal=all&refresh=true&keyword=${encodeURIComponent(userSkills[0] || 'Software Engineer')}`).catch((e) => {
+        console.warn('[Match My Skills] Non-blocking background sync notice:', e.message);
+      });
 
       const queryString = params.toString();
 
@@ -1732,15 +1645,8 @@ export default function JobsPage() {
         open={showUpgradeModal} 
         onClose={() => setShowUpgradeModal(false)}
         title="🚀 Daily Free Limit Reached"
-        subtitle="You've already used your 2 free Match My Skills refreshes today. Choose how you'd like to continue."
+        subtitle="You've already used your 2 free Match My Skills refreshes today. Upgrade to Pro for unlimited access."
         featureName="Match My Skills"
-        showBYOKOption={true}
-        onBYOKClick={() => setShowBYOKModal(true)}
-      />
-      
-      <BYOKModal
-        open={showBYOKModal}
-        onClose={() => setShowBYOKModal(false)}
       />
 
       <PremiumPortalModal

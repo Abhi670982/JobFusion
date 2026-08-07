@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { safeErrorResponse } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -22,21 +23,22 @@ export async function GET() {
           maintenanceMode: false,
           homepageAnnouncement: "",
           geminiKeyPlaceholder: "",
-          featureFlags: {
-            aiRecommendations: true,
-            scraperEnabled: true,
-            resumeParsing: true,
-          },
-        },
+          featureFlags: { resumeParsing: true, scraperEnabled: true, aiRecommendations: true },
+          futureIntegrations: {},
+          allowedAdminEmails: [
+            "akchauhan1172@gmail.com",
+            "abhishekchauhan1172@gmail.com",
+            "thomasramesh449@gmail.com",
+            "sudhanshukr388@gmail.com",
+            "piyushkumar.prog@gmail.com"
+          ],
+          contactEmail: "akchauhan1172@gmail.com",
+        }
       });
-
-      // Maintain MongoDB parity
     }
 
-    // Map to MongoDB-like representation
     const mappedSettings = {
       _id: settings.id,
-      settingsId: settings.settingsId,
       maintenanceMode: settings.maintenanceMode,
       homepageAnnouncement: settings.homepageAnnouncement,
       geminiKeyPlaceholder: settings.geminiKeyPlaceholder,
@@ -44,6 +46,7 @@ export async function GET() {
       futureIntegrations: settings.futureIntegrations,
       allowedAdminEmails: settings.allowedAdminEmails,
       contactEmail: settings.contactEmail,
+      lastCrawlAt: settings.lastCrawlAt,
       createdAt: settings.createdAt,
       updatedAt: settings.updatedAt
     };
@@ -52,11 +55,8 @@ export async function GET() {
       success: true,
       data: mappedSettings,
     });
-  } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error.message || "Failed to load settings" },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return safeErrorResponse(error, "Failed to load settings");
   }
 }
 
@@ -68,55 +68,33 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { maintenanceMode, homepageAnnouncement, geminiKeyPlaceholder, contactEmail, featureFlags, futureIntegrations } = body;
 
-    if (contactEmail !== undefined && contactEmail.trim()) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(contactEmail.trim())) {
-        return NextResponse.json({ success: false, error: "Invalid contact email format" }, { status: 400 });
-      }
-    }
+    const updateData: any = {};
+    if (body.maintenanceMode !== undefined) updateData.maintenanceMode = body.maintenanceMode;
+    if (body.homepageAnnouncement !== undefined) updateData.homepageAnnouncement = body.homepageAnnouncement;
+    if (body.geminiKeyPlaceholder !== undefined) updateData.geminiKeyPlaceholder = body.geminiKeyPlaceholder;
+    if (body.featureFlags !== undefined) updateData.featureFlags = body.featureFlags;
+    if (body.futureIntegrations !== undefined) updateData.futureIntegrations = body.futureIntegrations;
+    if (body.allowedAdminEmails !== undefined) updateData.allowedAdminEmails = body.allowedAdminEmails;
+    if (body.contactEmail !== undefined) updateData.contactEmail = body.contactEmail;
 
-    // Update PostgreSQL settings
     const settings = await prisma.settings.upsert({
       where: { settingsId: "global" },
-      update: {
-        maintenanceMode: maintenanceMode !== undefined ? maintenanceMode : undefined,
-        homepageAnnouncement: homepageAnnouncement !== undefined ? homepageAnnouncement : undefined,
-        geminiKeyPlaceholder: geminiKeyPlaceholder !== undefined ? geminiKeyPlaceholder : undefined,
-        contactEmail: contactEmail !== undefined ? contactEmail.trim() : undefined,
-        featureFlags: featureFlags !== undefined ? featureFlags : undefined,
-        futureIntegrations: futureIntegrations !== undefined ? futureIntegrations : undefined,
-      },
+      update: updateData,
       create: {
         settingsId: "global",
-        maintenanceMode: maintenanceMode ?? false,
-        homepageAnnouncement: homepageAnnouncement ?? "",
-        geminiKeyPlaceholder: geminiKeyPlaceholder ?? "",
-        contactEmail: contactEmail ? contactEmail.trim() : "akchauhan1172@gmail.com",
-        featureFlags: featureFlags ?? { aiRecommendations: true, scraperEnabled: true, resumeParsing: true },
-        futureIntegrations: futureIntegrations ?? {},
+        maintenanceMode: body.maintenanceMode || false,
+        homepageAnnouncement: body.homepageAnnouncement || "",
+        geminiKeyPlaceholder: body.geminiKeyPlaceholder || "",
+        featureFlags: body.featureFlags || { resumeParsing: true, scraperEnabled: true, aiRecommendations: true },
+        futureIntegrations: body.futureIntegrations || {},
+        allowedAdminEmails: body.allowedAdminEmails || [],
+        contactEmail: body.contactEmail || "akchauhan1172@gmail.com",
       }
-    });
-
-    // Log admin action using structured audit logger
-    const { logAdminAction } = await import("@/lib/audit-logger");
-    await logAdminAction({
-      req,
-      admin: {
-        _id: admin.id,
-        fullName: admin.fullName,
-        email: admin.email
-      },
-      action: "Updated Settings",
-      resource: "Settings",
-      resourceId: "global",
-      details: "Updated global platform settings and feature flags",
     });
 
     const mappedSettings = {
       _id: settings.id,
-      settingsId: settings.settingsId,
       maintenanceMode: settings.maintenanceMode,
       homepageAnnouncement: settings.homepageAnnouncement,
       geminiKeyPlaceholder: settings.geminiKeyPlaceholder,
@@ -124,6 +102,7 @@ export async function POST(req: NextRequest) {
       futureIntegrations: settings.futureIntegrations,
       allowedAdminEmails: settings.allowedAdminEmails,
       contactEmail: settings.contactEmail,
+      lastCrawlAt: settings.lastCrawlAt,
       createdAt: settings.createdAt,
       updatedAt: settings.updatedAt
     };
@@ -133,10 +112,7 @@ export async function POST(req: NextRequest) {
       message: "Platform settings updated successfully",
       data: mappedSettings,
     });
-  } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error.message || "Failed to save settings" },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return safeErrorResponse(error, "Failed to save settings");
   }
 }

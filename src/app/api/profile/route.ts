@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import { prisma } from "@/lib/prisma";
+import { requireAuthUser, safeErrorResponse } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -96,103 +96,64 @@ function mapProfile(p: any, user: any) {
   };
 }
 
-// 1. POST - Create a Profile (Normally handled by auto-sync, but kept secure)
+// 1. POST - Create a Profile for authenticated user
 export async function POST(req: NextRequest) {
   try {
-    const mongoUser = await getOrCreateMongoUser();
-    if (!mongoUser) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const { user: mongoUser, errorResponse } = await requireAuthUser();
+    if (errorResponse) return errorResponse;
 
     const body = await req.json();
-    const { headline, bio, skills, location, experience, resumeUrl } = body;
+    const { headline, bio, location, experience, resumeUrl } = body;
 
-    // Check if profile already exists for this user in Postgres
     let pgProfile = await prisma.profile.findUnique({
-      where: { userId: mongoUser._id.toString() }
+      where: { userId: mongoUser.id }
     });
 
     if (pgProfile) {
       return NextResponse.json(
         { success: false, error: "Profile already exists for this user. Use PUT to update." },
-        { status: 409 }
+        { status: 400 }
       );
     }
 
-    // Create in Postgres
     pgProfile = await prisma.profile.create({
       data: {
-        user: { connect: { id: mongoUser._id.toString() } },
+        userId: mongoUser.id,
         headline: headline || "",
         bio: bio || "",
         location: location || "",
         experience: experience || "",
         resumeUrl: resumeUrl || "",
-        resumeText: "",
         resumeSkillMode: "merge",
         resumeCategory: "",
         resumeSummary: "",
+      },
+      include: {
+        skills: true,
+        experiences: true,
+        education: true,
+        certifications: true,
+        projects: true
       }
     });
 
-    // Create skills if they exist
-    if (Array.isArray(skills) && skills.length > 0) {
-      await prisma.profileSkill.createMany({
-        data: skills.map((s: any) => ({
-          profileId: pgProfile!.id,
-          name: typeof s === "string" ? s : s.name,
-          level: s.level ?? 80
-        }))
-      });
-    }
-
-    // Fetch the fully created profile from Postgres to return
-    const fullProfile = await prisma.profile.findUnique({
-      where: { id: pgProfile.id },
-      include: { skills: true }
-    });
-
     return NextResponse.json(
-      { success: true, data: mapProfile(fullProfile, mongoUser) },
+      { success: true, data: mapProfile(pgProfile, mongoUser) },
       { status: 201 }
     );
-  } catch (error: any) {
-    console.error("Error in POST /api/profile:", error);
-    return NextResponse.json(
-      { success: false, error: error.message || "Something went wrong" },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return safeErrorResponse(error, "Failed to create profile");
   }
 }
 
 // 2. GET - Read Profile of current authenticated user
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
-    const mongoUser = await getOrCreateMongoUser();
-    if (!mongoUser) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const { user: mongoUser, errorResponse } = await requireAuthUser();
+    if (errorResponse) return errorResponse;
 
-    const { searchParams } = new URL(req.url);
-    const userId = searchParams.get("userId");
-
-    // Enforce "Users can only access their own profile"
-    if (userId && userId !== mongoUser._id.toString()) {
-      return NextResponse.json(
-        { success: false, error: "Forbidden: You can only access your own profile" },
-        { status: 403 }
-      );
-    }
-
-    // Fetch profile and all related models from Postgres
     const pgProfile = await prisma.profile.findUnique({
-      where: { userId: mongoUser._id.toString() },
+      where: { userId: mongoUser.id },
       include: {
         skills: true,
         experiences: true,
@@ -209,48 +170,28 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Fetch user details from Postgres
     const pgUser = await prisma.user.findUnique({
-      where: { id: mongoUser._id.toString() }
+      where: { id: mongoUser.id }
     });
 
     return NextResponse.json({ 
       success: true, 
       data: mapProfile(pgProfile, pgUser || mongoUser) 
     });
-  } catch (error: any) {
-    console.error("Error in GET /api/profile:", error);
-    return NextResponse.json(
-      { success: false, error: error.message || "Something went wrong" },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return safeErrorResponse(error, "Failed to fetch profile");
   }
 }
 
-// 3. PUT - Update Profile & User details
+// 3. PUT - Update Profile & User details of authenticated user
 export async function PUT(req: NextRequest) {
   try {
-    const mongoUser = await getOrCreateMongoUser();
-    if (!mongoUser) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const { user: mongoUser, errorResponse } = await requireAuthUser();
+    if (errorResponse) return errorResponse;
 
     const body = await req.json();
-    const { searchParams } = new URL(req.url);
-    const userId = searchParams.get("userId") || body.userId;
 
-    // Enforce "Users can only edit their own data"
-    if (userId && userId !== mongoUser._id.toString()) {
-      return NextResponse.json(
-        { success: false, error: "Forbidden: You can only edit your own profile" },
-        { status: 403 }
-      );
-    }
-
-    // Update User model fields if they are present in the request
+    // Update User model fields
     const userUpdateFields: any = {};
     if (body.fullName !== undefined) userUpdateFields.fullName = body.fullName;
     if (body.email !== undefined) userUpdateFields.email = body.email;
@@ -258,16 +199,13 @@ export async function PUT(req: NextRequest) {
 
     if (Object.keys(userUpdateFields).length > 0) {
       await prisma.user.update({
-        where: { id: mongoUser._id.toString() },
+        where: { id: mongoUser.id },
         data: userUpdateFields
       });
     }
 
-
-
-    // Fetch existing profile in PostgreSQL to verify existence
     const pgProfile = await prisma.profile.findUnique({
-      where: { userId: mongoUser._id.toString() }
+      where: { userId: mongoUser.id }
     });
 
     if (!pgProfile) {
@@ -277,7 +215,6 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    // Map profile updating fields to flattened columns
     const updateData: any = {};
     if (body.headline !== undefined) updateData.headline = body.headline;
     if (body.bio !== undefined) updateData.bio = body.bio;
@@ -317,93 +254,91 @@ export async function PUT(req: NextRequest) {
       if (n.marketingEmails !== undefined) updateData.notificationMarketingEmails = n.marketingEmails;
     }
 
-    // Update in Postgres
     await prisma.profile.update({
       where: { id: pgProfile.id },
       data: updateData
     });
 
-    // Replace nested sub-documents (skills, experiences, education, certifications, projects)
-    if (body.skills !== undefined && Array.isArray(body.skills)) {
+    // Update nested relations
+    if (body.skills && Array.isArray(body.skills)) {
       await prisma.profileSkill.deleteMany({ where: { profileId: pgProfile.id } });
       if (body.skills.length > 0) {
         await prisma.profileSkill.createMany({
           data: body.skills.map((s: any) => ({
             profileId: pgProfile.id,
-            name: typeof s === "string" ? s : s.name,
-            level: s.level ?? 80
+            name: typeof s === 'string' ? s : (s.name || ''),
+            level: typeof s === 'object' && s.level ? Number(s.level) : 80
           }))
         });
       }
     }
 
-    if (body.experiences !== undefined && Array.isArray(body.experiences)) {
+    if (body.experiences && Array.isArray(body.experiences)) {
       await prisma.workExperience.deleteMany({ where: { profileId: pgProfile.id } });
       if (body.experiences.length > 0) {
         await prisma.workExperience.createMany({
           data: body.experiences.map((e: any) => ({
             profileId: pgProfile.id,
-            company: e.company || "",
-            role: e.role || "",
-            period: e.period || "",
-            duration: e.duration || "",
-            description: e.description || "",
-            skills: e.skills || [],
-            companyColor: e.companyColor || null,
-            logo: e.logo || null
+            company: e.company || '',
+            role: e.role || '',
+            period: e.period || '',
+            duration: e.duration || '',
+            description: e.description || '',
+            skills: Array.isArray(e.skills) ? e.skills : [],
+            companyColor: e.companyColor || '#6366f1',
+            logo: e.logo || (e.company ? e.company.charAt(0).toUpperCase() : 'C')
           }))
         });
       }
     }
 
-    if (body.education !== undefined && Array.isArray(body.education)) {
+    if (body.education && Array.isArray(body.education)) {
       await prisma.education.deleteMany({ where: { profileId: pgProfile.id } });
       if (body.education.length > 0) {
         await prisma.education.createMany({
-          data: body.education.map((edu: any) => ({
+          data: body.education.map((ed: any) => ({
             profileId: pgProfile.id,
-            school: edu.school || "",
-            degree: edu.degree || "",
-            period: edu.period || "",
-            logo: edu.logo || null,
-            color: edu.color || null
+            school: ed.school || '',
+            degree: ed.degree || '',
+            period: ed.period || '',
+            logo: ed.logo || (ed.school ? ed.school.charAt(0).toUpperCase() : 'S'),
+            color: ed.color || '#003580'
           }))
         });
       }
     }
 
-    if (body.certifications !== undefined && Array.isArray(body.certifications)) {
+    if (body.certifications && Array.isArray(body.certifications)) {
       await prisma.certification.deleteMany({ where: { profileId: pgProfile.id } });
       if (body.certifications.length > 0) {
         await prisma.certification.createMany({
           data: body.certifications.map((c: any) => ({
             profileId: pgProfile.id,
-            name: c.name || "",
-            issuer: c.issuer || "",
-            year: c.year || "",
-            iconName: c.iconName || null
+            name: c.name || '',
+            issuer: c.issuer || '',
+            year: c.year || '',
+            iconName: c.iconName || 'Award'
           }))
         });
       }
     }
 
-    if (body.projects !== undefined && Array.isArray(body.projects)) {
+    if (body.projects && Array.isArray(body.projects)) {
       await prisma.project.deleteMany({ where: { profileId: pgProfile.id } });
       if (body.projects.length > 0) {
         await prisma.project.createMany({
-          data: body.projects.map((p: any) => ({
+          data: body.projects.map((proj: any) => ({
             profileId: pgProfile.id,
-            name: p.name || "",
-            description: p.description || "",
-            tech: p.tech || [],
-            link: p.link || null,
-            stars: p.stars || null
+            name: proj.name || '',
+            description: proj.description || '',
+            tech: Array.isArray(proj.tech) ? proj.tech : [],
+            link: proj.link || '#',
+            stars: String(proj.stars || '0')
           }))
         });
       }
     }
 
-    // Fetch updated profile with relationships to return
     const updatedProfile = await prisma.profile.findUnique({
       where: { id: pgProfile.id },
       include: {
@@ -416,84 +351,34 @@ export async function PUT(req: NextRequest) {
     });
 
     const pgUser = await prisma.user.findUnique({
-      where: { id: mongoUser._id.toString() }
+      where: { id: mongoUser.id }
     });
 
-    // Trigger background scraper sync if skills were updated
-    if (body.skills && Array.isArray(body.skills)) {
-      const newSkillNames = body.skills.map((s: any) => (typeof s === "string" ? s : s.name || "").toLowerCase()).filter(Boolean);
-      if (newSkillNames.length > 0) {
-        console.log(`[Profile API] Triggering backend skills sync for manually updated skills:`, newSkillNames);
-        Promise.resolve().then(async () => {
-          try {
-            const backendUrl = process.env.JOB_AGGREGATOR_URL || "http://localhost:5000";
-            const response = await fetch(`${backendUrl}/api/jobs/sync`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                skills: newSkillNames,
-                location: body.location || undefined
-              }),
-            });
-            const data = await response.json();
-            console.log(`[Profile API Background] Sync trigger result:`, data);
-          } catch (err: any) {
-            console.error(`[Profile API Background] Sync trigger failed:`, err.message);
-          }
-        });
-      }
-    }
-
     return NextResponse.json({ success: true, data: mapProfile(updatedProfile, pgUser || mongoUser) });
-  } catch (error: any) {
-    console.error("Error in PUT /api/profile:", error);
-    return NextResponse.json(
-      { success: false, error: error.message || "Something went wrong" },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return safeErrorResponse(error, "Failed to update profile");
   }
 }
 
-// 4. DELETE - Delete User & Profile
-export async function DELETE(req: NextRequest) {
+// 4. DELETE - Delete User & Profile of authenticated user
+export async function DELETE() {
   try {
-    const mongoUser = await getOrCreateMongoUser();
-    if (!mongoUser) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const { user: mongoUser, errorResponse } = await requireAuthUser();
+    if (errorResponse) return errorResponse;
 
-    const { searchParams } = new URL(req.url);
-    const userId = searchParams.get("userId");
-
-    // Enforce "Users can only edit/delete their own data"
-    if (userId && userId !== mongoUser._id.toString()) {
-      return NextResponse.json(
-        { success: false, error: "Forbidden: You can only delete your own account" },
-        { status: 403 }
-      );
-    }
-
-    // Delete in PostgreSQL
     await prisma.profile.delete({
-      where: { userId: mongoUser._id.toString() }
+      where: { userId: mongoUser.id }
     });
     
     await prisma.user.delete({
-      where: { id: mongoUser._id.toString() }
+      where: { id: mongoUser.id }
     });
 
     return NextResponse.json({
       success: true,
       message: "Profile and User account deleted successfully",
     });
-  } catch (error: any) {
-    console.error("Error in DELETE /api/profile:", error);
-    return NextResponse.json(
-      { success: false, error: error.message || "Something went wrong" },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return safeErrorResponse(error, "Failed to delete profile account");
   }
 }

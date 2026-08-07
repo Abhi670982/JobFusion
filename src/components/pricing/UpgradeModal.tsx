@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Sparkles, Check, Key } from 'lucide-react';
+import { X, Sparkles, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useEffect } from 'react';
@@ -15,8 +15,6 @@ interface UpgradeModalProps {
   subtitle?: string;
   featureName?: string;
   requiredPlan?: PlanId;
-  showBYOKOption?: boolean;
-  onBYOKClick?: () => void;
 }
 
 export function UpgradeModal({
@@ -25,8 +23,6 @@ export function UpgradeModal({
   title,
   subtitle,
   featureName = 'this feature',
-  showBYOKOption = false,
-  onBYOKClick,
 }: UpgradeModalProps) {
   // Close on Escape key
   useEffect(() => {
@@ -108,30 +104,26 @@ export function UpgradeModal({
 
               {/* Body */}
               <div className="p-6">
-                {!showBYOKOption && (
-                  <div className="text-center mb-6">
-                    <div className="flex items-end justify-center gap-1">
-                      <span className="text-4xl font-extrabold">₹299</span>
-                      <span className="text-muted-foreground mb-1.5">/month</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">or ₹2,999/year · Save 17%</p>
+                <div className="text-center mb-6">
+                  <div className="flex items-end justify-center gap-1">
+                    <span className="text-4xl font-extrabold">₹299</span>
+                    <span className="text-muted-foreground mb-1.5">/month</span>
                   </div>
-                )}
+                  <p className="text-xs text-muted-foreground mt-1">or ₹2,999/year · Save 17%</p>
+                </div>
 
                 {/* Features */}
-                {!showBYOKOption && (
-                  <ul className="space-y-2.5 mb-6" aria-label="Pro plan features">
-                    {highlightedFeatures.map((feature) => (
-                      <li key={feature} className="flex items-center gap-2.5 text-sm">
-                        <span className="w-4 h-4 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                          <Check className="w-2.5 h-2.5 text-primary" aria-hidden="true" />
-                        </span>
-                        <span className="text-muted-foreground">{feature}</span>
-                      </li>
-                    ))}
-                    <li className="text-xs text-muted-foreground pl-6">+ more features</li>
-                  </ul>
-                )}
+                <ul className="space-y-2.5 mb-6" aria-label="Pro plan features">
+                  {highlightedFeatures.map((feature) => (
+                    <li key={feature} className="flex items-center gap-2.5 text-sm">
+                      <span className="w-4 h-4 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <Check className="w-2.5 h-2.5 text-primary" aria-hidden="true" />
+                      </span>
+                      <span className="text-muted-foreground">{feature}</span>
+                    </li>
+                  ))}
+                  <li className="text-xs text-muted-foreground pl-6">+ more features</li>
+                </ul>
 
                 {/* CTA Buttons */}
                 <div className="space-y-3">
@@ -142,20 +134,6 @@ export function UpgradeModal({
                     <Sparkles className="w-4 h-4 mr-2" aria-hidden="true" />
                     Upgrade to Pro
                   </Button>
-                  
-                  {showBYOKOption && (
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        onClose();
-                        if (onBYOKClick) onBYOKClick();
-                      }}
-                      className="w-full rounded-xl"
-                    >
-                      <Key className="w-4 h-4 mr-2" />
-                      Use Your Own AI API Key
-                    </Button>
-                  )}
 
                   <Button
                     variant="ghost"
@@ -173,3 +151,4 @@ export function UpgradeModal({
     </AnimatePresence>
   );
 }
+

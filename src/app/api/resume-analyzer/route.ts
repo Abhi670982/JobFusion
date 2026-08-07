@@ -1,30 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import { getAIConfig } from "@/lib/ai-provider";
 import { runFullAnalysis, computeResumeHash } from "@/lib/resume-analyzer";
 import { prisma } from "@/lib/prisma";
+import { requireAuthUser, safeErrorResponse } from "@/lib/security";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
 /**
  * POST /api/resume-analyzer
- * Body: { userId: string, forceReanalyze?: boolean }
- *
  * Access gate: Pro subscription OR BYOK configured.
- * Free users without BYOK are rejected with REQUIRES_PREMIUM_OR_BYOK.
  */
 export async function POST(req: NextRequest) {
   try {
-    // 1. Authenticate
-    const mongoUser = await getOrCreateMongoUser();
-    if (!mongoUser) {
-      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-    }
+    const { user: mongoUser, errorResponse } = await requireAuthUser();
+    if (errorResponse) return errorResponse;
+
+    // Rate limit: 10 analysis calls per 15 minutes per user
+    const rateLimitError = checkRateLimit(req, { limit: 10, windowMs: 15 * 60 * 1000, identifier: mongoUser.id });
+    if (rateLimitError) return rateLimitError;
 
     const body = await req.json().catch(() => ({}));
     const { forceReanalyze = false, jobDescription = "" } = body;
 
-    // 2. Access gate — resolve AI config & daily usage limit
     const rawConfig = await getAIConfig(
       mongoUser.id,
       "resume-analyzer",
@@ -34,41 +32,37 @@ export async function POST(req: NextRequest) {
 
     if (!rawConfig.allowed) {
       return NextResponse.json(
-        { success: false, code: "REQUIRES_PREMIUM_OR_BYOK", error: rawConfig.error },
+        { success: false, code: "AI_LIMIT_REACHED", error: rawConfig.error },
         { status: 403 }
       );
     }
 
-    // Intercept free-credits route & check daily limit for Free users
-    if (!rawConfig.isBYOK) {
-      const subscription = await prisma.subscription.findUnique({
-        where: { userId: mongoUser.id },
-        include: { plan: true },
-      });
-      const isPro =
-        subscription &&
-        (subscription.plan.planId === "pro_monthly" ||
-          subscription.plan.planId === "pro_yearly") &&
-        (subscription.status === "active" || subscription.status === "trialing");
+    const subscription = await prisma.subscription.findUnique({
+      where: { userId: mongoUser.id },
+      include: { plan: true },
+    });
+    const isPro =
+      subscription &&
+      (subscription.plan.planId === "pro_monthly" ||
+        subscription.plan.planId === "pro_yearly") &&
+      (subscription.status === "active" || subscription.status === "trialing");
 
-      if (!isPro) {
-        const { usageService } = await import("@/lib/usageService");
-        const todayUsage = await usageService.getTodayUsage(mongoUser.id, "resume-analyzer");
-        if (todayUsage >= 2) {
-          return NextResponse.json(
-            {
-              success: false,
-              code: "LIMIT_REACHED",
-              error: "Free users can analyze up to 2 resumes per day. Upgrade to Premium for unlimited AI Resume Analysis OR connect your own API using BYOK.",
-              usage: { used: todayUsage, limit: 2 }
-            },
-            { status: 403 }
-          );
-        }
+    if (!isPro) {
+      const { usageService } = await import("@/lib/usageService");
+      const todayUsage = await usageService.getTodayUsage(mongoUser.id, "resume-analyzer");
+      if (todayUsage >= 2) {
+        return NextResponse.json(
+          {
+            success: false,
+            code: "LIMIT_REACHED",
+            error: "Free users can analyze up to 2 resumes per day. Upgrade to Premium for unlimited AI Resume Analysis.",
+            usage: { used: todayUsage, limit: 2 }
+          },
+          { status: 403 }
+        );
       }
     }
 
-    // 3. Fetch profile
     const profile = await prisma.profile.findUnique({
       where: { userId: mongoUser.id },
       include: { resumeAnalysis: true },
@@ -81,7 +75,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 4. Get resume text
     let resumeText = profile.resumeText || "";
 
     if (!resumeText) {
@@ -102,14 +95,12 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 5. Cache check — bypass if JD changed OR resume text hash changed OR forceReanalyze is true
     const currentHash = computeResumeHash(resumeText);
     const normalizedJD = (jobDescription || "").trim();
     
     if (!forceReanalyze && profile.resumeAnalysis) {
       const cachedHash = profile.resumeAnalysis.resumeHash;
       const cachedJD = (profile.resumeAnalysis.targetJobDescription || "").trim();
-      
       const cachedJson = profile.resumeAnalysis.analysisJson as any;
       const isNewSchema = cachedJson && typeof cachedJson === "object" && "scores" in cachedJson && "experienceAnalysis" in cachedJson;
 
@@ -122,10 +113,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 6. Run full hybrid analysis
     const report = await runFullAnalysis(resumeText, rawConfig, normalizedJD);
 
-    // 7. Persist result
     await prisma.resumeAnalysis.upsert({
       where: { profileId: profile.id },
       update: {
@@ -146,17 +135,11 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 8. Increment daily usage counter for non-BYOK users
-    if (!rawConfig.isBYOK) {
-      const { usageService } = await import("@/lib/usageService");
-      await usageService.incrementUsage(mongoUser.id, "resume-analyzer", mongoUser.clerkId || undefined);
-    }
+    const { usageService } = await import("@/lib/usageService");
+    await usageService.incrementUsage(mongoUser.id, "resume-analyzer", mongoUser.clerkId || undefined);
 
     return NextResponse.json({ success: true, data: report, cached: false });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Unexpected error";
-    console.error("[Resume Analyzer API]", message);
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    return safeErrorResponse(err, "Failed to analyze resume");
   }
 }
-

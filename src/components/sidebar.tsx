@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -188,6 +189,50 @@ export default function Sidebar() {
         {bottomItems.map((item) => (
           <NavLink key={item.href} item={item} collapsed={collapsed} pathname={pathname} />
         ))}
+      </div>
+
+      {/* Upgrade Pro Card */}
+      <div className="px-2.5 py-2 flex-shrink-0">
+        {!collapsed ? (
+          <div className="p-3.5 rounded-2xl bg-gradient-to-br from-primary/15 via-purple-500/10 to-indigo-500/15 border border-primary/20 shadow-sm relative overflow-hidden group">
+            <div className="flex items-start gap-2.5 relative z-10">
+              <div className="w-8 h-8 rounded-xl gradient-brand flex items-center justify-center text-white flex-shrink-0 shadow-sm">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-xs font-bold font-sans tracking-tight text-foreground flex items-center gap-1">
+                  Upgrade to Pro
+                </h4>
+                <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">
+                  Unlock all job portals & AI features
+                </p>
+              </div>
+            </div>
+            <Link href="/pricing" className="block mt-3 relative z-10">
+              <Button
+                size="sm"
+                className="w-full h-8 rounded-xl gradient-brand text-white border-0 font-semibold text-xs hover:opacity-90 shadow-sm transition-all"
+              >
+                Upgrade
+                <Sparkles className="w-3 h-3 ml-1" />
+              </Button>
+            </Link>
+          </div>
+        ) : (
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <Link
+                href="/pricing"
+                className="w-10 h-10 mx-auto rounded-xl gradient-brand flex items-center justify-center text-white shadow-sm hover:opacity-90 transition-all block"
+              >
+                <Sparkles className="w-4 h-4" />
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="rounded-lg text-xs font-medium">
+              Upgrade to Pro
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
 
       {/* User Profile */}

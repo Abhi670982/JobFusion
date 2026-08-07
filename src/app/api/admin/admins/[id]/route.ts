@@ -3,6 +3,7 @@ import { verifyAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { logAdminAction } from "@/lib/audit-logger";
 import { User } from "@prisma/client";
+import { safeErrorResponse } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,7 @@ export async function PATCH(
     const resolvedParams = await params;
     const adminId = resolvedParams.id;
     const body = await req.json();
-    const { status } = body; // "active" | "suspended"
+    const { status } = body;
 
     const targetAdmin = await prisma.user.findUnique({
       where: { id: adminId }
@@ -45,12 +46,10 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: "Admin not found." }, { status: 404 });
     }
 
-    // Prevent suspending oneself
     if (targetAdmin.clerkId === admin.clerkId && status === "suspended") {
       return NextResponse.json({ success: false, error: "You cannot suspend your own account." }, { status: 400 });
     }
 
-    // If suspending, ensure there's at least one active admin remaining
     if (status === "suspended") {
       const activeAdminsCount = await prisma.user.count({
         where: {
@@ -63,13 +62,11 @@ export async function PATCH(
       }
     }
 
-    // Update in Postgres
     const updatedAdmin = await prisma.user.update({
       where: { id: adminId },
       data: { status }
     });
 
-    // Log action
     await logAdminAction({
       req,
       admin: {
@@ -89,11 +86,7 @@ export async function PATCH(
       data: mapUser(updatedAdmin),
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to update admin status";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to update admin status");
   }
 }
 
@@ -119,12 +112,10 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: "Admin not found." }, { status: 404 });
     }
 
-    // Prevent removing oneself
     if (targetAdmin.clerkId === admin.clerkId) {
       return NextResponse.json({ success: false, error: "You cannot remove your own admin access." }, { status: 400 });
     }
 
-    // Ensure there's at least one active admin remaining
     const activeAdminsCount = await prisma.user.count({
       where: {
         role: "admin",
@@ -136,13 +127,11 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: "Cannot remove the last remaining active admin." }, { status: 400 });
     }
 
-    // Demote role to "jobseeker" in Postgres
     await prisma.user.update({
       where: { id: adminId },
       data: { role: "jobseeker" }
     });
 
-    // Remove email from Settings allowedAdminEmails in Postgres
     const globalSettings = await prisma.settings.findUnique({
       where: { settingsId: "global" }
     });
@@ -158,7 +147,6 @@ export async function DELETE(
       });
     }
 
-    // Log action
     await logAdminAction({
       req,
       admin: {
@@ -172,7 +160,6 @@ export async function DELETE(
       details: `Demoted admin ${targetAdmin.fullName} (${targetAdmin.email}) to jobseeker`,
     });
 
-    // Create Notification in Postgres
     await prisma.adminNotification.create({
       data: {
         type: "system_warning",
@@ -188,10 +175,6 @@ export async function DELETE(
       message: `${targetAdmin.fullName} demoted to jobseeker successfully.`,
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to remove admin";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to remove admin");
   }
 }

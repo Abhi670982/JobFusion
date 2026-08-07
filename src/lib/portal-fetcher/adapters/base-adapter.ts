@@ -1,4 +1,4 @@
-export type JobPortalSource = "linkedin" | "indeed" | "internshala" | "wellfound";
+export type JobPortalSource = "linkedin" | "indeed" | "internshala" | "wellfound" | "naukri" | "foundit";
 
 export interface PortalFetchQuery {
   keywords: string[];

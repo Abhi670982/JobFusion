@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
+import { safeErrorResponse } from "@/lib/security";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -64,7 +65,6 @@ export async function GET(req: NextRequest) {
       pendingReportsCount,
       premiumUsers,
       freeUsers,
-      byokUsers,
       totalAIRequests,
       todayAIRequests,
     ] = await Promise.all([
@@ -94,9 +94,6 @@ export async function GET(req: NextRequest) {
       safeQuery("premiumUsers", () => prisma.subscription.count({ where: { status: "active", planId: { not: "free" } } }), 0),
       safeQuery("freeUsers", () => prisma.user.count({
         where: { NOT: { subscription: { status: "active", planId: { not: "free" } } } }
-      }), 0),
-      safeQuery("byokUsers", () => prisma.userApiKey.count({
-        where: { OR: [{ openaiKey: { not: null } }, { geminiKey: { not: null } }, { claudeKey: { not: null } }] }
       }), 0),
       safeQuery("totalAIRequests", () => prisma.userUsage.aggregate({ _sum: { usageCount: true } }), { _sum: { usageCount: 0 } }),
       safeQuery("todayAIRequests", () => prisma.userUsage.aggregate({
@@ -190,12 +187,6 @@ export async function GET(req: NextRequest) {
         percentage: 0,
         label: "free tier users"
       },
-      byokUsers: {
-        value: byokUsers,
-        trend: "up",
-        percentage: 0,
-        label: "connected API keys"
-      },
       totalAIRequests: {
         value: totalAIRequests?._sum?.usageCount || 0,
         trend: "up",
@@ -221,11 +212,7 @@ export async function GET(req: NextRequest) {
       cached: false,
       data: responsePayload,
     });
-  } catch (error: any) {
-    console.error("Error in GET /api/admin/stats:", error);
-    return NextResponse.json(
-      { success: false, error: error.message || "Failed to load admin stats" },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return safeErrorResponse(error, "Failed to load admin stats");
   }
 }

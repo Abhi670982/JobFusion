@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
+import { safeErrorResponse } from "@/lib/security";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -312,11 +313,7 @@ export async function GET(req: any) {
       cached: false,
       data: payload,
     });
-  } catch (error: any) {
-    console.error("Error in GET /api/admin/analytics:", error);
-    return NextResponse.json(
-      { success: false, error: error.message || "Failed to fetch analytics" },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return safeErrorResponse(error, "Failed to fetch analytics");
   }
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import { prisma } from "@/lib/prisma";
 import { Prisma, Activity, ActivityType } from "@prisma/client";
+import { requireAuthUser, safeErrorResponse } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -22,27 +22,19 @@ function mapActivity(a: Activity | null) {
 
 export async function GET() {
   try {
-    const user = await getOrCreateMongoUser();
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const { user, errorResponse } = await requireAuthUser();
+    if (errorResponse) return errorResponse;
 
-    const userIdStr = user._id.toString();
+    const userIdStr = user.id;
 
-    // Check if the user has any activities in PostgreSQL
     let activities = await prisma.activity.findMany({
       where: { userId: userIdStr },
       orderBy: { createdAt: "desc" }
     });
 
     if (activities.length === 0) {
-      // Retroactively seed from current state
       const seedActivities: Prisma.ActivityCreateManyInput[] = [];
 
-      // 1. Seed applications
       const apps = await prisma.application.findMany({
         where: { userId: userIdStr },
         include: { job: true }
@@ -87,7 +79,6 @@ export async function GET() {
         }
       }
 
-      // 2. Seed saved jobs
       const saved = await prisma.savedJob.findMany({
         where: { userId: userIdStr },
         include: { job: true }
@@ -103,7 +94,6 @@ export async function GET() {
         });
       }
 
-      // 3. Seed profile and resume creation if exists
       const profile = await prisma.profile.findUnique({
         where: { userId: userIdStr }
       });
@@ -126,7 +116,6 @@ export async function GET() {
         }
       }
 
-      // If absolutely no history, add a default sign up activity
       if (seedActivities.length === 0) {
         seedActivities.push({
           userId: userIdStr,
@@ -136,13 +125,11 @@ export async function GET() {
         });
       }
 
-      // Insert all activities into Postgres
       if (seedActivities.length > 0) {
         await prisma.activity.createMany({
           data: seedActivities
         });
 
-        // Re-query from Postgres
         activities = await prisma.activity.findMany({
           where: { userId: userIdStr },
           orderBy: { createdAt: "desc" }
@@ -150,7 +137,6 @@ export async function GET() {
       }
     }
 
-    // Generate chart data for the last 7 days
     const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const chartData = [];
     const now = new Date();
@@ -185,24 +171,14 @@ export async function GET() {
       chartData,
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to fetch activities";
-    console.error("Error in GET /api/dashboard/activity:", error);
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to fetch activity history");
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await getOrCreateMongoUser();
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const { user, errorResponse } = await requireAuthUser();
+    if (errorResponse) return errorResponse;
 
     const { type, jobId, jobTitle, company, details } = await req.json();
 
@@ -213,10 +189,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create in PostgreSQL using Prisma
     const newActivity = await prisma.activity.create({
       data: {
-        userId: user._id.toString(),
+        userId: user.id,
         type: type as ActivityType,
         jobId: jobId || null,
         jobTitle: jobTitle || null,
@@ -230,10 +205,6 @@ export async function POST(req: NextRequest) {
       data: mapActivity(newActivity),
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to record activity";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to record activity");
   }
 }

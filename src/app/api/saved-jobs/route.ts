@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { requireAuthUser, verifyOwnership, safeErrorResponse } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -47,33 +48,24 @@ function mapSavedJob(sj: SavedJobWithUserAndJob | null) {
   };
 }
 
-// 1. POST - Save a Job
+// 1. POST - Save a Job for Authenticated User
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { userId, jobId } = body;
+    const { user, errorResponse } = await requireAuthUser();
+    if (errorResponse) return errorResponse;
 
-    // Validate required fields
-    if (!userId || !jobId) {
+    const body = await req.json();
+    const { jobId } = body;
+    const userId = user.id;
+
+    if (!jobId) {
       return NextResponse.json(
-        { success: false, error: "userId and jobId are required fields" },
+        { success: false, error: "jobId is required" },
         { status: 400 }
       );
     }
 
-    // Verify User and Job exist in PostgreSQL
-    const [userExists, jobExists] = await Promise.all([
-      prisma.user.findUnique({ where: { id: userId } }),
-      prisma.job.findUnique({ where: { id: jobId } }),
-    ]);
-
-    if (!userExists) {
-      return NextResponse.json(
-        { success: false, error: "User not found" },
-        { status: 404 }
-      );
-    }
-
+    const jobExists = await prisma.job.findUnique({ where: { id: jobId } });
     if (!jobExists) {
       return NextResponse.json(
         { success: false, error: "Job not found" },
@@ -81,19 +73,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if job is already saved in PostgreSQL
     const existingSavedJob = await prisma.savedJob.findUnique({
       where: { userId_jobId: { userId, jobId } }
     });
 
     if (existingSavedJob) {
       return NextResponse.json(
-        { success: false, error: "Job is already saved by this user" },
+        { success: false, error: "Job is already saved" },
         { status: 409 }
       );
     }
 
-    // Create in PostgreSQL
     const savedJob = await prisma.savedJob.create({
       data: {
         userId,
@@ -110,23 +100,19 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     );
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Something went wrong";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to save job");
   }
 }
 
-// 2. GET - Read Saved Jobs (Single, by User, by Job, or All)
+// 2. GET - Read Saved Jobs belonging exclusively to authenticated user
 export async function GET(req: NextRequest) {
   try {
+    const { user, errorResponse } = await requireAuthUser();
+    if (errorResponse) return errorResponse;
+
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
-    const userId = searchParams.get("userId");
-    const jobId = searchParams.get("jobId");
 
-    // Get specific saved job by ID
     if (id) {
       const savedJob = await prisma.savedJob.findUnique({
         where: { id },
@@ -139,128 +125,69 @@ export async function GET(req: NextRequest) {
           { status: 404 }
         );
       }
+      const forbidden = verifyOwnership(savedJob.userId, user.id);
+      if (forbidden) return forbidden;
+
       return NextResponse.json({ success: true, data: mapSavedJob(savedJob) });
     }
 
-    // Get saved jobs by userId
-    if (userId) {
-      const savedJobs = await prisma.savedJob.findMany({
-        where: { userId },
-        include: { user: true, job: true },
-        orderBy: { savedAt: "desc" }
-      });
-      return NextResponse.json({ success: true, data: savedJobs.map(mapSavedJob) });
-    }
-
-    // Get saved jobs by jobId
-    if (jobId) {
-      const savedJobs = await prisma.savedJob.findMany({
-        where: { jobId },
-        include: { user: true, job: true },
-        orderBy: { savedAt: "desc" }
-      });
-      return NextResponse.json({ success: true, data: savedJobs.map(mapSavedJob) });
-    }
-
-    // Get all saved jobs
     const savedJobs = await prisma.savedJob.findMany({
+      where: { userId: user.id },
       include: { user: true, job: true },
       orderBy: { savedAt: "desc" }
     });
+
     return NextResponse.json({ success: true, data: savedJobs.map(mapSavedJob) });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Something went wrong";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to fetch saved jobs");
   }
 }
 
-// 3. PUT - Update a Saved Job
-export async function PUT(req: NextRequest) {
+// 3. DELETE - Unsave a Job with Ownership Verification
+export async function DELETE(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { searchParams } = new URL(req.url);
-    const id = searchParams.get("id") || body.id;
+    const { user, errorResponse } = await requireAuthUser();
+    if (errorResponse) return errorResponse;
 
-    if (!id) {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+    const jobId = searchParams.get("jobId");
+
+    let savedJobToDelete = null;
+
+    if (id) {
+      savedJobToDelete = await prisma.savedJob.findUnique({ where: { id } });
+    } else if (jobId) {
+      savedJobToDelete = await prisma.savedJob.findUnique({
+        where: { userId_jobId: { userId: user.id, jobId } }
+      });
+    }
+
+    if (!savedJobToDelete) {
       return NextResponse.json(
-        { success: false, error: "Saved job id is required to update" },
-        { status: 400 }
+        { success: false, error: "Saved job record not found" },
+        { status: 404 }
       );
     }
 
-    const updateData = { ...body };
-    delete updateData._id;
-    delete updateData.userId;
-    delete updateData.jobId;
+    const forbidden = verifyOwnership(savedJobToDelete.userId, user.id);
+    if (forbidden) return forbidden;
 
-    // Update in Postgres
-    const updatedSavedJob = await prisma.savedJob.update({
-      where: { id },
-      data: updateData,
-      include: { user: true, job: true }
+    const deletedSavedJob = await prisma.savedJob.delete({
+      where: { id: savedJobToDelete.id }
     });
 
-    return NextResponse.json({ success: true, data: mapSavedJob(updatedSavedJob) });
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Something went wrong";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
-  }
-}
-
-// 4. DELETE - Delete a Saved Job (Unsave)
-export async function DELETE(req: NextRequest) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const id = searchParams.get("id");
-    const userId = searchParams.get("userId");
-    const jobId = searchParams.get("jobId");
-
-    let deletedSavedJob = null;
-
-    // Case A: Delete by unique SavedJob ID
-    if (id) {
-      deletedSavedJob = await prisma.savedJob.delete({
-        where: { id }
-      });
-    }
-    // Case B: Delete by userId and jobId combination
-    else if (userId && jobId) {
-      deletedSavedJob = await prisma.savedJob.delete({
-        where: { userId_jobId: { userId, jobId } }
-      });
-    }
-
-    if (deletedSavedJob) {
-      // Map basic info for payload compatibility
-      const mappedDeleted = {
+    return NextResponse.json({
+      success: true,
+      data: {
         _id: deletedSavedJob.id,
         userId: deletedSavedJob.userId,
         jobId: deletedSavedJob.jobId,
         savedAt: deletedSavedJob.savedAt
-      };
-      
-      return NextResponse.json({
-        success: true,
-        data: mappedDeleted,
-        message: "Job unsaved successfully",
-      });
-    }
-
-    return NextResponse.json(
-      { success: false, error: "Either id, or both userId and jobId query parameters are required to unsave a job" },
-      { status: 400 }
-    );
+      },
+      message: "Job unsaved successfully",
+    });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Something went wrong";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to unsave job");
   }
 }

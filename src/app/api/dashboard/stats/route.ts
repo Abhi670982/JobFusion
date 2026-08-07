@@ -1,27 +1,20 @@
 import { NextResponse } from "next/server";
-import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import { prisma } from "@/lib/prisma";
+import { requireAuthUser, safeErrorResponse } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const user = await getOrCreateMongoUser();
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const { user, errorResponse } = await requireAuthUser();
+    if (errorResponse) return errorResponse;
 
-    const userIdStr = user._id.toString();
+    const userIdStr = user.id;
 
-    // Dates for week and month filters
     const now = new Date();
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-    // Queries in PostgreSQL using Prisma
     const [
       appliedCount,
       appliedThisWeek,
@@ -38,7 +31,6 @@ export async function GET() {
       prisma.savedJob.count({ where: { userId: userIdStr } }),
     ]);
 
-    // Usage and monetization queries
     const { hasProAccess } = await import("@/lib/subscription");
     const { usageService } = await import("@/lib/usageService");
 
@@ -64,11 +56,7 @@ export async function GET() {
         }
       },
     });
-  } catch (error: any) {
-    console.error("Error in GET /api/dashboard/stats:", error);
-    return NextResponse.json(
-      { success: false, error: error.message || "Failed to fetch stats" },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return safeErrorResponse(error, "Failed to fetch dashboard stats");
   }
 }

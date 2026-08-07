@@ -23,7 +23,6 @@ import {
   Image as ImageIcon,
   Clock,
   Crown,
-  Key,
   CreditCard,
   DollarSign
 } from "lucide-react";
@@ -48,7 +47,6 @@ interface DashboardStats {
   systemHealth: KPI;
   premiumUsers: KPI;
   freeUsers: KPI;
-  byokUsers: KPI;
   totalAIRequests: KPI;
   todayAIRequests: KPI;
 }
@@ -171,7 +169,6 @@ export default function AdminDashboard() {
     { title: "Total Jobs", icon: Briefcase, data: stats?.totalJobs, href: "/admin/jobs", color: "text-violet-400" },
     { title: "Premium Users", icon: Crown, data: stats?.premiumUsers, href: "/admin/users", color: "text-amber-400" },
     { title: "Free Users", icon: Users, data: stats?.freeUsers, href: "/admin/users", color: "text-slate-400" },
-    { title: "BYOK Keys", icon: Key, data: stats?.byokUsers, href: "/admin/users", color: "text-violet-400" },
     { title: "Today's AI Requests", icon: Zap, data: stats?.todayAIRequests, href: "/admin/analytics", color: "text-blue-400" },
     { title: "Total AI Requests", icon: Database, data: stats?.totalAIRequests, href: "/admin/analytics", color: "text-indigo-400" },
     { title: "Resume Uploads", icon: FileText, data: stats?.resumeUploads, href: "/admin/resume-ai", color: "text-purple-400" },

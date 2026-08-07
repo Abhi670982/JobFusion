@@ -302,7 +302,7 @@ export async function getPermittedJobSources(userId?: string): Promise<{
   isPro: boolean;
   allowedSources: string[] | null;
 }> {
-  const freeSources = ['linkedin', 'wellfound', 'careers', 'company_career', 'company_website'];
+  const freeSources = ['linkedin', 'wellfound', 'indeed', 'internshala', 'foundit', 'naukri', 'careers', 'company_career', 'company_website'];
 
   if (!userId) {
     return { isPro: false, allowedSources: freeSources };

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ApplicationStatus, Prisma } from "@prisma/client";
+import { requireAuthUser, verifyOwnership, safeErrorResponse } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -51,30 +52,24 @@ function mapApplication(app: ApplicationWithUserAndJob | null) {
 // 1. POST - Create an Application
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { userId, jobId, status } = body;
+    const { user, errorResponse } = await requireAuthUser();
+    if (errorResponse) return errorResponse;
 
-    // Validate required fields
-    if (!userId || !jobId) {
+    const body = await req.json();
+    const { jobId, status } = body;
+
+    // Use authenticated user ID exclusively (prevent IDOR)
+    const userId = user.id;
+
+    if (!jobId) {
       return NextResponse.json(
-        { success: false, error: "userId and jobId are required fields" },
+        { success: false, error: "jobId is required" },
         { status: 400 }
       );
     }
 
-    // Verify User and Job exist in PostgreSQL
-    const [userExists, jobExists] = await Promise.all([
-      prisma.user.findUnique({ where: { id: userId } }),
-      prisma.job.findUnique({ where: { id: jobId } }),
-    ]);
-
-    if (!userExists) {
-      return NextResponse.json(
-        { success: false, error: "User not found" },
-        { status: 404 }
-      );
-    }
-
+    // Verify Job exists in PostgreSQL
+    const jobExists = await prisma.job.findUnique({ where: { id: jobId } });
     if (!jobExists) {
       return NextResponse.json(
         { success: false, error: "Job not found" },
@@ -82,7 +77,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check for duplicate application in PostgreSQL
+    // Check for duplicate application
     const existingApplication = await prisma.application.findUnique({
       where: { userId_jobId: { userId, jobId } }
     });
@@ -94,12 +89,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Translate status for Postgres
     let pgStatus: ApplicationStatus = ApplicationStatus.Applied;
     if (status === "Under Review") pgStatus = ApplicationStatus.Under_Review;
     else if (status) pgStatus = status as ApplicationStatus;
 
-    // Create in PostgreSQL
     const application = await prisma.application.create({
       data: {
         userId,
@@ -117,23 +110,20 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     );
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Something went wrong";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to submit application");
   }
 }
 
-// 2. GET - Read Applications (Single, by User, by Job, or All)
+// 2. GET - Read Applications belonging exclusively to authenticated user
 export async function GET(req: NextRequest) {
   try {
+    const { user, errorResponse } = await requireAuthUser();
+    if (errorResponse) return errorResponse;
+
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
-    const userId = searchParams.get("userId");
-    const jobId = searchParams.get("jobId");
 
-    // Get specific application by application ID
+    // Get specific application by application ID with ownership verification
     if (id) {
       const application = await prisma.application.findUnique({
         where: { id },
@@ -145,47 +135,31 @@ export async function GET(req: NextRequest) {
           { status: 404 }
         );
       }
+      const forbidden = verifyOwnership(application.userId, user.id);
+      if (forbidden) return forbidden;
+
       return NextResponse.json({ success: true, data: mapApplication(application) });
     }
 
-    // Get applications by userId
-    if (userId) {
-      const applications = await prisma.application.findMany({
-        where: { userId },
-        include: { user: true, job: true },
-        orderBy: { appliedAt: "desc" }
-      });
-      return NextResponse.json({ success: true, data: applications.map(mapApplication) });
-    }
-
-    // Get applications by jobId
-    if (jobId) {
-      const applications = await prisma.application.findMany({
-        where: { jobId },
-        include: { user: true, job: true },
-        orderBy: { appliedAt: "desc" }
-      });
-      return NextResponse.json({ success: true, data: applications.map(mapApplication) });
-    }
-
-    // Get all applications
+    // Query user's applications exclusively
     const applications = await prisma.application.findMany({
+      where: { userId: user.id },
       include: { user: true, job: true },
       orderBy: { appliedAt: "desc" }
     });
+
     return NextResponse.json({ success: true, data: applications.map(mapApplication) });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Something went wrong";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to retrieve applications");
   }
 }
 
-// 3. PUT - Update an Application (e.g. status)
+// 3. PUT - Update an Application with Ownership Verification
 export async function PUT(req: NextRequest) {
   try {
+    const { user, errorResponse } = await requireAuthUser();
+    if (errorResponse) return errorResponse;
+
     const body = await req.json();
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id") || body.id;
@@ -197,12 +171,26 @@ export async function PUT(req: NextRequest) {
       );
     }
 
+    // Verify existing application ownership
+    const existingApplication = await prisma.application.findUnique({
+      where: { id }
+    });
+
+    if (!existingApplication) {
+      return NextResponse.json(
+        { success: false, error: "Application not found" },
+        { status: 404 }
+      );
+    }
+
+    const forbidden = verifyOwnership(existingApplication.userId, user.id);
+    if (forbidden) return forbidden;
+
     const { status, ...updateData } = body;
     delete updateData._id;
     delete updateData.userId;
     delete updateData.jobId;
 
-    // Translate status for Postgres
     let pgStatus: ApplicationStatus | undefined = undefined;
     if (status === "Under Review") pgStatus = ApplicationStatus.Under_Review;
     else if (status) pgStatus = status as ApplicationStatus;
@@ -210,7 +198,6 @@ export async function PUT(req: NextRequest) {
     const dataToUpdate: Prisma.ApplicationUpdateInput = { ...updateData };
     if (pgStatus) dataToUpdate.status = pgStatus;
 
-    // Update in Postgres
     const updatedApplication = await prisma.application.update({
       where: { id },
       data: dataToUpdate,
@@ -219,17 +206,16 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json({ success: true, data: mapApplication(updatedApplication) });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Something went wrong";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to update application");
   }
 }
 
-// 4. DELETE - Delete an Application
+// 4. DELETE - Delete an Application with Ownership Verification
 export async function DELETE(req: NextRequest) {
   try {
+    const { user, errorResponse } = await requireAuthUser();
+    if (errorResponse) return errorResponse;
+
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
 
@@ -240,12 +226,24 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    // Delete in PostgreSQL
+    const existingApplication = await prisma.application.findUnique({
+      where: { id }
+    });
+
+    if (!existingApplication) {
+      return NextResponse.json(
+        { success: false, error: "Application not found" },
+        { status: 404 }
+      );
+    }
+
+    const forbidden = verifyOwnership(existingApplication.userId, user.id);
+    if (forbidden) return forbidden;
+
     const deletedApplication = await prisma.application.delete({
       where: { id }
     });
 
-    // Map minimal deleted payload
     const mappedDeleted = {
       _id: deletedApplication.id,
       userId: deletedApplication.userId,
@@ -259,10 +257,6 @@ export async function DELETE(req: NextRequest) {
       message: "Application deleted successfully",
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Something went wrong";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to delete application");
   }
 }

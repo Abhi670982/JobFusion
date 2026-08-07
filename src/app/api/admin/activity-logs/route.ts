@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
+import { safeErrorResponse } from "@/lib/security";
 import { prisma } from "@/lib/prisma";
 import { Prisma, ActivityType } from "@prisma/client";
 
@@ -112,10 +113,6 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to load activity logs";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to load activity logs");
   }
 }

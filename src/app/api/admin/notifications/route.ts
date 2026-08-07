@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { AdminNotification } from "@prisma/client";
+import { safeErrorResponse } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -37,11 +38,7 @@ export async function GET() {
       data: pgNotifications.map(mapNotif),
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to load notifications";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to load notifications");
   }
 }
 
@@ -56,7 +53,6 @@ export async function PATCH(req: NextRequest) {
     const { notificationId, all } = body;
 
     if (all) {
-      // Update in PostgreSQL
       await prisma.adminNotification.updateMany({
         where: { isRead: false },
         data: { isRead: true }
@@ -80,7 +76,6 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Notification not found" }, { status: 404 });
     }
 
-    // Update in PostgreSQL
     const updatedNotif = await prisma.adminNotification.update({
       where: { id: notificationId },
       data: { isRead: true }
@@ -92,10 +87,6 @@ export async function PATCH(req: NextRequest) {
       data: mapNotif(updatedNotif),
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to update notification";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to update notification");
   }
 }

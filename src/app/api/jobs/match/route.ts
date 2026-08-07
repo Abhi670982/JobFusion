@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
+import { requireAuthUser, safeErrorResponse } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +21,6 @@ const mockLocations = [
   "Hyderabad, Telangana"
 ];
 
-
-
 function parseSalaryMin(salary: string, index: number): number {
   const matches = salary.match(/\b\d+(?:,\d+)*(?:\.\d+)?k?\b/gi);
   if (matches && matches[0]) {
@@ -30,7 +29,7 @@ function parseSalaryMin(salary: string, index: number): number {
       ? parseFloat(cleanNum) * 1000 
       : parseFloat(cleanNum);
     
-    if (val < 1000) val = val * 85000; // E.g. $80k -> INR equivalent
+    if (val < 1000) val = val * 85000;
     return Math.floor(val);
   }
   return 1500000 + (index * 200000);
@@ -88,11 +87,13 @@ function mapJob(j: any) {
 
 export async function POST(req: NextRequest) {
   try {
+    const { errorResponse } = await requireAuthUser();
+    if (errorResponse) return errorResponse;
+
     const body = await req.json();
     const { skills } = body;
 
     if (!skills || !Array.isArray(skills) || skills.length === 0) {
-      // If no skills are provided, return all jobs from DB
       const pgJobs = await prisma.job.findMany({
         orderBy: { createdAt: "desc" }
       });
@@ -103,9 +104,6 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    console.log(`[Job Matching] Fetching live jobs for skills: ${skills.join(", ")}`);
-
-    // 1. Fetch live jobs from Himalayas API concurrently for the first 4 skills
     const fetchedJobs: any[] = [];
     const skillsToQuery = skills.slice(0, 4);
 
@@ -131,11 +129,8 @@ export async function POST(req: NextRequest) {
       }
     }));
 
-    console.log(`[Job Matching] Live fetch completed. Found ${fetchedJobs.length} potential openings.`);
-
     const dbMatchedJobs: any[] = [];
 
-    // 2. Map and upsert live jobs into PostgreSQL using Prisma
     if (fetchedJobs.length > 0) {
       for (let i = 0; i < fetchedJobs.length; i++) {
         const item = fetchedJobs[i];
@@ -181,7 +176,6 @@ export async function POST(req: NextRequest) {
         const dedupeHash = crypto.createHash("md5").update(hashInput).digest("hex");
 
         try {
-          // Upsert in Postgres
           const pgJob = await prisma.job.upsert({
             where: { dedupeHash },
             create: {
@@ -242,9 +236,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3. Fallback: If live fetch fails, query database matching skills
     if (dbMatchedJobs.length === 0) {
-      console.warn("[Job Matching] Live fetch returned 0 jobs. Falling back to DB search...");
       const fallbackJobs = await prisma.job.findMany({
         where: {
           skills: {
@@ -267,11 +259,7 @@ export async function POST(req: NextRequest) {
       matchedCount: dbMatchedJobs.length
     });
 
-  } catch (error: any) {
-    console.error("Error in POST /api/jobs/match:", error);
-    return NextResponse.json(
-      { success: false, error: error.message || "Failed to match jobs" },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return safeErrorResponse(error, "Failed to match jobs");
   }
 }

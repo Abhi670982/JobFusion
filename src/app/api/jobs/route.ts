@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import { validateJobsQuery } from "@/lib/api-validators";
 import { calculateRelevanceScore } from "@/lib/relevance";
 import { queryCareersJobs } from "@/lib/pipeline";
@@ -159,7 +160,6 @@ export async function GET(req: NextRequest) {
     const page = validated.page;
     const limit = validated.limit;
     const sortBy = validated.sortBy;
-    const order = validated.order;
 
     const andConditions: Prisma.JobWhereInput[] = [];
 
@@ -385,12 +385,11 @@ export async function GET(req: NextRequest) {
 
     // 13. Server-side Resume Relevance Skill Resolution
     let userResumeSkills: string[] = [];
-    const userIdParam = searchParams.get("userId");
+    const authUserForMatching = await getOrCreateMongoUser();
 
-    if (userIdParam) {
-      // Resolve skills for the specific authenticated user only.
+    if (authUserForMatching) {
       const userProfile = await prisma.profile.findUnique({
-        where: { userId: userIdParam },
+        where: { userId: authUserForMatching.id },
         include: { skills: true },
       });
       if (userProfile && userProfile.skills.length > 0) {
@@ -398,16 +397,9 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // If the client passed explicit skills in the query string, use those.
-    // This is the primary mechanism when userId is unavailable.
     if (userResumeSkills.length === 0 && skills) {
       userResumeSkills = skills.split(",").map((s) => s.trim()).filter(Boolean);
     }
-
-    // NOTE: No prisma.profile.findFirst fallback.
-    // A missing userId must never cause another/random user's profile to be selected.
-    // If neither userId nor skills param is present, userResumeSkills stays empty
-    // and the query returns all jobs in postedAtDate DESC order.
 
     const isCareersRequest =
       source === "careers" ||

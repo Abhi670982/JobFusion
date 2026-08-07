@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
+import { safeErrorResponse } from "@/lib/security";
 import { prisma } from "@/lib/prisma";
 import { Prisma, Job, JobType, LocationType } from "@prisma/client";
 
@@ -137,11 +138,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to load jobs";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to load jobs");
   }
 }
 
@@ -295,10 +292,6 @@ export async function POST(req: NextRequest) {
       data: mapJob(newJob),
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to create job posting";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to create job posting");
   }
 }

@@ -1,5 +1,4 @@
 import { prisma } from "./prisma";
-import { JobSourceCategory } from "@prisma/client";
 import { classifySourceCategory } from "./source-category";
 import { JobSource } from "./adapters/types";
 import { WellfoundAdapter } from "./adapters/wellfound";
@@ -55,7 +54,6 @@ export const DEFAULT_RESULT_TARGET = 20;
 export const MAX_RESULT_TARGET = 50;
 export const MAX_AGE_HOURS = 168; // 7 days (168h)
 
-const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 const TEN_DAYS_MS = 10 * 24 * 60 * 60 * 1000;
 
 /**
@@ -389,7 +387,7 @@ export async function runSourceSync(
     let jobsAdded = 0;
     let jobsUpdated = 0;
     let jobsUnchanged = 0;
-    let rejectedNoDate = 0;
+    const rejectedNoDate = 0;
     let rejectedTooOld = 0;
     let rejectedNoSkill = 0;
     let rawFetchedCount = 0;
@@ -447,7 +445,7 @@ export async function runSourceSync(
 
         // Filter jobs belonging to this day's window (or un-dated jobs processed in Day 1)
         const dailyJobs = mappedJobs.filter(item => {
-          let jobDate = item.unified.postedAt ? new Date(item.unified.postedAt) : null;
+          const jobDate = item.unified.postedAt ? new Date(item.unified.postedAt) : null;
           if (!jobDate || isNaN(jobDate.getTime())) {
             return day === 0;
           }
@@ -458,7 +456,7 @@ export async function runSourceSync(
 
         for (const item of dailyJobs) {
           try {
-            const { raw, unified } = item;
+            const { unified } = item;
 
             if (!unified.dedupeHash) {
               throw new Error("Missing dedupeHash from adapter mapping");

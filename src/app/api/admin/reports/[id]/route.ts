@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { Report, ReportStatus } from "@prisma/client";
+import { safeErrorResponse } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +34,7 @@ export async function PATCH(
     const resolvedParams = await params;
     const reportId = resolvedParams.id;
     const body = await req.json();
-    const { status } = body; // resolved, pending
+    const { status } = body;
 
     if (!status || !["pending", "resolved"].includes(status)) {
       return NextResponse.json({ success: false, error: "Invalid status" }, { status: 400 });
@@ -47,13 +48,11 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: "Report not found" }, { status: 404 });
     }
 
-    // Update in Postgres
     const updatedReport = await prisma.report.update({
       where: { id: reportId },
       data: { status: status as ReportStatus }
     });
 
-    // Log admin action in Postgres
     await prisma.activity.create({
       data: {
         userId: admin.id,
@@ -68,11 +67,7 @@ export async function PATCH(
       data: mapReport(updatedReport),
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to update report";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to update report");
   }
 }
 
@@ -97,12 +92,10 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: "Report not found" }, { status: 404 });
     }
 
-    // Delete in Postgres
     await prisma.report.delete({
       where: { id: reportId }
     });
 
-    // Log admin action in Postgres
     await prisma.activity.create({
       data: {
         userId: admin.id,
@@ -116,10 +109,6 @@ export async function DELETE(
       message: "Report ticket deleted successfully",
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to delete report";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to delete report");
   }
 }

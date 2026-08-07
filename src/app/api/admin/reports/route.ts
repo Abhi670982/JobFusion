@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { Prisma, ReportType, ReportStatus } from "@prisma/client";
+import { safeErrorResponse } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -121,10 +122,6 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to load reports";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to load reports");
   }
 }

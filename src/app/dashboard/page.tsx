@@ -7,7 +7,7 @@ import {
   TrendingUp, Briefcase, Bookmark, Eye,
   CheckCircle2, XCircle,
   Calendar, Star, ChevronRight, Zap, Code2, Smile, FileText, User,
-  CreditCard, Sparkles, Send, FileCode, Workflow
+  CreditCard, Sparkles, Send, FileCode
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -125,7 +125,6 @@ export default function DashboardPage() {
   const [chartData, setChartData] = useState<any[]>([]);
   const [matchesCount, setMatchesCount] = useState(0);
   const [subscription, setSubscription] = useState<any>(null);
-  const [aiConfig, setAiConfig] = useState<any>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -137,16 +136,14 @@ export default function DashboardPage() {
           setProfile(dash.profile);
           setStats(dash.stats);
 
-          const [actRes, matchRes, subRes, aiRes] = await Promise.all([
+          const [actRes, matchRes, subRes] = await Promise.all([
             fetchDashboardActivity(), 
             fetchDashboardMatches(),
-            fetch('/api/user-plan/current').then(r => r.json()),
-            fetch('/api/user/ai-provider').then(r => r.json())
+            fetch('/api/user-plan/current').then(r => r.json())
           ]);
           if (actRes) { setActivities(actRes.recentActivities || []); setChartData(actRes.chartData || []); }
           if (matchRes) setMatchesCount(matchRes.totalMatches || 0);
           if (subRes && subRes.subscription) setSubscription(subRes.subscription);
-          if (aiRes && aiRes.data) setAiConfig(aiRes.data);
         } else {
           router.push('/sign-in');
         }
@@ -353,7 +350,7 @@ export default function DashboardPage() {
 
           {/* Actions */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            {(!subscription?.features?.hasProAccess && !aiConfig?.isBYOK) && (
+            {!subscription?.features?.hasProAccess && (
               <Link href="/pricing">
                 <Button
                   id="dashboard-upgrade-btn"
@@ -381,7 +378,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Pro features teaser */}
-        {(!subscription?.features?.hasProAccess && !aiConfig?.isBYOK) && (
+        {!subscription?.features?.hasProAccess && (
           <div className="mt-4 pt-4 border-t border-border/60">
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2.5">Unlock with Pro</p>
             <div className="flex flex-wrap gap-2">
@@ -401,77 +398,6 @@ export default function DashboardPage() {
             </div>
           </div>
         )}
-      </motion.div>
-
-      {/* ── AI Provider Status Card ── */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="card-premium p-5"
-      >
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
-              <Zap className="w-5 h-5 text-blue-500" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-bold">AI Provider Config</span>
-                {aiConfig?.isBYOK ? (
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20">
-                    BYOK Active
-                  </span>
-                ) : aiConfig?.mode === 'pro' ? (
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                    Premium API
-                  </span>
-                ) : (
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-600 dark:text-slate-400 border border-slate-500/20">
-                    Free Tier API
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Current Provider: <span className="font-semibold capitalize text-foreground">{aiConfig?.provider || 'Unknown'}</span>
-                {!aiConfig?.isBYOK && " (JobFusion Platform)"}
-              </p>
-            </div>
-          </div>
-
-          <div className="hidden sm:block flex-1 max-w-[200px]">
-            {aiConfig?.isBYOK || aiConfig?.mode === 'pro' ? (
-              <div className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded-md w-max">
-                <CheckCircle2 className="w-3 h-3" /> Unlimited Requests
-              </div>
-            ) : (
-              <>
-                <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
-                  <span>Daily Usage (Resets at midnight)</span>
-                  <span>
-                    {aiConfig?.usage?.used || 0} / {aiConfig?.usage?.limit || 2}
-                  </span>
-                </div>
-                <div className="h-1.5 bg-muted rounded-full overflow-hidden" role="progressbar">
-                  <div 
-                    className="h-full bg-blue-500 rounded-full transition-all" 
-                    style={{ 
-                      width: `${Math.min(100, Math.round(((aiConfig?.usage?.used || 0) / (aiConfig?.usage?.limit || 2)) * 100))}%` 
-                    }} 
-                  />
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <Link href="/settings/ai-provider">
-              <Button size="sm" variant="outline" className="rounded-xl text-xs h-8">
-                Manage Keys
-              </Button>
-            </Link>
-          </div>
-        </div>
       </motion.div>
 
 

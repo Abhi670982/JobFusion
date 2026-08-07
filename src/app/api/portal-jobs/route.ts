@@ -20,7 +20,7 @@ function getRollingJobVisibilityWindow(now = new Date()) {
   };
 }
 
-// Process and save jobs in controlled in-memory deduplication and transaction batches
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function processAndPersistPortalJobs(userId: string, jobs: any[], userSkills: string[]): Promise<number> {
   if (!jobs || jobs.length === 0) return 0;
   
@@ -249,38 +249,74 @@ export async function GET(req: NextRequest) {
     }
     const userId = user.id;
 
+    const profile = await prisma.profile.findUnique({
+      where: { userId },
+      include: { skills: true }
+    });
+    const userSkills = profile?.skills ? profile.skills.map(s => s.name) : [];
+
     const { getPermittedJobSources } = await import("@/lib/subscription");
     const { allowedSources } = await getPermittedJobSources(userId);
 
-    // 2. Check Category-Isolated Redis Cache
-    const cacheKey = buildCacheKey(JobSourceCategory.JOB_PORTAL, validatedKeyword || portal, validatedLocation, page);
-    const redisCached = await getCachedCategoryJobs<any[]>(cacheKey);
-    if (redisCached) {
-      const filteredRedis = allowedSources 
-        ? redisCached.filter((j: any) => allowedSources.includes((j.source || "").toLowerCase()))
-        : redisCached;
+    const forceRefresh = searchParams.get("refresh") === "true";
+    let backgroundSyncQueued = false;
 
-      return NextResponse.json({
-        success: true,
-        portal,
-        keyword: validatedKeyword,
-        location: validatedLocation,
-        page,
-        data: filteredRedis,
-        jobs: filteredRedis,
-        cached: true,
-        sourceCategory: JobSourceCategory.JOB_PORTAL,
-      });
+    // 2. Check Category-Isolated Redis Cache (unless forceRefresh)
+    const cacheKey = buildCacheKey(JobSourceCategory.JOB_PORTAL, validatedKeyword || portal, validatedLocation, page);
+    if (!forceRefresh) {
+      const redisCached = await getCachedCategoryJobs<any[]>(cacheKey);
+      if (redisCached) {
+        const filteredRedis = allowedSources 
+          ? redisCached.filter((j: any) => allowedSources.includes((j.source || "").toLowerCase()))
+          : redisCached;
+
+        return NextResponse.json({
+          success: true,
+          portal,
+          keyword: validatedKeyword,
+          location: validatedLocation,
+          page,
+          data: filteredRedis,
+          jobs: filteredRedis,
+          cached: true,
+          sourceCategory: JobSourceCategory.JOB_PORTAL,
+        });
+      }
     }
 
     // 3. Query PostgreSQL for matching JOB_PORTAL jobs strictly within 168-hour rolling window
-    const cachedJobs = await getUserCachedPortalJobs(userId, portal, visibilityFrom, visibilityTo, allowedSources);
+    let cachedJobs = await getUserCachedPortalJobs(userId, portal, visibilityFrom, visibilityTo, allowedSources);
+    let crawlMetrics: any = null;
 
-    // 4. NON-BLOCKING DECOUPLED ARCHITECTURE:
-    // If DB results are empty or stale, enqueue a background BullMQ refresh task asynchronously with deterministic lock.
-    // Return available cached/empty response immediately to the client WITHOUT waiting for synchronous crawling!
-    let backgroundSyncQueued = false;
-    if (cachedJobs.length < 10) {
+    // 4. If forceRefresh OR DB results empty, perform live crawl pass
+    if (forceRefresh || cachedJobs.length === 0) {
+      const { crawlPortalJobs } = await import("@/lib/portal-fetcher/crawler");
+      const { persistPortalJobs } = await import("@/lib/portal-jobs-persist");
+
+      const crawlRes = await crawlPortalJobs({
+        portal: portal === "all" ? "all" : (portal as any),
+        keyword: validatedKeyword || undefined,
+        skills: userSkills,
+        location: validatedLocation,
+        page,
+        maxPages: 5,
+      });
+
+      const persistRes = await persistPortalJobs(crawlRes.jobs, userId, userSkills);
+
+      crawlMetrics = {
+        totalPagesCrawled: crawlRes.metrics.totalPagesCrawled,
+        jobsDiscovered: crawlRes.metrics.jobsDiscovered,
+        jobsInserted: persistRes.jobsInserted,
+        jobsUpdated: persistRes.jobsUpdated,
+        duplicatesSkipped: crawlRes.metrics.duplicatesSkipped + persistRes.duplicatesSkipped,
+        failedRequests: crawlRes.metrics.failedRequests,
+        portalStats: crawlRes.metrics.portalStats,
+      };
+
+      // Re-fetch cached jobs from DB after persistence
+      cachedJobs = await getUserCachedPortalJobs(userId, portal, visibilityFrom, visibilityTo, allowedSources);
+    } else if (cachedJobs.length < 10) {
       const enqueueRes = await enqueueCrawlJob({
         category: JobSourceCategory.JOB_PORTAL,
         provider: portal,
@@ -304,10 +340,13 @@ export async function GET(req: NextRequest) {
       page,
       data: cachedJobs,
       jobs: cachedJobs,
-      cached: true,
+      cached: !forceRefresh && !crawlMetrics,
       sourceCategory: JobSourceCategory.JOB_PORTAL,
       backgroundSyncQueued,
-      message: backgroundSyncQueued ? "Returning cached results. Refreshing background pool." : "Returned fresh cached jobs.",
+      metrics: crawlMetrics,
+      message: crawlMetrics
+        ? `Crawled ${crawlMetrics.totalPagesCrawled} pages. Discovered ${crawlMetrics.jobsDiscovered} jobs (${crawlMetrics.jobsInserted} new, ${crawlMetrics.jobsUpdated} updated, ${crawlMetrics.duplicatesSkipped} duplicates skipped).`
+        : backgroundSyncQueued ? "Returning cached results. Refreshing background pool." : "Returned fresh cached jobs.",
     });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Failed retrieving portal jobs";

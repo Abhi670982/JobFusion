@@ -3,39 +3,35 @@ import cloudinary from "@/lib/cloudinary";
 import { parsePdf, parseDocx } from "@/lib/parser";
 import { extractSkillsWithAI } from "@/lib/skills-extractor";
 import { analyzeResume } from "@/lib/resume-intelligence";
-import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import { extractProfileDetails } from "@/lib/profile-extractor";
 import { prisma } from "@/lib/prisma";
+import { requireAuthUser, safeErrorResponse } from "@/lib/security";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  let currentStep = "file_validation";
   try {
-    console.log("[Resume Upload] Request received");
+    const { user: mongoUser, errorResponse } = await requireAuthUser();
+    if (errorResponse) return errorResponse;
 
-    // ── 1. Parse form data ──────────────────────────────────────
+    const userId = mongoUser.id;
+
+    // Rate limit: 10 uploads per 15 minutes per user
+    const rateLimitError = checkRateLimit(req, { limit: 10, windowMs: 15 * 60 * 1000, identifier: userId });
+    if (rateLimitError) return rateLimitError;
+
     const formData = await req.formData();
     const file = formData.get("file") as File;
-    const userId = formData.get("userId") as string;
 
     if (!file) return NextResponse.json({ success: false, step: "file_validation", error: "No file uploaded" }, { status: 400 });
-    if (!userId) return NextResponse.json({ success: false, step: "file_validation", error: "userId is required" }, { status: 400 });
 
-    // ── 2. Auth Check ───────────────────────────────────────────
-    const mongoUser = await getOrCreateMongoUser();
-    if (!mongoUser) return NextResponse.json({ success: false, step: "authentication", error: "Unauthorized" }, { status: 401 });
-    if (userId !== mongoUser._id.toString()) return NextResponse.json({ success: false, step: "authorization", error: "Forbidden" }, { status: 403 });
-
-    // ── 3. Find / Create Profile in PostgreSQL ──────────────────
     let pgProfile = await prisma.profile.findUnique({
       where: { userId },
       include: { skills: true }
     });
 
     if (!pgProfile) {
-      const userExists = await prisma.user.findUnique({ where: { id: userId } });
-      if (!userExists) return NextResponse.json({ success: false, step: "file_validation", error: "User not found" }, { status: 404 });
       pgProfile = await prisma.profile.create({
         data: {
           user: { connect: { id: userId } },
@@ -48,17 +44,12 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // ── 4. Validate file ────────────────────────────────────────
     const fileName = file.name;
     const extension = fileName.split(".").pop()?.toLowerCase();
     if (!extension || !["pdf", "docx"].includes(extension)) {
       return NextResponse.json({ success: false, step: "file_validation", error: "Only PDF and DOCX files are allowed." }, { status: 400 });
     }
-    console.log(`[Resume Upload] File: ${fileName} (${file.size} bytes)`);
 
-    // ── 5. Cloudinary Upload ────────────────────────────────────
-    currentStep = "cloudinary_upload";
-    console.log("[Resume Upload Step] Cloudinary upload started");
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
@@ -74,38 +65,26 @@ export async function POST(req: NextRequest) {
       });
     } catch (cloudErr: any) {
       console.error("[Resume Upload] Cloudinary error:", cloudErr);
-      return NextResponse.json({ success: false, step: "cloudinary_upload", error: cloudErr.message || "Cloudinary upload failed" }, { status: 500 });
+      return NextResponse.json({ success: false, step: "cloudinary_upload", error: "Cloudinary upload failed" }, { status: 500 });
     }
     const resumeUrl = cloudinaryResult.secure_url;
-    console.log("[Resume Upload Step] Cloudinary upload success:", resumeUrl);
 
-    // ── 6. Text Extraction ──────────────────────────────────────
-    currentStep = "parser";
-    console.log("[Resume Upload Step] Text extraction started");
     let extractedText = "";
     try {
       extractedText = extension === "pdf" ? await parsePdf(buffer) : await parseDocx(buffer);
     } catch (parseErr: any) {
       console.error("[Resume Upload] Parser error:", parseErr);
-      return NextResponse.json({ success: false, step: "parser", error: parseErr.message || "Failed to extract text from resume" }, { status: 500 });
+      return NextResponse.json({ success: false, step: "parser", error: "Failed to extract text from resume" }, { status: 500 });
     }
-    console.log(`[Resume Upload Step] Extracted ${extractedText.length} characters`);
 
-    // ── 7. Skill Extraction ─────────────────────────────────────
-    currentStep = "skills_extraction";
-    console.log("[Resume Upload Step] Skills extraction started");
     let newSkills: { name: string; level: number }[] = [];
     try {
       newSkills = await extractSkillsWithAI(extractedText);
-      console.log(`[Resume Upload Step] ${newSkills.length} skills extracted`);
     } catch (skillsErr: any) {
       console.error("[Resume Upload] Skills error:", skillsErr);
       newSkills = [];
     }
 
-    // ── 8. Resume Intelligence Analysis ────────────────────────
-    currentStep = "intelligence";
-    console.log("[Resume Upload Step] Resume intelligence analysis started");
     let intelligence;
     try {
       intelligence = analyzeResume(extractedText, newSkills.map(s => s.name));
@@ -119,13 +98,8 @@ export async function POST(req: NextRequest) {
       };
     }
 
-    // ── 9. Database Updates ──────────────────────────────────────
-    currentStep = "postgres_update";
-    console.log("[Resume Upload Step] PostgreSQL update started");
-
     const skillMode = pgProfile.resumeSkillMode || "merge";
     
-    // Update skills in Postgres
     if (skillMode === "replace") {
       await prisma.profileSkill.deleteMany({ where: { profileId: pgProfile.id } });
       if (newSkills.length > 0) {
@@ -152,7 +126,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Save profile metadata in Postgres
     const profileUpdate: any = {
       resumeUrl,
       resumeName: fileName,
@@ -167,9 +140,8 @@ export async function POST(req: NextRequest) {
       insightsTips: intelligence.insights.tips
     };
 
-    let details: any = {};
     try {
-      details = await extractProfileDetails(extractedText);
+      const details = await extractProfileDetails(extractedText);
       if (details.bio) profileUpdate.bio = details.bio;
       if (details.phone && (!pgProfile.phone || pgProfile.phone === "+91 98765 43210")) {
         profileUpdate.phone = details.phone;
@@ -179,13 +151,11 @@ export async function POST(req: NextRequest) {
       if (details.linkedinUrl && !pgProfile.linkedinUrl) profileUpdate.linkedinUrl = details.linkedinUrl;
       if (details.githubUrl && !pgProfile.githubUrl) profileUpdate.githubUrl = details.githubUrl;
 
-      // Execute main profile update in Postgres
       await prisma.profile.update({
         where: { id: pgProfile.id },
         data: profileUpdate
       });
 
-      // Update sections
       if (details.experiences && details.experiences.length > 0) {
         await prisma.workExperience.deleteMany({ where: { profileId: pgProfile.id } });
         await prisma.workExperience.createMany({
@@ -232,14 +202,12 @@ export async function POST(req: NextRequest) {
       }
     } catch (extractErr) {
       console.error("[Resume Upload] Non-fatal: Failed to extract detailed profile sections:", extractErr);
-      // Fallback update
       await prisma.profile.update({
         where: { id: pgProfile.id },
         data: profileUpdate
       });
     }
 
-    // Retrieve fully updated profile from Postgres to return
     const updatedPgProfile = await prisma.profile.findUnique({
       where: { id: pgProfile.id },
       include: { skills: true }
@@ -265,11 +233,7 @@ export async function POST(req: NextRequest) {
         lastAnalyzedAt: updatedPgProfile!.lastAnalyzedAt,
       },
     });
-  } catch (err: any) {
-    console.error("[Resume Upload] Unhandled error:", err);
-    return NextResponse.json(
-      { success: false, step: currentStep, error: err.message || "Unexpected error" },
-      { status: 500 }
-    );
+  } catch (err: unknown) {
+    return safeErrorResponse(err, "Failed to process resume upload");
   }
 }

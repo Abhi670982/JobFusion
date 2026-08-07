@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { Prisma, ContactMessage, ContactMessageStatus } from "@prisma/client";
+import { safeErrorResponse } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "10", 10);
     const search = searchParams.get("q") || "";
     const status = searchParams.get("status") || "";
-    const sort = searchParams.get("sort") || "desc"; // desc = newest first
+    const sort = searchParams.get("sort") || "desc";
 
     const skip = (page - 1) * limit;
     const andConditions: Prisma.ContactMessageWhereInput[] = [];
@@ -78,12 +79,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to retrieve contact messages";
-    console.error("[Admin Contact Messages API GET] Error:", error);
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to retrieve contact messages");
   }
 }
 
@@ -106,7 +102,6 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Invalid status value" }, { status: 400 });
     }
 
-    // Verify contact message exists in Postgres
     const msgExists = await prisma.contactMessage.findUnique({
       where: { id }
     });
@@ -115,13 +110,11 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Message not found" }, { status: 404 });
     }
 
-    // Update in Postgres
     const updatedMsg = await prisma.contactMessage.update({
       where: { id },
       data: { status: status as ContactMessageStatus }
     });
 
-    // Log admin action using structured audit logger
     const { logAdminAction } = await import("@/lib/audit-logger");
     await logAdminAction({
       req,
@@ -141,12 +134,7 @@ export async function PATCH(req: NextRequest) {
       data: mapMessage(updatedMsg),
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to update contact message status";
-    console.error("[Admin Contact Messages API PATCH] Error:", error);
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to update contact message status");
   }
 }
 
@@ -173,12 +161,10 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Message not found" }, { status: 404 });
     }
 
-    // Delete in Postgres
     await prisma.contactMessage.delete({
       where: { id }
     });
 
-    // Log admin action using structured audit logger
     const { logAdminAction } = await import("@/lib/audit-logger");
     await logAdminAction({
       req,
@@ -198,11 +184,6 @@ export async function DELETE(req: NextRequest) {
       message: "Contact message deleted successfully",
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to delete contact message";
-    console.error("[Admin Contact Messages API DELETE] Error:", error);
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to delete contact message");
   }
 }

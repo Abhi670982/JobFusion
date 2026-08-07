@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { safeErrorResponse } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -176,11 +177,7 @@ export async function GET(
       },
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to load user details";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to load user details");
   }
 }
 
@@ -257,11 +254,7 @@ export async function PATCH(
       data: mappedUser,
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to update user";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to update user");
   }
 }
 
@@ -318,10 +311,6 @@ export async function DELETE(
       message: "User and all associated profile data deleted successfully",
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to delete user";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to delete user");
   }
 }

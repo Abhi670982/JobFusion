@@ -3,7 +3,9 @@ import { parsePdf, parseDocx } from "@/lib/parser";
 import { extractSkillsWithAI } from "@/lib/skills-extractor";
 import { analyzeResume } from "@/lib/resume-intelligence";
 import { prisma } from "@/lib/prisma";
-import { withAIProviderCheck, validateUserAccess } from "@/lib/middleware/ai-usage";
+import { withAIProviderCheck } from "@/lib/middleware/ai-usage";
+import { requireAuthUser, safeErrorResponse } from "@/lib/security";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +16,15 @@ export async function POST(req: NextRequest) {
   let fileName = "unknown";
 
   try {
+    const { user: authUser, errorResponse } = await requireAuthUser();
+    if (errorResponse) return errorResponse;
+
+    userId = authUser.id;
+
+    // Rate limit: 10 parsing requests per 15 minutes per user
+    const rateLimitError = checkRateLimit(req, { limit: 10, windowMs: 15 * 60 * 1000, identifier: userId });
+    if (rateLimitError) return rateLimitError;
+
     // Check AI usage limits and resolve AI provider/key for resume-review feature
     const aiCheck = await withAIProviderCheck(req, 'resume-review');
     if (!aiCheck.allowed || !aiCheck.config) {
@@ -21,17 +32,9 @@ export async function POST(req: NextRequest) {
     }
     const aiConfig = aiCheck.config;
 
-    // Validate user access
-    const accessCheck = await validateUserAccess(req);
-    if (!accessCheck.allowed) {
-      return accessCheck.response;
-    }
-
-    userId = accessCheck.userId || null;
-
-    // Fetch profile from Postgres
+    // Fetch profile belonging exclusively to authenticated user
     const pgProfile = await prisma.profile.findUnique({
-      where: { userId: userId || "" },
+      where: { userId },
       include: { skills: true }
     });
 
@@ -46,20 +49,15 @@ export async function POST(req: NextRequest) {
 
     if (!extractedText) {
       currentStep = "cloudinary_download";
-      try {
-        const response = await fetch(pgProfile.resumeUrl);
-        if (!response.ok) throw new Error(`Download failed: ${response.status}`);
-        const buffer = Buffer.from(await response.arrayBuffer());
-        extractedText = extension === "pdf" ? await parsePdf(buffer) : await parseDocx(buffer);
-        
-        // Save the extracted text in Postgres
-        await prisma.profile.update({
-          where: { id: pgProfile.id },
-          data: { resumeText: extractedText }
-        });
-      } catch (dlErr: any) {
-        throw dlErr;
-      }
+      const response = await fetch(pgProfile.resumeUrl);
+      if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+      const buffer = Buffer.from(await response.arrayBuffer());
+      extractedText = extension === "pdf" ? await parsePdf(buffer) : await parseDocx(buffer);
+      
+      await prisma.profile.update({
+        where: { id: pgProfile.id },
+        data: { resumeText: extractedText }
+      });
     }
 
     currentStep = "skills_extraction";
@@ -81,7 +79,6 @@ export async function POST(req: NextRequest) {
     currentStep = "postgres_update";
     const skillMode = pgProfile.resumeSkillMode || "merge";
     
-    // Replace skills in Postgres
     if (skillMode === "replace") {
       await prisma.profileSkill.deleteMany({ where: { profileId: pgProfile.id } });
       if (newSkills.length > 0) {
@@ -93,9 +90,7 @@ export async function POST(req: NextRequest) {
           }))
         });
       }
-    } 
-    // Merge skills in Postgres
-    else {
+    } else {
       const newUniqueSkills = newSkills.filter(
         ns => !pgProfile.skills.some(es => es.name.toLowerCase() === ns.name.toLowerCase())
       );
@@ -110,7 +105,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Update profile metadata in Postgres
     const updatedPgProfile = await prisma.profile.update({
       where: { id: pgProfile.id },
       data: {
@@ -125,20 +119,17 @@ export async function POST(req: NextRequest) {
       include: { skills: true }
     });
 
-    // Create success log in Postgres
     try {
-      if (userId) {
-        await prisma.resumeParsingLog.create({
-          data: {
-            userId,
-            status: "success",
-            step: "complete",
-            fileName,
-            parsingTimeMs: Date.now() - startTime,
-            skillsExtractedCount: newSkills.length,
-          }
-        });
-      }
+      await prisma.resumeParsingLog.create({
+        data: {
+          userId,
+          status: "success",
+          step: "complete",
+          fileName,
+          parsingTimeMs: Date.now() - startTime,
+          skillsExtractedCount: newSkills.length,
+        }
+      });
     } catch (pgErr) {
       console.error("[Postgres Parsing Log Error]", pgErr);
     }
@@ -162,10 +153,8 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : "Unexpected error";
-    // Log failure in Postgres and MongoDB
     try {
       if (userId) {
-        // Postgres Failure log
         await prisma.resumeParsingLog.create({
           data: {
             userId,
@@ -177,20 +166,19 @@ export async function POST(req: NextRequest) {
           }
         });
 
-        // Postgres Notify Admin
         await prisma.adminNotification.create({
           data: {
             type: "parsing_failed",
             title: "Resume Parsing Failed",
-            message: `Failed parsing resume during step '${currentStep}' for user: ${userId}. Error: ${errorMessage}`,
-            metadata: { userId, step: currentStep, error: errorMessage }
+            message: `Failed parsing resume during step '${currentStep}' for user: ${userId}.`,
+            metadata: { userId, step: currentStep }
           }
         });
       }
     } catch (logErr) {
-      console.error("[Parse Resume Logger] Failed to record resume parsing failure log:", logErr);
+      console.error("[Parse Resume Logger] Failed to record failure log:", logErr);
     }
 
-    return NextResponse.json({ success: false, step: currentStep, error: errorMessage }, { status: 500 });
+    return safeErrorResponse(err, "Failed to parse resume");
   }
 }

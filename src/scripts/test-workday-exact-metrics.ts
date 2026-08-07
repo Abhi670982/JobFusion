@@ -82,7 +82,7 @@ async function auditIndiaJobs(t: Target) {
     // Step 2: Fetch all jobs for India (by facet if available, or paginate all)
     let offset = 0;
     const limit = 50;
-    let keepGoing = true;
+    const keepGoing = true;
 
     while (keepGoing && offset < 500) {
       const payload: any = { searchText: '', limit, offset };

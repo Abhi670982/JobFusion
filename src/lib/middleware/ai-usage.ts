@@ -122,9 +122,10 @@ export async function withAIProviderCheck(
 }
 
 /**
- * Helper to extract userId from request body for authorization checks
+ * Helper to validate user authentication securely via Clerk without accepting
+ * frontend userId in request body or URL parameters.
  */
-export async function validateUserAccess(req: NextRequest): Promise<{ 
+export async function validateUserAccess(): Promise<{ 
   allowed: boolean; 
   userId?: string; 
   response?: NextResponse 
@@ -141,30 +142,7 @@ export async function validateUserAccess(req: NextRequest): Promise<{
       };
     }
 
-    const body = await req.json().catch(() => ({}));
-    const { userId } = body;
-
-    if (!userId) {
-      return {
-        allowed: false,
-        response: NextResponse.json(
-          { success: false, error: "userId is required" },
-          { status: 400 }
-        ),
-      };
-    }
-
-    if (userId !== mongoUser._id.toString()) {
-      return {
-        allowed: false,
-        response: NextResponse.json(
-          { success: false, error: "Forbidden: You can only access your own data" },
-          { status: 403 }
-        ),
-      };
-    }
-
-    return { allowed: true, userId };
+    return { allowed: true, userId: mongoUser.id };
   } catch (error) {
     console.error("[User Access Validation] Error:", error);
     return {

@@ -2,18 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import Link from 'next/link';
 import {
-  Zap, Shield, Users, Star, ArrowRight, Check
+  Zap, Shield, Users, Star
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { PricingCard } from '@/components/pricing/PricingCard';
 
 import { PricingFAQ } from '@/components/pricing/PricingFAQ';
 import { PricingCTA } from '@/components/pricing/PricingCTA';
 import { PricingSection } from '@/components/pricing/PricingSection';
 import { TRUST_BADGES, FREE_PLAN_FEATURES, PRO_PLAN_FEATURES } from '@/lib/plans';
-import { cn } from '@/lib/utils';
 import dynamic from 'next/dynamic';
 import Navbar from '@/components/navbar';
 
@@ -159,37 +156,6 @@ export default function PricingPage() {
               />
             ))}
           </div>
-
-          {/* BYOK Banner */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            className="mt-16 max-w-4xl mx-auto"
-          >
-            <div className="relative overflow-hidden rounded-3xl border border-primary/20 bg-primary/5 p-6 sm:p-8 flex flex-col sm:flex-row items-center gap-6 text-center sm:text-left">
-              <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
-                  <path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/>
-                  <path d="m21 2-9.6 9.6"/>
-                  <circle cx="7.5" cy="15.5" r="5.5"/>
-                </svg>
-              </div>
-              <div className="flex-1">
-                <h3 className="text-xl font-bold mb-1">Bring Your Own Key (BYOK)</h3>
-                <p className="text-sm text-muted-foreground">
-                  Already have an OpenAI, Gemini, or Claude API key? Connect it to your JobFusion account to unlock <span className="font-semibold text-foreground">unlimited AI features</span> without upgrading to Pro.
-                </p>
-              </div>
-              <div>
-                <Link href="/settings/ai-providers">
-                  <Button className="rounded-xl gradient-brand text-white border-0 shadow-md">
-                    Connect API Key
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          </motion.div>
 
           {/* Money-back guarantee note */}
           <motion.p

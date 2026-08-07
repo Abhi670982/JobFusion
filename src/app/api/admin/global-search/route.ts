@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
+import { safeErrorResponse } from "@/lib/security";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -120,10 +121,6 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Global search failed";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Global search failed");
   }
 }

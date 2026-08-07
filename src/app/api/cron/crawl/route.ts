@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse, after } from "next/server";
-import { runSourceSync } from "@/lib/pipeline";
-import { JobSource } from "@/lib/adapters/types";
+import { crawlPortalJobs } from "@/lib/portal-fetcher/crawler";
+import { persistPortalJobs } from "@/lib/portal-jobs-persist";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 
-const COOLDOWN_MS = 3 * 60 * 60 * 1000; // 3 hours
+const CRAWL_INTERVAL_MINUTES = Number(process.env.CRAWL_INTERVAL_MINUTES || "60");
+const COOLDOWN_MS = CRAWL_INTERVAL_MINUTES * 60 * 1000;
 
 function isTimingSafeMatch(input: string | null | undefined, expected: string | undefined): boolean {
   if (!expected) return true;
@@ -17,40 +18,25 @@ function isTimingSafeMatch(input: string | null | undefined, expected: string | 
   return crypto.timingSafeEqual(a, b);
 }
 
+/**
+ * Hourly Asynchronous Background Job Crawler Cron
+ * Scalable Database-First Architecture:
+ * Crawls all supported portals (LinkedIn, Wellfound, Indeed, Internshala, Foundit, Naukri, Company Careers)
+ * in the background independently, normalizes & deduplicates, and stores in PostgreSQL.
+ */
 export async function POST(req: NextRequest) {
   try {
-    const secret = req.headers.get("x-cron-secret") || req.headers.get("authorization")?.replace("Bearer ", "");
+    const secret = req.headers.get("x-cron-secret") || req.nextUrl.searchParams.get("secret") || req.headers.get("authorization")?.replace("Bearer ", "");
     const expectedSecret = process.env.CRON_SECRET;
     if (!isTimingSafeMatch(secret, expectedSecret)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { searchParams } = new URL(req.url);
-    const querySource = searchParams.get("source");
+    const force = searchParams.get("force") === "true";
 
-    let bodySource = "";
-    let customKeywords: string[] = [];
-    try {
-      const body = await req.clone().json();
-      if (body) {
-        if (body.source) {
-          bodySource = String(body.source).trim().toLowerCase();
-        }
-        if (Array.isArray(body.keywords)) {
-          customKeywords = body.keywords
-            .map((k: any) => String(k).trim())
-            .filter(Boolean);
-        }
-      }
-    } catch {
-      // Ignore if body is empty or not JSON
-    }
-
-    const targetSource = querySource || bodySource;
-    const isCustom = customKeywords.length > 0;
-
-    // DB-persisted cooldown (survives serverless cold starts)
-    if (!isCustom && !targetSource) {
+    // Cooldown check (configurable via CRAWL_INTERVAL_MINUTES)
+    if (!force) {
       let settings = await prisma.settings.findUnique({
         where: { settingsId: "global" },
       });
@@ -61,25 +47,13 @@ export async function POST(req: NextRequest) {
       }
 
       const now = Date.now();
-      if (
-        settings.lastCrawlAt &&
-        now - settings.lastCrawlAt.getTime() < COOLDOWN_MS
-      ) {
-        const remainingSeconds = Math.ceil(
-          (COOLDOWN_MS - (now - settings.lastCrawlAt.getTime())) / 1000
-        );
-        console.log(
-          `[Cron API] Cooldown active. Remaining: ${remainingSeconds}s`
-        );
-        return NextResponse.json(
-          {
-            success: true,
-            message:
-              "Job crawler recently executed. Skipped to prevent server overload.",
-            cooldownRemainingSeconds: remainingSeconds,
-          },
-          { status: 200 }
-        );
+      if (settings.lastCrawlAt && now - settings.lastCrawlAt.getTime() < COOLDOWN_MS) {
+        const remainingSeconds = Math.ceil((COOLDOWN_MS - (now - settings.lastCrawlAt.getTime())) / 1000);
+        return NextResponse.json({
+          success: true,
+          message: `Hourly background crawl recently executed. Next run in ${remainingSeconds}s.`,
+          cooldownRemainingSeconds: remainingSeconds,
+        });
       }
 
       await prisma.settings.update({
@@ -88,58 +62,41 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    console.log(`[Cron API] Triggering background job sync...`);
-
-    let sources: JobSource[] = ["wellfound", "careers", "aggregator"];
-    if (targetSource && sources.includes(targetSource as JobSource)) {
-      sources = [targetSource as JobSource];
-    }
-
-    // Empty keywords → pipeline pulls skills from DB (Rule 2)
-    const keywords = isCustom ? customKeywords : [];
+    console.log(`[Cron Background Crawl] Initiating hourly multi-portal job aggregation pass...`);
 
     after(async () => {
-      console.log(
-        "[Cron API Background] Starting sync cycle for sources:",
-        sources,
-        "keywords:",
-        keywords.length ? keywords : "(from DB skills)"
-      );
-      for (const source of sources) {
-        try {
-          console.log(`[Cron API Background] Syncing ${source}...`);
-          // Pass empty array or custom keywords
-          await runSourceSync(source, keywords);
-        } catch (err: any) {
-          console.error(
-            `[Cron API Background] Sync failed for ${source}:`,
-            err.message
-          );
-        }
+      console.log(`[Cron Background Crawl] Executing parallel crawl across all portals...`);
+      try {
+        const crawlRes = await crawlPortalJobs({
+          portal: "all",
+          location: "India",
+          maxPages: 5,
+        });
+
+        const persistRes = await persistPortalJobs(crawlRes.jobs);
+        console.log(`[Cron Background Crawl Complete] Crawled ${crawlRes.jobs.length} jobs across ${crawlRes.metrics.totalPagesCrawled} pages. DB Persisted: ${persistRes.jobsInserted} new, ${persistRes.jobsUpdated} updated, ${crawlRes.metrics.duplicatesSkipped + persistRes.duplicatesSkipped} duplicates skipped.`);
+      } catch (err: any) {
+        console.error("[Cron Background Crawl Failed]:", err.message || err);
       }
-      console.log("[Cron API Background] Sync cycle complete.");
     });
 
     return NextResponse.json(
       {
         success: true,
-        message: isCustom
-          ? "Job crawler successfully initiated for custom keywords in the background."
-          : "Job crawler successfully initiated in the background.",
+        message: "Hourly background job aggregation pipeline initiated successfully.",
         triggeredAt: new Date().toISOString(),
       },
       { status: 202 }
     );
   } catch (error: any) {
-    console.error("Error triggering crawler API:", error);
+    console.error("Cron crawl route error:", error);
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to trigger crawler" },
+      { success: false, error: error.message || "Failed to trigger cron crawl" },
       { status: 500 }
     );
   }
 }
 
-// GET support for easy testing via browser/curl
 export async function GET(req: NextRequest) {
   return POST(req);
 }

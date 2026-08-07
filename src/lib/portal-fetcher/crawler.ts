@@ -2,6 +2,7 @@ import { portalRegistry } from "./registry";
 import { PortalUnifiedJob, JobPortalSource } from "./adapters/base-adapter";
 import { expandSkillsToQueries } from "./utils/query-expansion";
 import { parsePostedDate } from "@/lib/parse-posted-date";
+import crypto from "crypto";
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   let timer: NodeJS.Timeout;
@@ -13,14 +14,48 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  retries = 2,
+  delayMs = 1500
+): Promise<T> {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      attempt++;
+      if (attempt > retries) throw err;
+      console.warn(`[Crawler Retry] Retry attempt ${attempt}/${retries} after error: ${err.message}`);
+      await new Promise((res) => setTimeout(res, delayMs * Math.pow(2, attempt - 1)));
+    }
+  }
+}
+
 interface CrawlerOptions {
   portal: JobPortalSource | "all";
   keyword?: string;
   skills?: string[];
   location?: string;
   page?: number;
+  maxPages?: number;
   crawlFrom?: Date;
   crawlTo?: Date;
+}
+
+export interface CrawlPortalResult {
+  jobs: PortalUnifiedJob[];
+  errors: string[];
+  partial?: boolean;
+  timedOut?: boolean;
+  failedPortals?: string[];
+  metrics: {
+    totalPagesCrawled: number;
+    jobsDiscovered: number;
+    duplicatesSkipped: number;
+    failedRequests: number;
+    portalStats: Record<string, { pagesCrawled: number; jobsFetched: number; status: string }>;
+  };
 }
 
 function normalizeExperienceLevel(exp: string | null): "entry" | "mid" | "senior" | "lead" | null {
@@ -33,26 +68,21 @@ function normalizeExperienceLevel(exp: string | null): "entry" | "mid" | "senior
   return null;
 }
 
-export async function crawlPortalJobs(options: CrawlerOptions): Promise<{
-  jobs: PortalUnifiedJob[];
-  errors: string[];
-  partial?: boolean;
-  timedOut?: boolean;
-  failedPortals?: string[];
-}> {
+export async function crawlPortalJobs(options: CrawlerOptions): Promise<CrawlPortalResult> {
   const portalParam = options.portal;
   const rawSkills = options.skills || [];
   const location = options.location || "India";
-  const page = options.page || 1;
+  const startPage = options.page || 1;
+  const maxPagesLimit = options.maxPages || 10;
 
-  // Determine keywords to search
+  // Determine keywords to search (broader role titles for maximum coverage)
   let keywords: string[] = [];
   if (options.keyword && options.keyword.trim().length > 0) {
     keywords = [options.keyword.trim()];
   } else if (rawSkills.length > 0) {
     keywords = expandSkillsToQueries(rawSkills);
   } else {
-    keywords = ["software engineer"];
+    keywords = ["software engineer", "full stack developer", "software developer"];
   }
 
   // Determine active portals
@@ -65,98 +95,108 @@ export async function crawlPortalJobs(options: CrawlerOptions): Promise<{
   let timedOut = false;
   let partial = false;
 
-  const overallTimeoutMs = 40000; // 40s overall deadline
+  let totalPagesCrawled = 0;
+  let failedRequests = 0;
+  const portalStats: Record<string, { pagesCrawled: number; jobsFetched: number; status: string }> = {};
 
-  // Parallel Crawling across portals, sequential/progressive page fetching within each portal
+  const overallTimeoutMs = 120000; // 120s overall deadline for deep parallel crawling
+
+  // Parallel Crawling across portals, progressive multi-page fetching per portal
   const crawlPromises = portalsToCrawl.map(async (portal) => {
+    portalStats[portal] = { pagesCrawled: 0, jobsFetched: 0, status: "pending" };
     try {
       const adapter = portalRegistry.getAdapter(portal);
-      console.log(`[Crawler] Sourcing live jobs from ${portal} progressively for keyword: "${keywords[0]}"`);
-
       const allPortalJobs: any[] = [];
-      let currentPage = page;
-      let hasMore = true;
 
-      while (currentPage <= page + 2 && hasMore) {
-        try {
-          const rawPageJobs = await withTimeout(
-            adapter.fetchJobs({ keywords, location, page: currentPage }),
-            18000 // 18s per-page timeout
-          );
-          if (rawPageJobs.length === 0) {
+      for (const currentKeyword of keywords) {
+        let currentPage = startPage;
+        let hasMore = true;
+
+        console.log(`[Crawler] Sourcing live jobs from ${portal} for keyword: "${currentKeyword}" (max ${maxPagesLimit} pages)`);
+
+        while (currentPage <= maxPagesLimit && hasMore) {
+          try {
+            const rawPageJobs = await withTimeout(
+              withRetry(() => adapter.fetchJobs({ keywords: [currentKeyword], location, page: currentPage })),
+              50000 // 50s per-page timeout for Apify actors
+            );
+
+            totalPagesCrawled++;
+            portalStats[portal].pagesCrawled++;
+
+            if (!rawPageJobs || rawPageJobs.length === 0) {
+              hasMore = false;
+              break;
+            }
+
+            const mappedJobs = rawPageJobs.map((rj: any) => {
+              try {
+                return adapter.mapToUnified(rj);
+              } catch (err) {
+                console.warn(`[Crawler] Mapping error on ${portal} page ${currentPage}:`, err);
+                return null;
+              }
+            });
+
+            let hasJobsOlderThanFrom = false;
+            let addedCount = 0;
+
+            for (let i = 0; i < mappedJobs.length; i++) {
+              const job = mappedJobs[i];
+              const rawJob = rawPageJobs[i];
+              if (!job) continue;
+
+              let resolvedDate: Date | null = null;
+              if (job.postedDate) {
+                const parsedDate = parsePostedDate(String(job.postedDate));
+                if (parsedDate) {
+                  resolvedDate = parsedDate.timestamp;
+                } else {
+                  const d = new Date(job.postedDate as any);
+                  if (!isNaN(d.getTime())) resolvedDate = d;
+                }
+              }
+
+              if (resolvedDate) {
+                if (options.crawlFrom && resolvedDate < options.crawlFrom) {
+                  hasJobsOlderThanFrom = true;
+                  continue;
+                }
+                if (options.crawlTo && resolvedDate > options.crawlTo) {
+                  continue;
+                }
+              }
+
+              allPortalJobs.push(rawJob);
+              addedCount++;
+            }
+
+            portalStats[portal].jobsFetched += addedCount;
+            console.log(`[Crawler] ${portal} [${currentKeyword}] page ${currentPage}: fetched ${rawPageJobs.length} jobs, kept ${addedCount}`);
+
+            if (hasJobsOlderThanFrom) {
+              hasMore = false;
+              break;
+            }
+
+            currentPage++;
+          } catch (err: any) {
+            failedRequests++;
+            console.warn(`[Crawler] ${portal} [${currentKeyword}] page ${currentPage} failed:`, err.message);
             hasMore = false;
             break;
           }
-
-          const mappedJobs = rawPageJobs.map((rj: any) => {
-            try {
-              return adapter.mapToUnified(rj);
-            } catch (err) {
-              console.warn(`[Crawler] Mapping error on ${portal} page ${currentPage}:`, err);
-              return null;
-            }
-          });
-
-          let hasJobsOlderThanFrom = false;
-          let addedCount = 0;
-
-          for (let i = 0; i < mappedJobs.length; i++) {
-            const job = mappedJobs[i];
-            const rawJob = rawPageJobs[i];
-            if (!job) continue;
-
-            // Resolve postedAt date
-            let resolvedDate: Date | null = null;
-            if (job.postedDate) {
-              const parsedDate = parsePostedDate(String(job.postedDate));
-              if (parsedDate) {
-                resolvedDate = parsedDate.timestamp;
-              } else {
-                const d = new Date(job.postedDate as any);
-                if (!isNaN(d.getTime())) resolvedDate = d;
-              }
-            }
-
-            if (resolvedDate) {
-              if (options.crawlFrom && resolvedDate < options.crawlFrom) {
-                hasJobsOlderThanFrom = true;
-                continue; // Skip, it's older than crawlFrom
-              }
-              if (options.crawlTo && resolvedDate > options.crawlTo) {
-                continue; // Skip, it's newer than crawlTo
-              }
-            }
-
-            allPortalJobs.push(rawJob);
-            addedCount++;
-          }
-
-          console.log(`[Crawler] ${portal} page ${currentPage}: fetched ${rawPageJobs.length} jobs, kept ${addedCount} within boundaries`);
-
-          if (hasJobsOlderThanFrom) {
-            console.log(`[Crawler] ${portal} page ${currentPage} has jobs older than crawlFrom (${options.crawlFrom?.toISOString()}). Stopping pagination.`);
-            hasMore = false;
-            break;
-          }
-
-          if (rawPageJobs.length < 5) {
-            hasMore = false;
-            break;
-          }
-
-          currentPage++;
-        } catch (err: any) {
-          console.warn(`[Crawler] ${portal} page ${currentPage} failed:`, err.message);
-          hasMore = false;
-          break;
         }
       }
 
+      portalStats[portal].status = "success";
       return { portal, rawJobs: allPortalJobs, status: "success" as const };
     } catch (err: any) {
+      failedRequests++;
       console.warn(`[Crawler] Failed fetching from ${portal}:`, err.message);
       errors.push(`${portal}: ${err.message}`);
       failedPortals.push(portal);
+      portalStats[portal].status = "failed";
       return { portal, rawJobs: [], status: "failed" as const, error: err.message };
     }
   });
@@ -187,24 +227,24 @@ export async function crawlPortalJobs(options: CrawlerOptions): Promise<{
       partial = true;
       errors.push(`${res.portal}: Timeout exceeded overall deadline`);
       failedPortals.push(res.portal);
+      if (portalStats[res.portal]) portalStats[res.portal].status = "timeout";
     } else if (res.status === "failed") {
       partial = true;
     }
   });
 
-  // Normalize, score, and filter
+  // Normalize, deduplicate, score, and filter
   const unifiedJobs: PortalUnifiedJob[] = [];
   const seenHashes = new Set<string>();
+  let duplicatesSkipped = 0;
 
   for (const jobWrap of allRawJobs) {
     try {
       const adapter = portalRegistry.getAdapter(jobWrap.source);
       const unified = adapter.mapToUnified(jobWrap.raw);
 
-      // Normalize experience
       unified.experience = normalizeExperienceLevel(unified.experience as any);
 
-      // Check date freshness and mark isDateless
       let isDateless = true;
       let keepJob = true;
 
@@ -215,14 +255,12 @@ export async function crawlPortalJobs(options: CrawlerOptions): Promise<{
         if (parsedDate) {
           resolvedDate = parsedDate.timestamp;
         } else {
-          // Try native Date parsing as fallback (works for ISO strings from APIs)
           const d = new Date(unified.postedDate as any);
           if (!isNaN(d.getTime())) resolvedDate = d;
         }
 
         if (resolvedDate) {
           isDateless = false;
-          
           if (options.crawlFrom && resolvedDate < options.crawlFrom) {
             keepJob = false;
           }
@@ -231,52 +269,44 @@ export async function crawlPortalJobs(options: CrawlerOptions): Promise<{
           }
 
           if (!options.crawlFrom) {
-            // Age check: max 10 days old (consistent with careers pipeline)
             const ageMs = Date.now() - resolvedDate.getTime();
             const TEN_DAYS_MS = 10 * 24 * 60 * 60 * 1000;
             if (ageMs > TEN_DAYS_MS) {
               keepJob = false;
             }
           }
-          // Update postedDate to the resolved ISO string for consistent client-side sorting
           unified.postedDate = resolvedDate.toISOString() as any;
         }
       }
 
       unified.isDateless = isDateless;
 
-      if (!keepJob) {
-        console.log(`[Crawler] Rejecting stale job: "${unified.title}" posted at ${unified.postedDate}`);
+      if (!keepJob) continue;
+
+      // Multi-field deduplication hash
+      const dedupeKey = `${unified.source}-${unified.sourceId}-${unified.sourceUrl}-${unified.title}-${unified.company}-${unified.location}`.toLowerCase();
+      const dedupeHash = crypto.createHash("sha256").update(dedupeKey).digest("hex");
+
+      if (seenHashes.has(dedupeHash)) {
+        duplicatesSkipped++;
         continue;
       }
+      seenHashes.add(dedupeHash);
 
-      // 1. Deduplication
-      if (seenHashes.has(unified.sourceId) || seenHashes.has(unified.sourceUrl)) {
-        continue;
-      }
-
-      seenHashes.add(unified.sourceId);
-      if (unified.sourceUrl) seenHashes.add(unified.sourceUrl);
-
-      // 2. Skill Relevance Filtering
-      // If skills list is provided, filter out unrelated jobs (e.g. Sales, Marketing, HR if developer profile)
+      // Skill relevance filtering
       if (rawSkills.length > 0) {
         const lowerUserSkills = rawSkills.map(s => s.toLowerCase().trim());
-        
-        // Prioritize Job Title and Explicit Skills
-        const matchesUserSkills = lowerUserSkills.some(skill => 
-          unified.title.toLowerCase().includes(skill) || 
+        const matchesUserSkills = lowerUserSkills.some(skill =>
+          unified.title.toLowerCase().includes(skill) ||
           unified.skills.some(s => s.toLowerCase() === skill)
         );
 
         const hasTechTerm = /\b(developer|engineer|programmer|analyst|architect|consultant|coder|technician|intern)\b/i.test(unified.title);
 
-        // Filter out non-matching jobs (to prevent returning HR/sales positions for developer skills)
-        const isSpamRole = /\b(hr|human resources|recruiter|talent acquisition|sales|business development|marketing|digital marketing|operations|office administrator|customer support|telecaller|account manager|finance|accounting|mechanical|civil)\b/i.test(unified.title.toLowerCase()) && 
+        const isSpamRole = /\b(hr|human resources|recruiter|talent acquisition|sales|business development|marketing|digital marketing|operations|office administrator|customer support|telecaller|account manager|finance|accounting|mechanical|civil)\b/i.test(unified.title.toLowerCase()) &&
                           !lowerUserSkills.some(s => unified.title.toLowerCase().includes(s));
 
         if (isSpamRole || (!matchesUserSkills && !hasTechTerm)) {
-          console.log(`[Crawler] Filtering out irrelevant role: "${unified.title}" at "${unified.company}"`);
           continue;
         }
       }
@@ -287,7 +317,7 @@ export async function crawlPortalJobs(options: CrawlerOptions): Promise<{
     }
   }
 
-  console.log(`[Crawler] Merged live results: ${unifiedJobs.length} jobs (from ${allRawJobs.length} raw jobs fetched)`);
+  console.log(`[Crawler] Deep Crawl Summary: ${unifiedJobs.length} jobs ready (${allRawJobs.length} raw jobs across ${totalPagesCrawled} pages)`);
 
   return {
     jobs: unifiedJobs,
@@ -295,6 +325,12 @@ export async function crawlPortalJobs(options: CrawlerOptions): Promise<{
     partial,
     timedOut,
     failedPortals,
+    metrics: {
+      totalPagesCrawled,
+      jobsDiscovered: allRawJobs.length,
+      duplicatesSkipped,
+      failedRequests,
+      portalStats,
+    },
   };
 }
-

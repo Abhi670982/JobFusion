@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     const aiConfig = aiCheck.config;
 
     // Validate user access
-    const accessCheck = await validateUserAccess(req);
+    const accessCheck = await validateUserAccess();
     if (!accessCheck.allowed) {
       return accessCheck.response;
     }

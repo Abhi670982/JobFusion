@@ -1,14 +1,14 @@
 import { BasePortalAdapter, PortalFetchQuery, PortalUnifiedJob } from "./base-adapter";
+import { crawlLinkedInViaApify } from "@/lib/apify-runner";
+import { fetchWithBrightDataProxy } from "@/lib/brightdata-proxy";
 import { extractSkills } from "@/lib/skills-extractor";
 import { parsePostedDate } from "@/lib/parse-posted-date";
 import crypto from "crypto";
 
 /**
- * LinkedIn adapter — free Cheerio-based scraper using the public guest job search.
- * No API key, no RapidAPI, no cost.
- *
- * Primary:  https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search
- * Fallback: https://www.linkedin.com/jobs/search (standard search page)
+ * LinkedIn Portal Adapter
+ * Primary:  Apify official LinkedIn Jobs Actor (`APIFY_TOKEN`)
+ * Fallback: Cheerio Guest API routed through Bright Data Proxy (`BRIGHTDATA_API_KEY`)
  */
 export class LinkedInPortalAdapter extends BasePortalAdapter {
   readonly source = "linkedin" as const;
@@ -18,52 +18,50 @@ export class LinkedInPortalAdapter extends BasePortalAdapter {
     const location = query.location || "India";
     const page = query.page || 1;
 
-    try {
-      return await this.scrapeGuestApi(keyword, location, page);
-    } catch (err: any) {
-      console.warn(
-        `[LinkedIn Adapter] Guest API failed (${err.message}). Trying search page fallback...`
-      );
+    // 1. Try Primary: Apify LinkedIn Jobs Actor
+    if (process.env.APIFY_TOKEN) {
       try {
-        return await this.scrapeSearchPage(keyword, location, page);
+        console.log(`[LinkedIn Adapter] Fetching via Apify Actor (keyword: "${keyword}", location: "${location}")`);
+        const apifyJobs = await crawlLinkedInViaApify({
+          keyword,
+          location,
+          maxItems: 50,
+        });
+        if (apifyJobs && apifyJobs.length > 0) {
+          return apifyJobs;
+        }
+      } catch (err: any) {
+        console.warn(`[LinkedIn Adapter] Apify execution failed (${err.message}). Switching to Bright Data Proxy fallback...`);
+      }
+    }
+
+    // 2. Fallback: Cheerio Guest API with Bright Data Proxy
+    try {
+      return await this.scrapeGuestApiWithProxy(keyword, location, page);
+    } catch (err: any) {
+      console.warn(`[LinkedIn Adapter] Guest API fallback failed (${err.message}). Trying search page with Bright Data Proxy...`);
+      try {
+        return await this.scrapeSearchPageWithProxy(keyword, location, page);
       } catch (fallbackErr: any) {
-        console.warn(
-          `[LinkedIn Adapter] Search page fallback also failed (${fallbackErr.message}). Returning empty list.`
-        );
+        console.warn(`[LinkedIn Adapter] Search page fallback also failed (${fallbackErr.message}). Returning empty list.`);
         return [];
       }
     }
   }
 
-  /**
-   * Primary: LinkedIn's guest jobs API endpoint — returns job card HTML fragments.
-   */
-  private async scrapeGuestApi(keyword: string, location: string, page: number): Promise<any[]> {
+  private async scrapeGuestApiWithProxy(keyword: string, location: string, page: number): Promise<any[]> {
     const cheerio = require("cheerio");
     const start = (page - 1) * 25;
     const url = `https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords=${encodeURIComponent(keyword)}&location=${encodeURIComponent(location)}&start=${start}&f_TPR=r604800`;
 
-    console.log(`[LinkedIn Adapter] Fetching via guest API (page ${page}, start ${start}): ${url}`);
+    console.log(`[LinkedIn Adapter] Fetching via Bright Data Proxy (page ${page}, start ${start}): ${url}`);
 
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-      },
-    });
+    const res = await fetchWithBrightDataProxy(url);
 
     if (!res.ok) throw new Error(`LinkedIn guest API returned ${res.status}`);
 
     const html = await res.text();
-
-    if (
-      html.includes("captcha") ||
-      html.includes("Cloudflare") ||
-      html.includes("just a moment")
-    ) {
+    if (html.includes("captcha") || html.includes("Cloudflare")) {
       throw new Error("LinkedIn guest API blocked by CAPTCHA");
     }
 
@@ -73,29 +71,20 @@ export class LinkedInPortalAdapter extends BasePortalAdapter {
     $("li").each((_: number, elem: any) => {
       const card = $(elem);
       const titleEl = card.find(".base-search-card__title");
-      const companyEl = card.find(
-        ".base-search-card__subtitle a, .base-search-card__subtitle"
-      );
+      const companyEl = card.find(".base-search-card__subtitle a, .base-search-card__subtitle");
       const locationEl = card.find(".job-search-card__location");
       const linkEl = card.find("a.base-card__full-link");
 
       let timeEl = card.find("time").first();
       if (timeEl.length === 0) {
-        timeEl = card
-          .find(
-            ".job-search-card__listdate, .job-search-card__listdate--new, .base-search-card__metadata time"
-          )
-          .first();
+        timeEl = card.find(".job-search-card__listdate, .job-search-card__listdate--new, .base-search-card__metadata time").first();
       }
 
       const title = titleEl.text().trim();
       const company = companyEl.text().trim().split("\n")[0].trim();
       const loc = locationEl.text().trim();
       const applyUrl = linkEl.attr("href") || "";
-      const postedText =
-        timeEl.length > 0
-          ? timeEl.attr("datetime") || timeEl.text().trim()
-          : "";
+      const postedText = timeEl.length > 0 ? timeEl.attr("datetime") || timeEl.text().trim() : "";
 
       if (title && company) {
         jobs.push({
@@ -109,28 +98,16 @@ export class LinkedInPortalAdapter extends BasePortalAdapter {
       }
     });
 
-    console.log(`[LinkedIn Adapter] Guest API returned ${jobs.length} jobs.`);
+    console.log(`[LinkedIn Adapter] Guest API with Proxy returned ${jobs.length} jobs.`);
     return jobs;
   }
 
-  /**
-   * Fallback: Standard public job search page.
-   */
-  private async scrapeSearchPage(keyword: string, location: string, page: number): Promise<any[]> {
+  private async scrapeSearchPageWithProxy(keyword: string, location: string, page: number): Promise<any[]> {
     const cheerio = require("cheerio");
     const start = (page - 1) * 25;
     const url = `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(keyword)}&location=${encodeURIComponent(location)}&start=${start}&f_TPR=r604800`;
 
-    console.log(`[LinkedIn Adapter] Fetching via search page (page ${page}, start ${start}): ${url}`);
-
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept-Language": "en-US,en;q=0.9",
-        Accept: "text/html,application/xhtml+xml",
-      },
-    });
+    const res = await fetchWithBrightDataProxy(url);
 
     if (!res.ok) throw new Error(`LinkedIn search page returned ${res.status}`);
 
@@ -142,8 +119,7 @@ export class LinkedInPortalAdapter extends BasePortalAdapter {
       const title = $(el).find(".base-search-card__title").text().trim();
       const company = $(el).find(".base-search-card__subtitle").text().trim();
       const loc = $(el).find(".job-search-card__location").text().trim();
-      const applyUrl =
-        $(el).find("a.base-card__full-link").attr("href") || "";
+      const applyUrl = $(el).find("a.base-card__full-link").attr("href") || "";
       const posted = $(el).find("time").attr("datetime") || "";
 
       if (title && applyUrl) {
@@ -158,7 +134,6 @@ export class LinkedInPortalAdapter extends BasePortalAdapter {
       }
     });
 
-    console.log(`[LinkedIn Adapter] Search page returned ${jobs.length} jobs.`);
     return jobs;
   }
 
@@ -168,35 +143,28 @@ export class LinkedInPortalAdapter extends BasePortalAdapter {
     const location = (raw.location || "Remote, India").trim();
 
     const rawHashInput = `${title}${company}${location}`.toLowerCase();
-    const dedupeHash = crypto
-      .createHash("sha256")
-      .update(rawHashInput)
-      .digest("hex");
+    const dedupeHash = crypto.createHash("sha256").update(rawHashInput).digest("hex");
 
-    const description = `Job listing from LinkedIn: ${title} at ${company} located in ${location}.`;
-    const extractedSkills = extractSkills(title + " " + description).map((s) =>
-      s.name.toLowerCase()
-    );
+    const description = raw.description || `Job listing from LinkedIn: ${title} at ${company} located in ${location}.`;
+    const extractedSkills = extractSkills(title + " " + description).map((s) => s.name.toLowerCase());
 
     const isRemote =
       location.toLowerCase().includes("remote") ||
       location.toLowerCase().includes("work from home") ||
       location.toLowerCase().includes("wfh");
 
-    // Extract LinkedIn job ID from URL for a clean sourceId
     let sourceId = dedupeHash.substring(0, 12);
     if (raw.applyUrl) {
       const match = raw.applyUrl.match(/-(\d+)\?/);
       if (match && match[1]) sourceId = match[1];
+    } else if (raw.sourceId) {
+      sourceId = raw.sourceId;
     }
 
-    // Parse posted date
-    let postedAt: Date | null = null;
+    let postedAt: Date = new Date();
     if (raw.postedText) {
-      const parsed = parsePostedDate(raw.postedText);
-      if (parsed) {
-        postedAt = parsed.timestamp;
-      }
+      const parsed = parsePostedDate(String(raw.postedText));
+      if (parsed) postedAt = parsed.timestamp;
     }
 
     return {
@@ -209,19 +177,12 @@ export class LinkedInPortalAdapter extends BasePortalAdapter {
       logo: null,
       location,
       isRemote,
-      employmentType: "full-time",
+      employmentType: (raw.jobType || "full-time") as any,
       experience:
-        title.toLowerCase().includes("senior") ||
-        title.toLowerCase().includes("sr.")
-          ? "senior"
-          : title.toLowerCase().includes("lead") ||
-            title.toLowerCase().includes("principal")
-          ? "lead"
-          : title.toLowerCase().includes("junior") ||
-            title.toLowerCase().includes("entry")
-          ? "entry"
-          : "mid",
-      salary: "Not disclosed",
+        title.toLowerCase().includes("senior") ? "senior" :
+        title.toLowerCase().includes("lead") ? "lead" :
+        title.toLowerCase().includes("junior") ? "entry" : "mid",
+      salary: raw.salary || "Not disclosed",
       salaryMin: null,
       salaryMax: null,
       description,

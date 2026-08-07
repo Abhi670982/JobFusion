@@ -3,6 +3,8 @@ import { LinkedInPortalAdapter } from "./adapters/linkedin";
 import { IndeedPortalAdapter } from "./adapters/indeed";
 import { InternshalaPortalAdapter } from "./adapters/internshala";
 import { WellfoundPortalAdapter } from "./adapters/wellfound";
+import { NaukriPortalAdapter } from "./adapters/naukri";
+import { FounditPortalAdapter } from "./adapters/foundit";
 
 class PortalAdapterRegistry {
   private registry = new Map<JobPortalSource, () => BasePortalAdapter>();
@@ -12,6 +14,8 @@ class PortalAdapterRegistry {
     this.register("indeed", () => new IndeedPortalAdapter());
     this.register("internshala", () => new InternshalaPortalAdapter());
     this.register("wellfound", () => new WellfoundPortalAdapter());
+    this.register("naukri", () => new NaukriPortalAdapter());
+    this.register("foundit", () => new FounditPortalAdapter());
   }
 
   register(source: JobPortalSource, creator: () => BasePortalAdapter) {

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
-import { Prisma, Company } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import { safeErrorResponse } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -12,76 +13,15 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
-    // ── AUTO-BOOTSTRAP COMPANIES FROM JOBS (PostgreSQL check) ────────────────
-    const initialCount = await prisma.company.count();
-    if (initialCount === 0) {
-      console.log("[Companies API] Bootstrapping PostgreSQL Company table from existing Job entries...");
-      
-      // Fetch distinct companies from PostgreSQL Job table
-      const uniqueCompanies = await prisma.job.findMany({
-        select: { company: true },
-        distinct: ['company'],
-      });
-
-      const uniqueCompanyNames = uniqueCompanies.map(j => j.company).filter(Boolean);
-
-      const companyDocs = [];
-      for (const name of uniqueCompanyNames) {
-        // Find sample job to get career url / timestamp
-        const sampleJob = await prisma.job.findFirst({
-          where: { company: name }
-        });
-        const jobsCount = await prisma.job.count({
-          where: { company: name }
-        });
-
-        let careerUrl = "";
-        if (sampleJob && sampleJob.applyUrl) {
-          try {
-            const url = new URL(sampleJob.applyUrl);
-            careerUrl = `${url.protocol}//${url.hostname}`;
-          } catch {
-            careerUrl = sampleJob.applyUrl;
-          }
-        }
-        
-        if (!careerUrl) {
-          careerUrl = `https://www.${name.toLowerCase().replace(/[^a-z0-9]/g, "")}.com/careers`;
-        }
-
-        companyDocs.push({
-          name,
-          careerUrl,
-          crawlStatus: "idle" as const,
-          lastSync: sampleJob ? sampleJob.createdAt : new Date(),
-          jobsFound: jobsCount,
-          isEnabled: true,
-        });
-      }
-
-      if (companyDocs.length > 0) {
-        await prisma.company.createMany({
-          data: companyDocs
-        });
-      }
-    }
-
     const { searchParams } = new URL(req.url);
     const query = searchParams.get("q") || "";
-    const isEnabled = searchParams.get("isEnabled");
-    const page = parseInt(searchParams.get("page") || "1", 10);
-    const limit = parseInt(searchParams.get("limit") || "10", 10);
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "10", 10)));
 
     const filter: Prisma.CompanyWhereInput = {};
 
     if (query) {
       filter.name = { contains: query, mode: "insensitive" };
-    }
-
-    if (isEnabled === "true") {
-      filter.isEnabled = true;
-    } else if (isEnabled === "false") {
-      filter.isEnabled = false;
     }
 
     const skip = (page - 1) * limit;
@@ -93,21 +33,31 @@ export async function GET(req: NextRequest) {
         skip,
         take: limit,
       }),
-      prisma.company.count({
-        where: filter,
-      }),
+      prisma.company.count({ where: filter }),
     ]);
 
-    // Map database output to MongoDB-like payload
-    const companies = pgCompanies.map((c: Company) => ({
+    const companyNames = pgCompanies.map((c: any) => c.name);
+
+    const jobCountsGrouped = await prisma.job.groupBy({
+      by: ["company"],
+      where: {
+        company: { in: companyNames }
+      },
+      _count: { id: true }
+    });
+
+    const jobCountMap: Record<string, number> = {};
+    jobCountsGrouped.forEach((g: any) => {
+      jobCountMap[g.company.toLowerCase()] = g._count.id;
+    });
+
+    const companies = pgCompanies.map((c: any) => ({
       _id: c.id,
-      name: c.name,
-      careerUrl: c.careerUrl,
-      crawlStatus: c.crawlStatus,
-      lastSync: c.lastSync,
-      jobsFound: c.jobsFound,
-      lastError: c.lastError,
-      isEnabled: c.isEnabled,
+      company: c.name,
+      careersUrl: c.careerUrl,
+      atsType: "custom",
+      enabled: c.isEnabled,
+      jobsCount: jobCountMap[c.name.toLowerCase()] || 0,
       createdAt: c.createdAt,
       updatedAt: c.updatedAt
     }));
@@ -122,11 +72,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to load companies";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to load companies");
   }
 }
 
@@ -138,50 +84,57 @@ export async function PATCH(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { companyId, isEnabled, careerUrl } = body;
+    const { id, company, enabled } = body;
 
-    if (!companyId) {
-      return NextResponse.json({ success: false, error: "companyId is required" }, { status: 400 });
+    if (!id && !company) {
+      return NextResponse.json({ success: false, error: "Company ID or name is required" }, { status: 400 });
     }
 
-    const company = await prisma.company.findUnique({
-      where: { id: companyId }
-    });
+    const updateData: any = {};
+    if (enabled !== undefined) updateData.isEnabled = enabled;
 
-    if (!company) {
+    let updatedCompany;
+    if (id) {
+      updatedCompany = await prisma.company.update({
+        where: { id },
+        data: updateData
+      });
+    } else {
+      updatedCompany = await prisma.company.updateMany({
+        where: { name: { equals: company, mode: "insensitive" } },
+        data: updateData
+      });
+
+      const firstMatch = await prisma.company.findFirst({
+        where: { name: { equals: company, mode: "insensitive" } }
+      });
+      updatedCompany = firstMatch;
+    }
+
+    if (!updatedCompany) {
       return NextResponse.json({ success: false, error: "Company not found" }, { status: 404 });
     }
 
-    // Update in Postgres
-    const updatedCompany = await prisma.company.update({
-      where: { id: companyId },
-      data: {
-        isEnabled: isEnabled !== undefined ? isEnabled : undefined,
-        careerUrl: careerUrl !== undefined ? careerUrl : undefined,
-      }
+    const { logAdminAction } = await import("@/lib/audit-logger");
+    await logAdminAction({
+      req,
+      admin: {
+        _id: admin.id,
+        fullName: admin.fullName,
+        email: admin.email
+      },
+      action: "Updated Company Settings",
+      resource: "Company",
+      resourceId: updatedCompany.id,
+      details: `Updated settings for company: ${updatedCompany.name} (Enabled: ${updatedCompany.isEnabled})`,
     });
-
-    // Log admin action in Postgres using Prisma
-    try {
-      await prisma.activity.create({
-        data: {
-          userId: admin.id,
-          type: "admin_action",
-          details: `${updatedCompany.isEnabled ? "Enabled" : "Disabled"} crawls for company: '${updatedCompany.name}'`
-        }
-      });
-    } catch (pgErr) {
-      console.error("[Postgres Activity Log Error]", pgErr);
-    }
 
     const mappedCompany = {
       _id: updatedCompany.id,
-      name: updatedCompany.name,
-      careerUrl: updatedCompany.careerUrl,
-      crawlStatus: updatedCompany.crawlStatus,
-      lastSync: updatedCompany.lastSync,
-      jobsFound: updatedCompany.jobsFound,
-      lastError: updatedCompany.lastError,
+      company: updatedCompany.name,
+      careersUrl: updatedCompany.careerUrl,
+      atsType: "custom",
+      enabled: updatedCompany.isEnabled,
       isEnabled: updatedCompany.isEnabled,
       createdAt: updatedCompany.createdAt,
       updatedAt: updatedCompany.updatedAt
@@ -193,10 +146,6 @@ export async function PATCH(req: NextRequest) {
       data: mappedCompany,
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to update company";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to update company");
   }
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import { prisma } from "@/lib/prisma";
+import { requireAuthUser, safeErrorResponse } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -53,16 +53,11 @@ function mapJob(job: any, matchScore: number) {
 
 export async function GET() {
   try {
-    const user = await getOrCreateMongoUser();
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const { user, errorResponse } = await requireAuthUser();
+    if (errorResponse) return errorResponse;
 
     const pgProfile = await prisma.profile.findUnique({
-      where: { userId: user._id.toString() },
+      where: { userId: user.id },
       include: { skills: true }
     });
 
@@ -78,9 +73,20 @@ export async function GET() {
     const userSkills = (pgProfile.skills || []).map(s => s.name.toLowerCase());
     const userDomain = (pgProfile.resumeCategory || "").toLowerCase().trim();
 
-    // Fetch active jobs from Postgres
+    const { getPermittedJobSources } = await import("@/lib/subscription");
+    const { allowedSources } = await getPermittedJobSources(user.id);
+
+    const jobWhere: any = { isActive: true };
+    if (allowedSources && allowedSources.length > 0) {
+      jobWhere.OR = [
+        { sourceCategory: "company_career" },
+        { source: { in: allowedSources, mode: "insensitive" } },
+        { sourceCategory: { in: allowedSources, mode: "insensitive" } },
+      ];
+    }
+
     const allJobs = await prisma.job.findMany({
-      where: { isActive: true }
+      where: jobWhere
     });
 
     if (allJobs.length === 0) {
@@ -98,17 +104,15 @@ export async function GET() {
       
       let score = 0;
       if (jobSkills.length > 0) {
-        score = (overlap.length / jobSkills.length) * 80; // Up to 80% based on skill overlap
+        score = (overlap.length / jobSkills.length) * 80;
       }
 
-      // Add up to 20% if job category matches user domain
       if (userDomain && job.category && job.category.toLowerCase().includes(userDomain)) {
         score += 20;
       } else if (userDomain && job.title && job.title.toLowerCase().includes(userDomain)) {
         score += 15;
       }
 
-      // If user has no skills at all, base it on domain or a baseline match score
       if (userSkills.length === 0) {
         score = userDomain && job.category && job.category.toLowerCase().includes(userDomain) ? 75 : 50;
       }
@@ -121,11 +125,9 @@ export async function GET() {
       };
     });
 
-    // Filter jobs with a decent match score (>= 60%) or all if total matches is small
     const threshold = userSkills.length > 0 ? 60 : 50;
     const filteredMatches = matchedJobs.filter((jm) => jm.matchScore >= threshold);
     
-    // Sort by match score descending
     filteredMatches.sort((a, b) => b.matchScore - a.matchScore);
 
     const topMatches = filteredMatches.slice(0, 10).map(jm => mapJob(jm.job, jm.matchScore));
@@ -139,11 +141,7 @@ export async function GET() {
       averageMatchPercentage: avgScore,
       topMatchedJobs: topMatches,
     });
-  } catch (error: any) {
-    console.error("Error in GET /api/dashboard/matches:", error);
-    return NextResponse.json(
-      { success: false, error: error.message || "Failed to calculate matches" },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return safeErrorResponse(error, "Failed to calculate job matches");
   }
 }

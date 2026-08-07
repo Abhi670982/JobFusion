@@ -12,6 +12,7 @@ export const KNOWN_JOB_PORTAL_PROVIDERS = new Set([
   "internshala",
   "wellfound",
   "naukri",
+  "foundit",
   "glassdoor",
   "ziprecruiter",
   "aggregator",
@@ -83,6 +84,12 @@ export function classifySourceCategory(
   }
   if (sourceStr.includes("wellfound") || sourceStr.includes("angel")) {
     return { category: JobSourceCategory.JOB_PORTAL, provider: "WELLFOUND", isVerified: true };
+  }
+  if (sourceStr.includes("naukri")) {
+    return { category: JobSourceCategory.JOB_PORTAL, provider: "NAUKRI", isVerified: true };
+  }
+  if (sourceStr.includes("foundit") || sourceStr.includes("monster")) {
+    return { category: JobSourceCategory.JOB_PORTAL, provider: "FOUNDIT", isVerified: true };
   }
   if (sourceStr.includes("greenhouse")) {
     return { category: JobSourceCategory.COMPANY_CAREER, provider: "GREENHOUSE", isVerified: true };

@@ -11,30 +11,12 @@ export async function GET() {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
-    // 1. Requests by provider (BYOK vs JobFusion)
-    const [
-      openaiBYOK,
-      geminiBYOK,
-      claudeBYOK
-    ] = await Promise.all([
-      prisma.userApiKey.count({ where: { openaiKey: { not: null } } }),
-      prisma.userApiKey.count({ where: { geminiKey: { not: null } } }),
-      prisma.userApiKey.count({ where: { claudeKey: { not: null } } })
-    ]);
-
-    const byokUsersCount = openaiBYOK + geminiBYOK + claudeBYOK;
-
-    // Platform usage is estimated based on users who don't have BYOK but have usage
     const totalUsersWithUsage = await prisma.userUsage.groupBy({
       by: ['userId'],
     });
-    const platformUsersCount = Math.max(0, totalUsersWithUsage.length - byokUsersCount);
 
     const providerDistribution = [
-      { name: 'Gemini (Platform)', value: platformUsersCount, color: '#10b981' }, // emerald
-      { name: 'OpenAI (BYOK)', value: openaiBYOK, color: '#f43f5e' }, // rose
-      { name: 'Gemini (BYOK)', value: geminiBYOK, color: '#3b82f6' }, // blue
-      { name: 'Claude (BYOK)', value: claudeBYOK, color: '#8b5cf6' }, // violet
+      { name: 'Gemini (JobFusion Internal)', value: totalUsersWithUsage.length, color: '#10b981' },
     ];
 
     // 2. Daily AI usage chart (last 14 days)
@@ -74,11 +56,7 @@ export async function GET() {
       data: {
         providerDistribution,
         dailyUsage,
-        featureUsage: formattedFeatureUsage,
-        byokAdoption: {
-          byok: byokUsersCount,
-          platform: platformUsersCount
-        }
+        featureUsage: formattedFeatureUsage
       }
     });
   } catch (error: any) {

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
-import { logAdminAction } from "@/lib/audit-logger";
-import { Prisma, User } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import { safeErrorResponse } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
-function mapUser(u: User | null) {
+function mapUser(u: any) {
   if (!u) return null;
   return {
     _id: u.id,
@@ -23,20 +23,21 @@ function mapUser(u: User | null) {
 
 export async function GET(req: NextRequest) {
   try {
-    const admin = await verifyAdmin();
-    if (!admin) {
+    const adminUser = await verifyAdmin();
+    if (!adminUser) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
     const { searchParams } = new URL(req.url);
-    const query = searchParams.get("q") || "";
+    const search = searchParams.get("search");
 
     const andConditions: Prisma.UserWhereInput[] = [{ role: "admin" }];
-    if (query) {
+
+    if (search) {
       andConditions.push({
         OR: [
-          { fullName: { contains: query, mode: "insensitive" } },
-          { email: { contains: query, mode: "insensitive" } },
+          { fullName: { contains: search, mode: "insensitive" } },
+          { email: { contains: search, mode: "insensitive" } }
         ]
       });
     }
@@ -48,18 +49,14 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ success: true, data: pgAdmins.map(mapUser) });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to load admins";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to load admins");
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const admin = await verifyAdmin();
-    if (!admin) {
+    const adminUser = await verifyAdmin();
+    if (!adminUser) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
@@ -67,76 +64,61 @@ export async function POST(req: NextRequest) {
     const { email } = body;
 
     if (!email) {
-      return NextResponse.json({ success: false, error: "Email is required." }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Email is required" }, { status: 400 });
     }
 
-    const emailNormalized = email.trim().toLowerCase();
+    const cleanEmail = email.trim().toLowerCase();
 
-    // Verify user exists in PostgreSQL
     const targetUser = await prisma.user.findFirst({
-      where: { email: { equals: emailNormalized, mode: "insensitive" } }
+      where: { email: { equals: cleanEmail, mode: "insensitive" } }
     });
 
     if (!targetUser) {
-      return NextResponse.json({ success: false, error: "User account does not exist in JobFusion." }, { status: 404 });
+      return NextResponse.json({
+        success: false,
+        error: "User with this email was not found. The user must register for an account on JobFusion first before they can be promoted to admin."
+      }, { status: 440 });
     }
 
-    // Verify user is not suspended
-    if (targetUser.status === "suspended") {
-      return NextResponse.json({ success: false, error: "User account is suspended and cannot be promoted." }, { status: 400 });
-    }
-
-    // Verify user is not already an admin
     if (targetUser.role === "admin") {
-      return NextResponse.json({ success: false, error: "User is already an admin." }, { status: 400 });
+      return NextResponse.json({ success: false, error: "This user is already an administrator." }, { status: 400 });
     }
 
-    // Promotion logic in Postgres
     const updatedUser = await prisma.user.update({
       where: { id: targetUser.id },
       data: { role: "admin" }
     });
 
-    // Add email to Settings allowedAdminEmails list in Postgres
-    let globalSettings = await prisma.settings.findUnique({
-      where: { settingsId: "global" }
-    });
-
-    if (!globalSettings) {
-      globalSettings = await prisma.settings.create({
-        data: { settingsId: "global", allowedAdminEmails: [] }
-      });
+    const globalSettings = await prisma.settings.findUnique({ where: { settingsId: "global" } });
+    if (globalSettings) {
+      const currentList = (globalSettings.allowedAdminEmails as string[]) || [];
+      if (!currentList.map(e => e.toLowerCase()).includes(cleanEmail)) {
+        await prisma.settings.update({
+          where: { settingsId: "global" },
+          data: { allowedAdminEmails: [...currentList, cleanEmail] }
+        });
+      }
     }
 
-    const currentEmails = (globalSettings.allowedAdminEmails as string[]) || [];
-    if (!currentEmails.map(e => e.toLowerCase()).includes(emailNormalized)) {
-      currentEmails.push(emailNormalized);
-      await prisma.settings.update({
-        where: { settingsId: "global" },
-        data: { allowedAdminEmails: currentEmails }
-      });
-    }
-
-    // Log the action in Activity Logs
+    const { logAdminAction } = await import("@/lib/audit-logger");
     await logAdminAction({
       req,
       admin: {
-        _id: admin.id,
-        fullName: admin.fullName,
-        email: admin.email
+        _id: adminUser.id,
+        fullName: adminUser.fullName,
+        email: adminUser.email
       },
-      action: "Added Admin",
-      resource: "Admin",
-      resourceId: targetUser.id,
-      details: `Promoted user ${targetUser.fullName} (${targetUser.email}) to admin role`,
+      action: "Promoted Admin",
+      resource: "User",
+      resourceId: updatedUser.id,
+      details: `Promoted user: ${updatedUser.fullName} (${updatedUser.email}) to Administrator`,
     });
 
-    // Generate an Admin Notification in Postgres
     await prisma.adminNotification.create({
       data: {
         type: "system_warning",
-        title: "New Admin Added",
-        message: `${targetUser.fullName} (${targetUser.email}) was promoted to admin by ${admin.fullName}`,
+        title: "New Admin Promoted",
+        message: `${adminUser.fullName} promoted ${updatedUser.fullName} (${updatedUser.email}) to Administrator.`,
         isRead: false,
         timestamp: new Date()
       }
@@ -148,10 +130,6 @@ export async function POST(req: NextRequest) {
       data: mapUser(updatedUser),
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Failed to promote admin";
-    return NextResponse.json(
-      { success: false, error: errorMessage },
-      { status: 500 }
-    );
+    return safeErrorResponse(error, "Failed to promote admin");
   }
 }

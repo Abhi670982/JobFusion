@@ -1,22 +1,16 @@
 import { NextResponse } from "next/server";
-import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import { prisma } from "@/lib/prisma";
+import { requireAuthUser, safeErrorResponse } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const user = await getOrCreateMongoUser();
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const { user, errorResponse } = await requireAuthUser();
+    if (errorResponse) return errorResponse;
 
-    const userIdStr = user._id.toString();
+    const userIdStr = user.id;
 
-    // Query stats in PostgreSQL
     const [profile, savedCount, visitedJobs, appliedCountResult] = await Promise.all([
       prisma.profile.findUnique({
         where: { userId: userIdStr },
@@ -42,7 +36,6 @@ export async function GET() {
     const visitedCount = visitedJobs.length;
     const appliedCount = appliedCountResult || 0;
 
-    // Map profile back to MongoDB casing
     const mappedProfile = profile ? {
       _id: profile.id,
       userId: profile.userId,
@@ -84,11 +77,7 @@ export async function GET() {
         appliedCount,
       },
     });
-  } catch (error: any) {
-    console.error("Error in GET /api/dashboard:", error);
-    return NextResponse.json(
-      { success: false, error: error.message || "Failed to load dashboard" },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return safeErrorResponse(error, "Failed to load dashboard data");
   }
 }

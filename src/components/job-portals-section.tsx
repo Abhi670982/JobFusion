@@ -85,6 +85,24 @@ const PORTAL_TABS: PortalTab[] = [
     activeText: 'text-teal-600 dark:text-teal-400',
     gradient: 'from-teal-500 to-emerald-500',
   },
+  {
+    id: 'naukri',
+    label: 'Naukri',
+    dotColor: 'bg-emerald-500',
+    activeBg: 'bg-emerald-500/10',
+    activeBorder: 'border-emerald-500/40',
+    activeText: 'text-emerald-600 dark:text-emerald-400',
+    gradient: 'from-emerald-500 to-green-600',
+  },
+  {
+    id: 'foundit',
+    label: 'Foundit',
+    dotColor: 'bg-rose-500',
+    activeBg: 'bg-rose-500/10',
+    activeBorder: 'border-rose-500/40',
+    activeText: 'text-rose-600 dark:text-rose-400',
+    gradient: 'from-rose-500 to-pink-600',
+  },
 ];
 
 const JOB_TYPES = [
@@ -332,7 +350,7 @@ export default function JobPortalsSection({
             // Stale cache: display immediately but refresh in background
             setPortalJobs(prev => ({ ...prev, [portal]: jobs || [] }));
           }
-        } catch (_) {
+        } catch {
           // ignore parsing errors
         }
       }
@@ -410,7 +428,7 @@ export default function JobPortalsSection({
     forceRefresh = false
   ) => {
     const portalsToCrawl = targetPortal === 'all'
-      ? ['linkedin', 'internshala', 'wellfound', 'indeed']
+      ? ['linkedin', 'internshala', 'wellfound', 'indeed', 'naukri', 'foundit']
       : [targetPortal];
 
     if (forceRefresh) {
@@ -438,8 +456,9 @@ export default function JobPortalsSection({
 
   // Clean up active abort controllers on unmount
   useEffect(() => {
+    const currentControllers = abortControllersRef.current;
     return () => {
-      Object.values(abortControllersRef.current).forEach(ctrl => ctrl?.abort());
+      Object.values(currentControllers).forEach(ctrl => ctrl?.abort());
     };
   }, []);
 

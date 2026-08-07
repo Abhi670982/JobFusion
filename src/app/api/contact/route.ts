@@ -2,15 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendContactNotification } from "@/lib/email";
 import sanitizeHtml from "sanitize-html";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { safeErrorResponse } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
+    // Rate limit: 5 requests per 15 minutes per IP
+    const rateLimitError = checkRateLimit(req, { limit: 5, windowMs: 15 * 60 * 1000 });
+    if (rateLimitError) return rateLimitError;
+
     const body = await req.json();
     const { name, email, subject, message } = body;
 
-    // Validate inputs exist
     if (!name || !email || !subject || !message) {
       return NextResponse.json(
         { success: false, error: "All fields are required." },
@@ -18,13 +23,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Input cleaning/validation
     const trimmedName = name.trim();
     const trimmedEmail = email.trim().toLowerCase();
     const trimmedSubject = subject.trim();
     const trimmedMessage = message.trim();
 
-    // Check sizes & empty
     if (!trimmedName || !trimmedEmail || !trimmedSubject || !trimmedMessage) {
       return NextResponse.json(
         { success: false, error: "Fields cannot be blank." },
@@ -61,12 +64,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Sanitization
     const cleanName = sanitizeHtml(trimmedName, { allowedTags: [], allowedAttributes: {} });
     const cleanSubject = sanitizeHtml(trimmedSubject, { allowedTags: [], allowedAttributes: {} });
     const cleanMessage = sanitizeHtml(trimmedMessage, { allowedTags: [], allowedAttributes: {} });
 
-    // Store in PostgreSQL
     const newMessage = await prisma.contactMessage.create({
       data: {
         name: cleanName,
@@ -77,7 +78,6 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    // Retrieve configured support email from Postgres
     let supportEmail = "akchauhan1172@gmail.com";
     try {
       const globalSettings = await prisma.settings.findUnique({
@@ -90,7 +90,6 @@ export async function POST(req: NextRequest) {
       console.error("[Contact API] Error reading support email from settings:", dbErr);
     }
 
-    // Trigger email sending
     try {
       await sendContactNotification({
         to: supportEmail,
@@ -108,11 +107,7 @@ export async function POST(req: NextRequest) {
       message: "Your message has been sent successfully. We'll get back to you as soon as possible.",
       data: { id: newMessage.id },
     });
-  } catch (error: any) {
-    console.error("[Contact API] Internal Server Error:", error);
-    return NextResponse.json(
-      { success: false, error: "Something went wrong. Please try again later." },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return safeErrorResponse(error, "Something went wrong. Please try again later.");
   }
 }

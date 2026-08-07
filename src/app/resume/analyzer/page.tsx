@@ -18,7 +18,6 @@ type PageState = 'loading' | 'no-resume' | 'no-access' | 'idle' | 'analyzing' | 
 
 interface StatusData {
   isPro: boolean;
-  hasBYOK: boolean;
   hasResume: boolean;
   hasAccess: boolean;
   resumeName: string | null;
@@ -109,11 +108,8 @@ function ReadyToAnalyzeState({
       </div>
 
       <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border bg-muted/50 text-xs font-semibold text-muted-foreground">
-        {status.isPro ? (
-          <><span className="w-2 h-2 rounded-full bg-emerald-500" />Powered by JobFusion AI (Pro)</>
-        ) : (
-          <><span className="w-2 h-2 rounded-full bg-blue-500" />Using Your API Key (BYOK)</>
-        )}
+        <span className="w-2 h-2 rounded-full bg-emerald-500" />
+        Powered by JobFusion AI
       </div>
 
       <Button
@@ -167,7 +163,7 @@ export default function ResumeAnalyzerPage() {
       const data = await res.json();
 
       if (!data.success) {
-        if (data.code === 'REQUIRES_PREMIUM_OR_BYOK') {
+        if (data.code === 'REQUIRES_PREMIUM_OR_BYOK' || data.code === 'AI_LIMIT_REACHED') {
           setPageState('no-access');
           setPremiumModalOpen(true);
           return;

@@ -1,23 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import { getAIConfig } from "@/lib/ai-provider";
 import { generateAISimpleText } from "@/lib/ai-client";
+import { requireAuthUser, safeErrorResponse } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
-/**
- * POST /api/resume-analyzer/action
- * Body: { actionType: string, originalText: string, context?: string }
- *
- * Stateless AI playground actions to instantly rewrite summaries,
- * generate metric-focused STAR bullet points, or list action verbs.
- */
 export async function POST(req: NextRequest) {
   try {
-    const mongoUser = await getOrCreateMongoUser();
-    if (!mongoUser) {
-      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-    }
+    const { user: mongoUser, errorResponse } = await requireAuthUser();
+    if (errorResponse) return errorResponse;
 
     const body = await req.json().catch(() => ({}));
     const { actionType, originalText, context = "" } = body;
@@ -26,7 +17,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Missing required parameters." }, { status: 400 });
     }
 
-    // Resolve AI configuration (Pro subscription or BYOK required)
     const rawConfig = await getAIConfig(
       mongoUser.id,
       "resume-analyzer",
@@ -36,7 +26,7 @@ export async function POST(req: NextRequest) {
 
     if (!rawConfig.allowed) {
       return NextResponse.json(
-        { success: false, code: "REQUIRES_PREMIUM_OR_BYOK", error: rawConfig.error },
+        { success: false, code: "AI_LIMIT_REACHED", error: rawConfig.error },
         { status: 403 }
       );
     }
@@ -85,8 +75,6 @@ Return ONLY a comma-separated list of the 8 action verbs (e.g., "Spearheaded, Ar
 
     return NextResponse.json({ success: true, data: result });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Unexpected error";
-    console.error("[Analyzer Action API]", message);
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    return safeErrorResponse(err, "Failed to process analyzer action");
   }
 }

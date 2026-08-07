@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { safeErrorResponse } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Path required" }, { status: 400 });
     }
 
-    // Ignore API routes, static files, and admin pages
     if (
       path.startsWith("/api/") ||
       path.startsWith("/_next/") ||
@@ -28,7 +28,6 @@ export async function POST(req: NextRequest) {
       req.headers.get("x-real-ip") ||
       null;
 
-    // Write to PostgreSQL
     try {
       await prisma.pageView.create({
         data: {
@@ -43,8 +42,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    // Fail silently — don't break the user experience for tracking errors
-    return NextResponse.json({ success: false, error: error.message });
+  } catch (error: unknown) {
+    return safeErrorResponse(error, "Failed to track page visit");
   }
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Sparkles, Check, Key, Brain } from 'lucide-react';
+import { X, Sparkles, Check, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -64,7 +64,7 @@ export function PremiumAccessModal({ open, onClose }: PremiumAccessModalProps) {
                   </motion.div>
                   <h2 className="text-xl font-bold mb-1">Resume Analysis Limit Reached</h2>
                   <p className="text-white/85 text-xs max-w-sm mx-auto leading-relaxed">
-                    Free users can analyze up to 2 resumes per day. Upgrade to Premium for unlimited AI Resume Analysis OR Connect your own API using BYOK.
+                    Free users can analyze up to 2 resumes per day. Upgrade to Premium for unlimited AI Resume Analysis.
                   </p>
                 </div>
               </div>
@@ -118,10 +118,6 @@ export function PremiumAccessModal({ open, onClose }: PremiumAccessModalProps) {
                         <Check className="w-3 h-3 text-primary flex-shrink-0" />
                         All 6+ Job Sources
                       </li>
-                      <li className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-                        <Check className="w-3 h-3 text-primary flex-shrink-0" />
-                        BYOK Integration Option
-                      </li>
                     </ul>
                   </div>
                 </div>
@@ -145,15 +141,6 @@ export function PremiumAccessModal({ open, onClose }: PremiumAccessModalProps) {
                     <Sparkles className="w-4 h-4 mr-2" />
                     Upgrade Now
                   </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => { onClose(); router.push('/settings/ai-providers'); }}
-                    className="w-full rounded-xl h-11"
-                    id="analyzer-byok-cta"
-                  >
-                    <Key className="w-4 h-4 mr-2" />
-                    Use My API
-                  </Button>
                 </div>
               </div>
             </motion.div>
@@ -163,3 +150,4 @@ export function PremiumAccessModal({ open, onClose }: PremiumAccessModalProps) {
     </AnimatePresence>
   );
 }
+

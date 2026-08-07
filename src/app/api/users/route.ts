@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import { prisma } from "@/lib/prisma";
+import { requireAuthUser, safeErrorResponse } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
@@ -21,43 +21,26 @@ function mapUser(u: any) {
 
 export async function GET() {
   try {
-    const mongoUser = await getOrCreateMongoUser();
-    if (!mongoUser) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const { user: mongoUser, errorResponse } = await requireAuthUser();
+    if (errorResponse) return errorResponse;
 
     const pgUser = await prisma.user.findUnique({
-      where: { id: mongoUser._id.toString() }
+      where: { id: mongoUser.id }
     });
 
     return NextResponse.json({
       success: true,
-      user: mapUser(pgUser),
+      user: mapUser(pgUser || mongoUser),
     });
-  } catch (error: any) {
-    console.error("Error in GET /api/users:", error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message,
-      },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return safeErrorResponse(error, "Failed to fetch user details");
   }
 }
 
 export async function PUT(req: NextRequest) {
   try {
-    const mongoUser = await getOrCreateMongoUser();
-    if (!mongoUser) {
-      return NextResponse.json(
-        { success: false, error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const { user: mongoUser, errorResponse } = await requireAuthUser();
+    if (errorResponse) return errorResponse;
 
     const body = await req.json();
     const { fullName, email, profileImage } = body;
@@ -67,9 +50,8 @@ export async function PUT(req: NextRequest) {
     if (email !== undefined) updateData.email = email;
     if (profileImage !== undefined) updateData.profileImage = profileImage;
 
-    // Update in PostgreSQL
     const updatedPgUser = await prisma.user.update({
-      where: { id: mongoUser._id.toString() },
+      where: { id: mongoUser.id },
       data: updateData
     });
 
@@ -77,13 +59,7 @@ export async function PUT(req: NextRequest) {
       success: true,
       user: mapUser(updatedPgUser),
     });
-  } catch (error: any) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message,
-      },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return safeErrorResponse(error, "Failed to update user details");
   }
 }

@@ -1,21 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import { canApplyToJobPortal } from "@/lib/subscription";
 import { prisma } from "@/lib/prisma";
+import { requireAuthUser, safeErrorResponse } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
 /**
  * POST /api/jobs/apply-gate
- * Body: { jobId?: string, source?: string, sourceCategory?: string }
- *
  * Enforces strict subscription-based access gating for Premium job portals.
- * BYOK has NO role here.
  */
 export async function POST(req: NextRequest) {
   try {
-    const user = await getOrCreateMongoUser();
-    const userId = user?.id;
+    const { user, errorResponse } = await requireAuthUser();
+    if (errorResponse) return errorResponse;
+
+    const userId = user.id;
 
     const body = await req.json().catch(() => ({}));
     const { jobId, source: bodySource, sourceCategory: bodyCat } = body;
@@ -49,11 +48,7 @@ export async function POST(req: NextRequest) {
       allowed: true,
       applyUrl: targetJob?.applyUrl || null,
     });
-  } catch (error: any) {
-    console.error("Error in POST /api/jobs/apply-gate:", error);
-    return NextResponse.json(
-      { success: false, error: error.message || "Failed to validate portal access" },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return safeErrorResponse(error, "Failed to validate portal access");
   }
 }

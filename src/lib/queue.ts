@@ -6,8 +6,6 @@ import { runSourceSync } from "./pipeline";
 import { JobSource } from "./adapters/types";
 import { classifySourceCategory } from "./source-category";
 
-const REDIS_URL = process.env.REDIS_URL || "";
-
 let redisClient: IORedis | null = null;
 let crawlQueue: Queue | null = null;
 
@@ -199,12 +197,17 @@ export async function executeBackgroundCrawl(params: EnqueueCrawlParams): Promis
     if (portalSource === "aggregator") {
       await runSourceSync("aggregator", [keyword]);
     } else {
-      await crawlPortalJobs({
+      const crawlResult = await crawlPortalJobs({
         portal: portalSource === "all" ? "all" : (portalSource as any),
         keyword,
         location: location || "India",
         page: 1,
+        maxPages: 10,
       });
+
+      const { persistPortalJobs } = await import("./portal-jobs-persist");
+      const persistMetrics = await persistPortalJobs(crawlResult.jobs, params.userId);
+      console.log(`[Worker Sync Complete] Crawled ${crawlResult.jobs.length} jobs. Persisted: ${persistMetrics.jobsInserted} inserted, ${persistMetrics.jobsUpdated} updated, ${persistMetrics.duplicatesSkipped} duplicates skipped.`);
     }
   } else {
     throw new Error(`[Worker Validation Error] Invalid sourceCategory "${category}". Must be COMPANY_CAREER or JOB_PORTAL.`);

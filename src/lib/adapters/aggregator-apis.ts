@@ -16,16 +16,40 @@ export interface RawAggregatorJob {
   isRemote?: boolean;
 }
 
+// Helper for fetching with exponential backoff & HTTP 429 rate limit handling
+async function fetchWithRetry(url: string, init?: RequestInit, maxRetries = 3): Promise<Response> {
+  let attempt = 0;
+  while (true) {
+    attempt++;
+    try {
+      const res = await fetch(url, init);
+      if (res.status === 429 && attempt <= maxRetries) {
+        const backoffMs = 2000 * Math.pow(2, attempt - 1);
+        console.warn(`[Aggregator API 429 Rate Limit] ${url} returned 429. Retrying in ${backoffMs}ms (attempt ${attempt}/${maxRetries})...`);
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        continue;
+      }
+      return res;
+    } catch (err: any) {
+      if (attempt <= maxRetries) {
+        const backoffMs = 1500 * Math.pow(2, attempt - 1);
+        console.warn(`[Aggregator API Network Retry] ${url} error (${err.message}). Retrying in ${backoffMs}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
 // Helper to check if a text contains any of the search keywords
 function matchesKeyword(text: string, keyword: string): boolean {
   if (!text) return false;
   const kw = keyword.toLowerCase().trim();
   const lowerText = text.toLowerCase();
   
-  // Direct match
   if (lowerText.includes(kw)) return true;
   
-  // Check common parts (e.g. "software engineer" vs "software developer")
   const parts = kw.split(/\s+/).filter(p => p.length > 2);
   if (parts.length > 0) {
     return parts.every(p => lowerText.includes(p));
@@ -37,7 +61,7 @@ function matchesKeyword(text: string, keyword: string): boolean {
 export async function fetchHimalayasJobs(keyword: string): Promise<RawAggregatorJob[]> {
   try {
     const url = "https://himalayas.app/jobs/api?limit=50";
-    const res = await fetch(url, {
+    const res = await fetchWithRetry(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
       }
@@ -46,7 +70,6 @@ export async function fetchHimalayasJobs(keyword: string): Promise<RawAggregator
     const data = await res.json();
     if (!data || !Array.isArray(data.jobs)) return [];
     
-    // Filter client-side
     const filtered = data.jobs.filter((j: any) => 
       matchesKeyword(j.title, keyword) || 
       matchesKeyword(j.description, keyword)
@@ -80,11 +103,11 @@ export async function fetchHimalayasJobs(keyword: string): Promise<RawAggregator
   }
 }
 
-// Arbeitnow API
+// Arbeitnow API with 429 Rate Limiting & Retries
 export async function fetchArbeitnowJobs(keyword: string): Promise<RawAggregatorJob[]> {
   try {
     const url = "https://www.arbeitnow.com/api/job-board-api";
-    const res = await fetch(url, {
+    const res = await fetchWithRetry(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
       }
@@ -93,7 +116,6 @@ export async function fetchArbeitnowJobs(keyword: string): Promise<RawAggregator
     const data = await res.json();
     if (!data || !Array.isArray(data.data)) return [];
     
-    // Filter client-side
     const filtered = data.data.filter((j: any) => 
       matchesKeyword(j.title, keyword) || 
       matchesKeyword(j.description, keyword)
@@ -112,7 +134,7 @@ export async function fetchArbeitnowJobs(keyword: string): Promise<RawAggregator
       isRemote: job.remote || false,
     }));
   } catch (err: any) {
-    console.error("[Aggregator API] Arbeitnow fetch failed:", err.message);
+    console.error("[Aggregator API] Arbeitnow fetch failed after retries:", err.message);
     return [];
   }
 }
@@ -121,7 +143,7 @@ export async function fetchArbeitnowJobs(keyword: string): Promise<RawAggregator
 export async function fetchJobicyJobs(keyword: string): Promise<RawAggregatorJob[]> {
   try {
     const url = `https://jobicy.com/api/v2/remote-jobs?count=30&tag=${encodeURIComponent(keyword)}`;
-    const res = await fetch(url, {
+    const res = await fetchWithRetry(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
       }
@@ -153,7 +175,7 @@ export async function fetchJobicyJobs(keyword: string): Promise<RawAggregatorJob
 export async function fetchRemotiveJobs(keyword: string): Promise<RawAggregatorJob[]> {
   try {
     const url = `https://remotive.com/api/remote-jobs?category=software-dev&search=${encodeURIComponent(keyword)}&limit=30`;
-    const res = await fetch(url, {
+    const res = await fetchWithRetry(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
       }
@@ -163,7 +185,6 @@ export async function fetchRemotiveJobs(keyword: string): Promise<RawAggregatorJ
     if (!data || !Array.isArray(data.jobs)) return [];
     
     return data.jobs.map((job: any) => {
-      // Parse salary if possible (e.g. "$120k - $150k")
       let salaryMin: number | undefined;
       let salaryMax: number | undefined;
       const comp = job.salary || "";

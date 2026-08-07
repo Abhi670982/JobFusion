@@ -1,25 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getOrCreateMongoUser } from "@/lib/auth-sync";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { usageService } from "@/lib/usageService";
+import { requireAuthUser, safeErrorResponse } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
-    const mongoUser = await getOrCreateMongoUser();
-    if (!mongoUser) {
-      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-    }
+    const { user: mongoUser, errorResponse } = await requireAuthUser();
+    if (errorResponse) return errorResponse;
 
-    const { searchParams } = new URL(req.url);
-    const userId = searchParams.get("userId");
-
-    if (userId !== mongoUser._id.toString()) {
-      return NextResponse.json({ success: false, error: "Forbidden" }, { status: 403 });
-    }
-
-    // Get today's usage for all features
     const todayStr = usageService.getTodayDateString();
     const todayUsages = await prisma.userUsage.findMany({
       where: {
@@ -28,16 +18,13 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    // Calculate total usage today
     const totalUsage = todayUsages.reduce((sum: number, usage: any) => sum + usage.usageCount, 0);
 
-    // Build feature usage breakdown
     const featureUsage: Record<string, number> = {};
     todayUsages.forEach((usage: any) => {
       featureUsage[usage.featureName] = usage.usageCount;
     });
 
-    // Get subscription info
     const subscription = await prisma.subscription.findUnique({
       where: { userId: mongoUser.id },
       include: { plan: true },
@@ -56,11 +43,7 @@ export async function GET(req: NextRequest) {
         usageDate: todayStr,
       },
     });
-  } catch (error: any) {
-    console.error("[User Usage GET] Error:", error);
-    return NextResponse.json(
-      { success: false, error: error.message || "Failed to fetch usage data" },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return safeErrorResponse(error, "Failed to fetch usage data");
   }
 }
