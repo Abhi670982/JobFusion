@@ -31,14 +31,17 @@ export default function CustomSignInPage() {
   const [dynamicRedirect, setDynamicRedirect] = useState(redirectUrl);
 
   useEffect(() => {
-    const guestSearchStr = sessionStorage.getItem('guestSearch');
-    if (guestSearchStr) {
-      try {
-        const { role, location } = JSON.parse(guestSearchStr);
-        setDynamicRedirect(`/jobs?q=${encodeURIComponent(role || '')}&location=${encodeURIComponent(location || '')}`);
-      } catch {}
+    const explicitRedirect = searchParams.get('redirect_url');
+    if (!explicitRedirect) {
+      const guestSearchStr = sessionStorage.getItem('guestSearch');
+      if (guestSearchStr) {
+        try {
+          const { role, location } = JSON.parse(guestSearchStr);
+          setDynamicRedirect(`/jobs?q=${encodeURIComponent(role || '')}&location=${encodeURIComponent(location || '')}`);
+        } catch {}
+      }
     }
-  }, []);
+  }, [searchParams]);
 
   const [show, setShow] = useState(false);
   const [email, setEmail] = useState('');
@@ -221,12 +224,12 @@ export default function CustomSignInPage() {
         redirectCallbackUrl: '/sso-callback',
       });
       if (ssoErr) {
-        setError(ssoErr.message || 'OAuth error occurred.');
+        setError(mapSignInError(ssoErr));
         setLoading(false);
       }
     } catch (err: any) {
       console.error('Google sign-in error:', err);
-      setError(err.message || 'OAuth error occurred.');
+      setError(mapSignInError(err));
       setLoading(false);
     }
   };
@@ -255,6 +258,18 @@ export default function CustomSignInPage() {
     }
 
     if (hasValidationError) {
+      return;
+    }
+
+    const emailVal = validateEmailInput(email, true);
+    if (!emailVal.isValid) {
+      setError(emailVal.error || 'The email or password you entered is incorrect.');
+      return;
+    }
+
+    const passVal = validatePasswordInput(password, true);
+    if (!passVal.isValid) {
+      setError(passVal.error || 'The email or password you entered is incorrect.');
       return;
     }
 
@@ -553,6 +568,7 @@ export default function CustomSignInPage() {
                       id="email"
                       type="email"
                       placeholder="you@example.com"
+                      maxLength={254}
                       value={email}
                       onChange={(e) => {
                         setEmail(e.target.value);
@@ -580,6 +596,7 @@ export default function CustomSignInPage() {
                       id="password"
                       type={show ? 'text' : 'password'}
                       placeholder="••••••••"
+                      maxLength={128}
                       value={password}
                       onChange={(e) => {
                         setPassword(e.target.value);

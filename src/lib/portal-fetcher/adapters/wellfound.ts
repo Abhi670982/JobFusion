@@ -2,6 +2,7 @@ import { BasePortalAdapter, PortalFetchQuery, PortalUnifiedJob } from "./base-ad
 import { crawlWellfoundViaApify } from "@/lib/apify-runner";
 import { extractSkills } from "@/lib/skills-extractor";
 import { fetchHimalayasJobs, fetchArbeitnowJobs } from "@/lib/adapters/aggregator-apis";
+import { sanitizeJobDescription, validateExternalUrl } from "../sanitizers/sanitizer";
 import crypto from "crypto";
 
 export class WellfoundPortalAdapter extends BasePortalAdapter {
@@ -113,11 +114,13 @@ export class WellfoundPortalAdapter extends BasePortalAdapter {
         location.toLowerCase().includes("work from home") ||
         location.toLowerCase().includes("wfh");
 
+      const applyUrl = validateExternalUrl(raw.applyUrl) || `https://wellfound.com`;
+
       return {
         sourceId: raw.sourceId || dedupeHash.substring(0, 12),
         source: this.source,
-        sourceUrl: raw.applyUrl || `https://wellfound.com`,
-        applyUrl: raw.applyUrl || null,
+        sourceUrl: applyUrl,
+        applyUrl,
         title,
         company,
         logo: null,
@@ -128,7 +131,7 @@ export class WellfoundPortalAdapter extends BasePortalAdapter {
         salary: raw.salary || "Not disclosed",
         salaryMin: null,
         salaryMax: null,
-        description: raw.description || "",
+        description: sanitizeJobDescription(raw.description || ""),
         postedDate: null,
         skills: raw.description ? extractSkills(raw.description).map((s) => s.name.toLowerCase()) : [],
       };
@@ -156,7 +159,7 @@ export class WellfoundPortalAdapter extends BasePortalAdapter {
           ? `₹${Math.round(raw.salaryMin / 100000)}L – ₹${Math.round(raw.salaryMax / 100000)}L`
           : "Not disclosed";
 
-      const targetUrl = raw.url || raw.applyUrl || `https://wellfound.com/jobs?keyword=${encodeURIComponent(title)}`;
+      const targetUrl = validateExternalUrl(raw.url || raw.applyUrl) || `https://wellfound.com`;
 
       return {
         sourceId: raw.id || dedupeHash.substring(0, 12),
@@ -165,7 +168,7 @@ export class WellfoundPortalAdapter extends BasePortalAdapter {
         applyUrl: targetUrl,
         title,
         company,
-        logo: raw.companyLogoUrl || null,
+        logo: validateExternalUrl(raw.companyLogoUrl) || null,
         location,
         isRemote,
         employmentType,
@@ -197,11 +200,11 @@ export class WellfoundPortalAdapter extends BasePortalAdapter {
     return {
       sourceId: raw.id || dedupeHash.substring(0, 12),
       source: this.source,
-      sourceUrl: raw.applyUrl || `https://wellfound.com/jobs/${raw.id}`,
-      applyUrl: raw.applyUrl || `https://wellfound.com/jobs/${raw.id}`,
+      sourceUrl: applyUrl,
+      applyUrl,
       title,
       company,
-      logo: raw.company?.logoUrl || null,
+      logo: validateExternalUrl(raw.company?.logoUrl) || null,
       location,
       isRemote,
       employmentType: "full-time",

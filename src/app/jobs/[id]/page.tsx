@@ -37,6 +37,8 @@ import {
   DbProfile
 } from '@/lib/api-helper';
 
+import { useAuthGuard } from '@/hooks/use-auth-guard';
+
 function JobDetailSkeleton() {
   return (
     <div className="space-y-6">
@@ -91,6 +93,7 @@ function getPortalSearchUrl(source: string, title: string, company: string): str
 export default function JobDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const { requireAuth } = useAuthGuard();
   const jobId = params.id as string;
 
   const [loading, setLoading] = useState(true);
@@ -173,25 +176,27 @@ export default function JobDetailPage() {
     loadData();
   }, [jobId]);
 
-  const handleSaveToggle = async () => {
-    if (!user || !job || actionLoading) return;
-    setActionLoading(true);
+  const handleSaveToggle = () => {
+    requireAuth(async () => {
+      if (!user || !job || actionLoading) return;
+      setActionLoading(true);
 
-    const nextSaved = !saved;
-    setSaved(nextSaved); // Optimistic UI
+      const nextSaved = !saved;
+      setSaved(nextSaved); // Optimistic UI
 
-    try {
-      if (nextSaved) {
-        await saveJob(user._id, job._id);
-      } else {
-        await unsaveJob(user._id, job._id);
+      try {
+        if (nextSaved) {
+          await saveJob(user._id, job._id);
+        } else {
+          await unsaveJob(user._id, job._id);
+        }
+      } catch (err) {
+        console.error("Failed to toggle saved job:", err);
+        setSaved(saved); // Revert
+      } finally {
+        setActionLoading(false);
       }
-    } catch (err) {
-      console.error("Failed to toggle saved job:", err);
-      setSaved(saved); // Revert
-    } finally {
-      setActionLoading(false);
-    }
+    });
   };
 
   const handleResumeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -417,15 +422,13 @@ export default function JobDetailPage() {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    {user && (
-                      <button
-                        onClick={handleSaveToggle}
-                        disabled={actionLoading}
-                        className={cn('p-2 rounded-xl transition-all', saved ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:bg-accent')}
-                      >
-                        {saved ? <BookmarkCheck className="w-5 h-5" /> : <Bookmark className="w-5 h-5" />}
-                      </button>
-                    )}
+                    <button
+                      onClick={handleSaveToggle}
+                      disabled={actionLoading}
+                      className={cn('p-2 rounded-xl transition-all', saved ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:bg-accent')}
+                    >
+                      {saved ? <BookmarkCheck className="w-5 h-5" /> : <Bookmark className="w-5 h-5" />}
+                    </button>
                     <button className="p-2 rounded-xl text-muted-foreground hover:bg-accent transition-all">
                       <Share2 className="w-5 h-5" />
                     </button>

@@ -11,6 +11,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { mapSignUpError } from '@/lib/auth-errors';
+import {
+  validateFirstName,
+  validateLastName,
+  validateEmailInput,
+  validatePasswordInput,
+} from '@/lib/auth-validation';
 
 const perks = [
   'Access aggregated job opportunities',
@@ -137,7 +144,7 @@ export default function CustomSignUpPage() {
       });
 
       if (signUpErr) {
-        setError(signUpErr.message || 'Failed to create account. Please check your inputs.');
+        setError(mapSignUpError(signUpErr));
         setLoading(false);
         return;
       }
@@ -157,17 +164,17 @@ export default function CustomSignUpPage() {
         // Send email code verification
         const { error: sendErr } = await signUp.verifications.sendEmailCode();
         if (sendErr) {
-          setError(sendErr.message || 'Failed to send verification code.');
+          setError(mapSignUpError(sendErr));
           setLoading(false);
           return;
         }
         setVerifying(true);
       } else {
-        setError(`Sign up failed: status is ${signUp.status}`);
+        setError('Something went wrong. Please try again later.');
       }
     } catch (err: any) {
       console.error('Email sign-up error:', err);
-      setError(err.message || 'Failed to create account.');
+      setError(mapSignUpError(err));
     } finally {
       setLoading(false);
     }
@@ -187,7 +194,7 @@ export default function CustomSignUpPage() {
       });
 
       if (verifyErr) {
-        setVerifyingError(verifyErr.message || 'Verification failed. Please check the code.');
+        setVerifyingError(mapSignUpError(verifyErr));
         setVerifyingLoading(false);
         return;
       }
@@ -204,11 +211,11 @@ export default function CustomSignUpPage() {
           },
         });
       } else {
-        setVerifyingError(`Verification incomplete. Status: ${signUp.status}`);
+        setVerifyingError('Something went wrong. Please try again later.');
       }
     } catch (err: any) {
       console.error('Verification error:', err);
-      setVerifyingError(err.message || 'Verification failed.');
+      setVerifyingError(mapSignUpError(err));
     } finally {
       setVerifyingLoading(false);
     }
@@ -222,13 +229,13 @@ export default function CustomSignUpPage() {
     try {
       const { error: resendErr } = await signUp.verifications.sendEmailCode();
       if (resendErr) {
-        setVerifyingError(resendErr.message || 'Failed to resend verification code.');
+        setVerifyingError(mapSignUpError(resendErr));
         return;
       }
       setResendMessage('A new verification code has been sent.');
     } catch (err: any) {
       console.error('Resend code error:', err);
-      setVerifyingError(err.message || 'Failed to resend verification code.');
+      setVerifyingError(mapSignUpError(err));
     }
   };
 
@@ -244,12 +251,12 @@ export default function CustomSignUpPage() {
         redirectCallbackUrl: '/sso-callback',
       });
       if (ssoErr) {
-        setError(ssoErr.message || 'OAuth error occurred.');
+        setError(mapSignUpError(ssoErr));
         setLoading(false);
       }
     } catch (err: any) {
       console.error('Google sign-up error:', err);
-      setError(err.message || 'OAuth error occurred.');
+      setError(mapSignUpError(err));
       setLoading(false);
     }
   };
@@ -356,6 +363,7 @@ export default function CustomSignUpPage() {
                     <Input
                       id="fname"
                       placeholder="Alex"
+                      maxLength={50}
                       value={firstName}
                       onChange={(e) => {
                         setFirstName(e.target.value);
@@ -378,6 +386,7 @@ export default function CustomSignUpPage() {
                     <Input
                       id="lname"
                       placeholder="Morgan"
+                      maxLength={50}
                       value={lastName}
                       onChange={(e) => {
                         setLastName(e.target.value);
@@ -405,6 +414,7 @@ export default function CustomSignUpPage() {
                       id="email"
                       type="email"
                       placeholder="you@example.com"
+                      maxLength={254}
                       value={email}
                       onChange={(e) => {
                         setEmail(e.target.value);
@@ -432,6 +442,7 @@ export default function CustomSignUpPage() {
                       id="password"
                       type={show ? 'text' : 'password'}
                       placeholder="Min. 8 characters"
+                      maxLength={128}
                       value={password}
                       onChange={(e) => {
                         setPassword(e.target.value);

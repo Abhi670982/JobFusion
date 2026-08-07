@@ -701,4 +701,82 @@ model ResumeAnalysis {
   @@map("resume_analyses")
 }
 
+// ============================================================
+// JOB PORTALS — Dedicated Persistent Engine (Isolated from Company Careers)
+// ============================================================
+
+enum PortalSource {
+  linkedin
+  indeed
+  internshala
+  wellfound
+}
+
+enum PortalEmploymentType {
+  full_time
+  part_time
+  contract
+  internship
+  freelance
+}
+
+enum PortalExperienceLevel {
+  entry
+  mid
+  senior
+  lead
+}
+
+model PortalJob {
+  id               String                 @id @default(uuid())
+  sourceId         String?
+  sourcePortal     PortalSource
+  sourceUrl        String?
+  applyUrl         String?
+  title            String
+  company          String
+  companyLogo      String?
+  location         String?
+  isRemote         Boolean                @default(false)
+  employmentType   PortalEmploymentType?
+  experienceLevel  PortalExperienceLevel?
+  salaryText       String?
+  salaryMin        Int?
+  salaryMax        Int?
+  description      String?
+  skills           String[]               @default([])
+  postedAt         DateTime               @default(now())
+  isDateless       Boolean                @default(false)
+  dedupeHash       String                 @unique
+  isActive         Boolean                @default(true)
+  fetchedAt        DateTime               @default(now())
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  @@index([isActive, postedAt(sort: Desc)])
+  @@index([isActive, sourcePortal, postedAt(sort: Desc)])
+  @@index([title])
+  @@index([company])
+  @@index([location])
+  @@index([skills])
+  @@map("portal_jobs")
+}
+
+model TrackedSkill {
+  id            String      @id @default(uuid())
+  name          String      @unique
+  demandCount   Int         @default(1)
+  isSeed        Boolean     @default(false)
+  lastDemandAt  DateTime    @default(now())
+  lastCrawledAt DateTime?
+  crawlStatus   CrawlStatus @default(idle)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([demandCount(sort: Desc)])
+  @@index([crawlStatus, lastCrawledAt])
+  @@map("tracked_skills")
+}
+
+
 

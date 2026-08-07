@@ -8,6 +8,7 @@ import { FounditPortalAdapter } from "./adapters/foundit";
 
 class PortalAdapterRegistry {
   private registry = new Map<JobPortalSource, () => BasePortalAdapter>();
+  private healthMap = new Map<JobPortalSource, AdapterHealthStatus>();
 
   constructor() {
     this.register("linkedin", () => new LinkedInPortalAdapter());
@@ -20,18 +21,38 @@ class PortalAdapterRegistry {
 
   register(source: JobPortalSource, creator: () => BasePortalAdapter) {
     this.registry.set(source, creator);
+    this.healthMap.set(source, "Healthy");
   }
 
-  getAdapter(source: JobPortalSource): BasePortalAdapter {
+  getAdapter(source: JobPortalSource, logger: Logger = defaultLogger): BasePortalAdapter {
     const creator = this.registry.get(source);
     if (!creator) {
       throw new Error(`Portal adapter not registered for source: ${source}`);
     }
-    return creator();
+    const adapter = creator();
+    adapter.setLogger(logger);
+    return adapter;
   }
 
   getAvailableSources(): JobPortalSource[] {
     return Array.from(this.registry.keys());
+  }
+
+  updateHealth(source: JobPortalSource, status: AdapterHealthStatus) {
+    this.healthMap.set(source, status);
+  }
+
+  getHealthSummary(): Record<string, AdapterHealthStatus> {
+    const summary: Record<string, AdapterHealthStatus> = {};
+    for (const source of this.getAvailableSources()) {
+      const cb = getCircuitBreaker(source);
+      if (cb.getState() === "OPEN") {
+        summary[source] = "Offline";
+      } else {
+        summary[source] = this.healthMap.get(source) || "Healthy";
+      }
+    }
+    return summary;
   }
 }
 

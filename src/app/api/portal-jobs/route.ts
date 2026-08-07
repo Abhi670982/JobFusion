@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { JobSourceCategory } from "@prisma/client";
 import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import { prisma } from "@/lib/prisma";
-import { classifySourceCategory } from "@/lib/source-category";
-import { enqueueCrawlJob } from "@/lib/queue";
-import { buildCacheKey, getCachedCategoryJobs, setCachedCategoryJobs } from "@/lib/redis-cache";
-import { calculateRelevanceScore } from "@/lib/relevance";
-import { canonicalizeUrl } from "@/lib/url-cleaner";
-import crypto from "crypto";
+import { normalizeSearchInput } from "@/lib/portal-fetcher/sanitizers/sanitizer";
+import { searchPortalJobs } from "@/lib/portal-fetcher/services/portal-search-service";
+import { portalRegistry } from "@/lib/portal-fetcher/registry";
 
 export const dynamic = "force-dynamic";
 
@@ -205,49 +201,29 @@ async function getUserCachedPortalJobs(userId: string, portal: string, visibilit
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  
-  let requestNow = new Date();
-  if (process.env.NODE_ENV !== "production") {
-    const mockNowParam = searchParams.get("mockNow");
-    if (mockNowParam) {
-      const parsedMock = new Date(mockNowParam);
-      if (!isNaN(parsedMock.getTime())) {
-        requestNow = parsedMock;
-      }
-    }
-  }
 
-  const { from: visibilityFrom, to: visibilityTo } = getRollingJobVisibilityWindow(requestNow);
-
-  const portal = (searchParams.get("portal") || "all").toLowerCase();
-  const keyword = searchParams.get("keyword")?.trim() || "";
-  const location = searchParams.get("location")?.trim() || "India";
+  const rawPortal = searchParams.get("portal") || "all";
+  const rawKeyword = searchParams.get("keyword") || "";
+  const rawLocation = searchParams.get("location") || "India";
+  const rawSkillsParam = searchParams.get("skills") || "";
   const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+  const limit = Math.max(1, Math.min(50, parseInt(searchParams.get("pageLimit") || searchParams.get("limit") || "10", 10)));
 
-  // Input Sanitization
-  const validatedKeyword = keyword.trim().replace(/\s+/g, " ");
-  if (validatedKeyword.length > 200 || /[\x00-\x1F\x7F-\x9F]/.test(validatedKeyword)) {
-    return NextResponse.json(
-      { success: false, error: "Invalid keyword format or characters" },
-      { status: 400 }
-    );
-  }
-
-  const validatedLocation = location.trim().replace(/\s+/g, " ");
-  if (validatedLocation.length > 100 || /[\x00-\x1F\x7F-\x9F]/.test(validatedLocation)) {
-    return NextResponse.json(
-      { success: false, error: "Invalid location format or characters" },
-      { status: 400 }
-    );
-  }
+  // Normalize search parameters
+  const normalizedPortal = rawPortal.toLowerCase();
+  const normalizedKeyword = normalizeSearchInput(rawKeyword, 200);
+  const normalizedLocation = normalizeSearchInput(rawLocation, 100) || "India";
+  const requestSkills = rawSkillsParam
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 
   try {
-    // 1. Authenticate user & resolve permitted job sources
+    // Authenticate user & resolve user skills
     const user = await getOrCreateMongoUser();
     if (!user) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
-    const userId = user.id;
 
     const profile = await prisma.profile.findUnique({
       where: { userId },
@@ -349,10 +325,15 @@ export async function GET(req: NextRequest) {
         : backgroundSyncQueued ? "Returning cached results. Refreshing background pool." : "Returned fresh cached jobs.",
     });
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Failed retrieving portal jobs";
-    console.error("[Portal Jobs API] Handler failed:", errorMessage);
+    const errObj = error instanceof Error ? error : new Error(String(error));
+    console.error("[Portal Jobs API] Full Exception Details:", {
+      message: errObj.message,
+      name: errObj.name,
+      stack: errObj.stack,
+      cause: (errObj as any).cause,
+    });
     return NextResponse.json(
-      { success: false, error: errorMessage },
+      { success: false, error: errObj.message, stack: errObj.stack, version: "v1" },
       { status: 500 }
     );
   }

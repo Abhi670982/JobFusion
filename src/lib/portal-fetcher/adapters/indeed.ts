@@ -3,6 +3,7 @@ import { crawlIndeedViaApify } from "@/lib/apify-runner";
 import { extractSkills } from "@/lib/skills-extractor";
 import { fetchJobicyJobs, fetchRemotiveJobs } from "@/lib/adapters/aggregator-apis";
 import { parsePostedDate } from "@/lib/parse-posted-date";
+import { sanitizeJobDescription, validateExternalUrl } from "../sanitizers/sanitizer";
 import crypto from "crypto";
 
 /**
@@ -101,11 +102,13 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
 
       const descText = typeof raw.description === "string" ? raw.description : typeof raw.description === "object" && raw.description ? JSON.stringify(raw.description) : "";
 
+      const applyUrl = validateExternalUrl(raw.applyUrl) || `https://in.indeed.com`;
+
       return {
         sourceId: raw.sourceId || dedupeHash.substring(0, 12),
         source: this.source,
-        sourceUrl: raw.applyUrl || `https://in.indeed.com`,
-        applyUrl: raw.applyUrl || null,
+        sourceUrl: applyUrl,
+        applyUrl,
         title,
         company,
         logo: null,
@@ -141,7 +144,7 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
         applyUrl: targetUrl,
         title,
         company,
-        logo: raw.companyLogoUrl || null,
+        logo: validateExternalUrl(raw.companyLogoUrl) || null,
         location,
         isRemote,
         employmentType: "full-time",
@@ -165,10 +168,12 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
     const description = raw.description || "";
     const extractedSkills = extractSkills(description).map((s) => s.name.toLowerCase());
 
-    let applyUrl: string | null = null;
+    let rawApply: string | null = null;
     if (raw.apply_options && Array.isArray(raw.apply_options) && raw.apply_options.length > 0) {
-      applyUrl = raw.apply_options[0].link || null;
+      rawApply = raw.apply_options[0].link || null;
     }
+
+    const applyUrl = validateExternalUrl(rawApply || raw.link) || `https://www.indeed.com`;
 
     const ext = raw.detected_extensions || {};
     const isRemote =
@@ -187,11 +192,11 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
     return {
       sourceId: raw.job_id || dedupeHash.substring(0, 12),
       source: this.source,
-      sourceUrl: raw.link || applyUrl || `https://www.indeed.com`,
+      sourceUrl: applyUrl,
       applyUrl,
       title,
       company,
-      logo: raw.thumbnail || null,
+      logo: validateExternalUrl(raw.thumbnail) || null,
       location,
       isRemote,
       employmentType: "full-time",

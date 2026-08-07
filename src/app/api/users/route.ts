@@ -46,8 +46,26 @@ export async function PUT(req: NextRequest) {
     const { fullName, email, profileImage } = body;
     
     const updateData: any = {};
-    if (fullName !== undefined) updateData.fullName = fullName;
-    if (email !== undefined) updateData.email = email;
+    if (fullName !== undefined) {
+      const trimmedName = String(fullName).trim().replace(/\s+/g, ' ');
+      if (trimmedName.length < 2 || trimmedName.length > 100) {
+        return NextResponse.json(
+          { success: false, error: 'Full name must be between 2 and 100 characters' },
+          { status: 400 }
+        );
+      }
+      updateData.fullName = trimmedName;
+    }
+    if (email !== undefined) {
+      const trimmedEmail = String(email).trim();
+      if (trimmedEmail.length > 254) {
+        return NextResponse.json(
+          { success: false, error: 'Email address cannot exceed 254 characters' },
+          { status: 400 }
+        );
+      }
+      updateData.email = trimmedEmail;
+    }
     if (profileImage !== undefined) updateData.profileImage = profileImage;
 
     const updatedPgUser = await prisma.user.update({

@@ -3,6 +3,7 @@ import { crawlLinkedInViaApify } from "@/lib/apify-runner";
 import { fetchWithBrightDataProxy } from "@/lib/brightdata-proxy";
 import { extractSkills } from "@/lib/skills-extractor";
 import { parsePostedDate } from "@/lib/parse-posted-date";
+import { sanitizeJobDescription, validateExternalUrl } from "../sanitizers/sanitizer";
 import crypto from "crypto";
 
 /**
@@ -167,11 +168,13 @@ export class LinkedInPortalAdapter extends BasePortalAdapter {
       if (parsed) postedAt = parsed.timestamp;
     }
 
+    const validatedApplyUrl = validateExternalUrl(raw.applyUrl) || "https://www.linkedin.com";
+
     return {
       sourceId,
       source: this.source,
-      sourceUrl: raw.applyUrl || "https://www.linkedin.com",
-      applyUrl: raw.applyUrl || null,
+      sourceUrl: validatedApplyUrl,
+      applyUrl: validatedApplyUrl,
       title,
       company,
       logo: null,
@@ -186,7 +189,7 @@ export class LinkedInPortalAdapter extends BasePortalAdapter {
       salaryMin: null,
       salaryMax: null,
       description,
-      postedDate: postedAt,
+      postedDate: postedAtISO,
       skills: extractedSkills,
     };
   }

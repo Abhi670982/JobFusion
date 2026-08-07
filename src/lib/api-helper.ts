@@ -173,20 +173,22 @@ export function clearApiCache() {
 export async function fetchCurrentUser(forceRefresh = false): Promise<DbUser | null> {
   const now = Date.now();
   if (!forceRefresh && cachedUser && (now - lastUserFetchTime < CACHE_TTL)) {
-
     return cachedUser;
   }
   if (!forceRefresh && cachedUserPromise) {
-
     return cachedUserPromise;
   }
-
 
   cachedUserPromise = (async () => {
     try {
       const res = await fetch('/api/users');
-
-      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      if (!res.ok) {
+        if (res.status === 401) {
+          cachedUser = null;
+          return null;
+        }
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
       const data = await res.json();
       if (data.success && data.user) {
         cachedUser = data.user;
@@ -194,8 +196,6 @@ export async function fetchCurrentUser(forceRefresh = false): Promise<DbUser | n
         return data.user;
       }
     } catch (error: any) {
-      // "TypeError: Failed to fetch" is a transient network error (e.g. during Clerk hydration).
-      // Downgrade to warn so it doesn't pollute the error console on normal page loads.
       if (error?.name === 'TypeError') {
         console.warn("[Frontend API] fetchCurrentUser() - Transient network error:", error.message);
       } else {
@@ -214,24 +214,19 @@ export async function fetchProfile(userId: string, forceRefresh = false): Promis
   const now = Date.now();
   const cached = profileCache.get(userId);
   if (!forceRefresh && cached && (now - cached.time < CACHE_TTL)) {
-
     return cached.data;
   }
   
   let promise = profilePromiseCache.get(userId);
   if (!forceRefresh && promise) {
-
     return promise;
   }
-
 
   promise = (async () => {
     try {
       const res = await fetch(`/api/profile?userId=${userId}`);
-
       if (!res.ok) {
-        if (res.status === 404) {
-          console.warn(`[Frontend API] fetchProfile(${userId}) - Profile not found (404)`);
+        if (res.status === 401 || res.status === 404) {
           profileCache.set(userId, { data: null, time: Date.now() });
           return null;
         }
@@ -255,7 +250,6 @@ export async function fetchProfile(userId: string, forceRefresh = false): Promis
 }
 
 export async function updateProfile(userId: string, profileData: Partial<DbProfile>): Promise<DbProfile | null> {
-
   try {
     const res = await fetch(`/api/profile?userId=${userId}`, {
       method: 'PUT',
@@ -266,7 +260,6 @@ export async function updateProfile(userId: string, profileData: Partial<DbProfi
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
     const data = await res.json();
     if (data.success) {
-      // Invalidate and update caches
       profileCache.set(userId, { data: data.data, time: Date.now() });
       return data.data;
     }
@@ -279,19 +272,15 @@ export async function updateProfile(userId: string, profileData: Partial<DbProfi
 export async function fetchJobs(forceRefresh = false): Promise<DbJob[]> {
   const now = Date.now();
   if (!forceRefresh && cachedJobs.length > 0 && (now - lastJobsFetchTime < JOBS_CACHE_TTL)) {
-
     return cachedJobs;
   }
   if (!forceRefresh && cachedJobsPromise) {
-
     return cachedJobsPromise;
   }
-
 
   cachedJobsPromise = (async () => {
     try {
       const res = await fetch('/api/jobs');
-
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
 
@@ -312,10 +301,8 @@ export async function fetchJobs(forceRefresh = false): Promise<DbJob[]> {
 }
 
 export async function fetchJobById(id: string): Promise<DbJob | null> {
-
   try {
     const res = await fetch(`/api/jobs?id=${id}`);
-
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
     const data = await res.json();
     if (data.success) return data.data;
@@ -329,21 +316,23 @@ export async function fetchApplications(userId: string, forceRefresh = false): P
   const now = Date.now();
   const cached = applicationsCache.get(userId);
   if (!forceRefresh && cached && (now - cached.time < CACHE_TTL)) {
-
     return cached.data;
   }
   let promise = applicationsPromiseCache.get(userId);
   if (!forceRefresh && promise) {
-
     return promise;
   }
-
 
   promise = (async () => {
     try {
       const res = await fetch(`/api/applications?userId=${userId}`);
-
-      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      if (!res.ok) {
+        if (res.status === 401) {
+          applicationsCache.set(userId, { data: [], time: Date.now() });
+          return [];
+        }
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
       const data = await res.json();
 
       if (data.success) {
@@ -363,7 +352,6 @@ export async function fetchApplications(userId: string, forceRefresh = false): P
 }
 
 export async function applyToJob(userId: string, jobId: string): Promise<DbApplication | null> {
-
   try {
     const res = await fetch('/api/applications', {
       method: 'POST',
@@ -374,7 +362,6 @@ export async function applyToJob(userId: string, jobId: string): Promise<DbAppli
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
     const data = await res.json();
     if (data.success) {
-      // Invalidate applications cache
       applicationsCache.delete(userId);
       return data.data;
     }
@@ -388,21 +375,23 @@ export async function fetchSavedJobs(userId: string, forceRefresh = false): Prom
   const now = Date.now();
   const cached = savedJobsCache.get(userId);
   if (!forceRefresh && cached && (now - cached.time < CACHE_TTL)) {
-
     return cached.data;
   }
   let promise = savedJobsPromiseCache.get(userId);
   if (!forceRefresh && promise) {
-
     return promise;
   }
-
 
   promise = (async () => {
     try {
       const res = await fetch(`/api/saved-jobs?userId=${userId}`);
-
-      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      if (!res.ok) {
+        if (res.status === 401) {
+          savedJobsCache.set(userId, { data: [], time: Date.now() });
+          return [];
+        }
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
       const data = await res.json();
 
       if (data.success) {
@@ -422,7 +411,6 @@ export async function fetchSavedJobs(userId: string, forceRefresh = false): Prom
 }
 
 export async function saveJob(userId: string, jobId: string): Promise<DbSavedJob | null> {
-
   try {
     const res = await fetch('/api/saved-jobs', {
       method: 'POST',
@@ -433,7 +421,6 @@ export async function saveJob(userId: string, jobId: string): Promise<DbSavedJob
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
     const data = await res.json();
     if (data.success) {
-      // Invalidate saved jobs cache
       savedJobsCache.delete(userId);
       return data.data;
     }
@@ -444,7 +431,6 @@ export async function saveJob(userId: string, jobId: string): Promise<DbSavedJob
 }
 
 export async function unsaveJob(userId: string, jobId: string): Promise<boolean> {
-
   try {
     const res = await fetch(`/api/saved-jobs?userId=${userId}&jobId=${jobId}`, {
       method: 'DELETE',
@@ -453,7 +439,6 @@ export async function unsaveJob(userId: string, jobId: string): Promise<boolean>
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
     const data = await res.json();
     if (data.success) {
-      // Invalidate saved jobs cache
       savedJobsCache.delete(userId);
       return true;
     }
@@ -464,7 +449,6 @@ export async function unsaveJob(userId: string, jobId: string): Promise<boolean>
 }
 
 export async function uploadResume(userId: string, file: File): Promise<any> {
-
   try {
     const formData = new FormData();
     formData.append('file', file);
@@ -481,7 +465,6 @@ export async function uploadResume(userId: string, file: File): Promise<any> {
     }
     const data = await res.json();
     if (data.success && data.data) {
-      // Directly populate profile cache
       profileCache.set(userId, { data: data.data, time: Date.now() });
     } else {
       profileCache.delete(userId);
@@ -495,7 +478,6 @@ export async function uploadResume(userId: string, file: File): Promise<any> {
 }
 
 export async function parseResume(userId: string): Promise<any> {
-
   try {
     const res = await fetch('/api/parse-resume', {
       method: 'POST',
@@ -509,7 +491,6 @@ export async function parseResume(userId: string): Promise<any> {
     }
     const data = await res.json();
     if (data.success && data.data) {
-      // Directly update profile cache
       profileCache.set(userId, { data: data.data, time: Date.now() });
     } else {
       profileCache.delete(userId);
@@ -525,7 +506,10 @@ export async function parseResume(userId: string): Promise<any> {
 export async function fetchDashboardData(): Promise<any> {
   try {
     const res = await fetch('/api/dashboard');
-    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+    if (!res.ok) {
+      if (res.status === 401) return null;
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
     const data = await res.json();
     return data.success ? data : null;
   } catch (error) {
@@ -537,7 +521,10 @@ export async function fetchDashboardData(): Promise<any> {
 export async function fetchDashboardStats(): Promise<any> {
   try {
     const res = await fetch('/api/dashboard/stats');
-    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+    if (!res.ok) {
+      if (res.status === 401) return null;
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
     const data = await res.json();
     return data.success ? data.stats : null;
   } catch (error) {
@@ -549,7 +536,10 @@ export async function fetchDashboardStats(): Promise<any> {
 export async function fetchDashboardActivity(): Promise<any> {
   try {
     const res = await fetch('/api/dashboard/activity');
-    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+    if (!res.ok) {
+      if (res.status === 401) return null;
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
     const data = await res.json();
     return data.success ? data : null;
   } catch (error) {

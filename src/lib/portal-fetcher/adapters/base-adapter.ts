@@ -5,6 +5,7 @@ export interface PortalFetchQuery {
   location?: string;
   page?: number;
   limit?: number;
+  logger?: Logger;
 }
 
 export interface PortalUnifiedJob {
@@ -23,13 +24,20 @@ export interface PortalUnifiedJob {
   salaryMin: number | null;  // numeric representation for filter calculations
   salaryMax: number | null;
   description: string;
-  postedDate: Date | string | null;
+  postedDate: string | null; // ISO 8601 string or null
   isDateless?: boolean;
   skills: string[];          // extracted skill tags
+  dedupeHash?: string;
 }
 
 export abstract class BasePortalAdapter {
   abstract readonly source: JobPortalSource;
+  protected logger: Logger = defaultLogger;
+
+  setLogger(logger: Logger) {
+    this.logger = logger;
+  }
+
   abstract fetchJobs(query: PortalFetchQuery): Promise<any[]>;
   abstract mapToUnified(raw: any): PortalUnifiedJob;
 }

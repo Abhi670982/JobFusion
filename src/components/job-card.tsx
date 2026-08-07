@@ -18,6 +18,8 @@ import { isPremiumPortal } from '@/lib/portal-gating';
 import { trackMonetizationEvent } from '@/lib/analytics';
 import { Lock } from 'lucide-react';
 
+import { useAuthGuard } from '@/hooks/use-auth-guard';
+
 interface JobCardProps {
   job: DbJob;
   index?: number;
@@ -43,6 +45,7 @@ export default function JobCard({
   const [saved, setSaved] = useState(initialIsSaved);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { requireAuth } = useAuthGuard();
 
   useEffect(() => { setSaved(initialIsSaved); }, [initialIsSaved]);
 
@@ -99,22 +102,25 @@ export default function JobCard({
     processJobApply(e);
   };
 
-  const handleSaveToggle = async (e: React.MouseEvent) => {
-    e.preventDefault(); e.stopPropagation();
-    if (!userId || loading) return;
-    setLoading(true);
-    const nextSaved = !saved;
-    setSaved(nextSaved);
-    try {
-      if (nextSaved) {
-        const result = await saveJob(userId, job._id);
-        if (!result) { setSaved(saved); } else if (onSavedToggle) onSavedToggle(job._id, true);
-      } else {
-        const success = await unsaveJob(userId, job._id);
-        if (!success) { setSaved(saved); } else if (onSavedToggle) onSavedToggle(job._id, false);
-      }
-    } catch { setSaved(saved); }
-    finally { setLoading(false); }
+  const handleSaveToggle = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    requireAuth(async () => {
+      if (!userId || loading) return;
+      setLoading(true);
+      const nextSaved = !saved;
+      setSaved(nextSaved);
+      try {
+        if (nextSaved) {
+          const result = await saveJob(userId, job._id);
+          if (!result) { setSaved(saved); } else if (onSavedToggle) onSavedToggle(job._id, true);
+        } else {
+          const success = await unsaveJob(userId, job._id);
+          if (!success) { setSaved(saved); } else if (onSavedToggle) onSavedToggle(job._id, false);
+        }
+      } catch { setSaved(saved); }
+      finally { setLoading(false); }
+    });
   };
 
   const handleApplyClick = (e: React.MouseEvent) => {
@@ -208,21 +214,19 @@ export default function JobCard({
           </div>
 
           {/* Save button */}
-          {userId && (
-            <button
-              onClick={handleSaveToggle}
-              disabled={loading}
-              className={cn(
-                'rounded-xl p-2 transition-all duration-200 flex-shrink-0 z-10 touch-auto',
-                saved
-                  ? 'text-primary bg-primary/12 hover:bg-primary/20'
-                  : 'text-muted-foreground hover:text-primary hover:bg-primary/8',
-                loading && 'opacity-50 cursor-not-allowed'
-              )}
-            >
-              {saved ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
-            </button>
-          )}
+          <button
+            onClick={handleSaveToggle}
+            disabled={loading}
+            className={cn(
+              'rounded-xl p-2 transition-all duration-200 flex-shrink-0 z-10 touch-auto',
+              saved
+                ? 'text-primary bg-primary/12 hover:bg-primary/20'
+                : 'text-muted-foreground hover:text-primary hover:bg-primary/8',
+              loading && 'opacity-50 cursor-not-allowed'
+            )}
+          >
+            {saved ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+          </button>
         </div>
 
         {/* Tags */}

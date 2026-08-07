@@ -41,6 +41,7 @@ interface CrawlerOptions {
   maxPages?: number;
   crawlFrom?: Date;
   crawlTo?: Date;
+  logger?: Logger;
 }
 
 export interface CrawlPortalResult {
@@ -85,14 +86,13 @@ export async function crawlPortalJobs(options: CrawlerOptions): Promise<CrawlPor
     keywords = ["software engineer", "full stack developer", "software developer"];
   }
 
-  // Determine active portals
+  const registeredPortals = portalRegistry.getAvailableSources();
   const portalsToCrawl: JobPortalSource[] =
-    portalParam === "all" ? portalRegistry.getAvailableSources() : [portalParam];
+    portalParam === "all" ? registeredPortals : [portalParam];
 
   const errors: string[] = [];
   const allRawJobs: { source: JobPortalSource; raw: any }[] = [];
   const failedPortals: string[] = [];
-  let timedOut = false;
   let partial = false;
 
   let totalPagesCrawled = 0;
@@ -201,26 +201,12 @@ export async function crawlPortalJobs(options: CrawlerOptions): Promise<CrawlPor
     }
   });
 
-  // Race each promise with a timeout promise representing overall deadline
-  const results = await Promise.all(
-    crawlPromises.map(async (p, idx) => {
-      const portal = portalsToCrawl[idx];
-      return Promise.race([
-        p,
-        new Promise<any>((resolve) => {
-          setTimeout(() => {
-            resolve({ portal, rawJobs: [], status: "timeout" as const });
-          }, overallTimeoutMs);
-        })
-      ]);
-    })
-  );
-
-  results.forEach((res) => {
-    if (res.status === "success" && res.rawJobs.length > 0) {
-      const { portal, rawJobs } = res;
-      rawJobs.forEach((rj: any) => {
-        allRawJobs.push({ source: portal, raw: rj });
+      metrics.recordAdapterExecution({
+        portal,
+        durationMs,
+        success: false,
+        itemCount: 0,
+        error: err.message,
       });
     } else if (res.status === "timeout") {
       timedOut = true;
@@ -231,7 +217,7 @@ export async function crawlPortalJobs(options: CrawlerOptions): Promise<CrawlPor
     } else if (res.status === "failed") {
       partial = true;
     }
-  });
+  };
 
   // Normalize, deduplicate, score, and filter
   const unifiedJobs: PortalUnifiedJob[] = [];
@@ -240,7 +226,9 @@ export async function crawlPortalJobs(options: CrawlerOptions): Promise<CrawlPor
 
   for (const jobWrap of allRawJobs) {
     try {
-      const adapter = portalRegistry.getAdapter(jobWrap.source);
+      const adapter = portalRegistry.getAdapter(jobWrap.source, logger);
+      
+      // Stage 2: NORMALIZE
       const unified = adapter.mapToUnified(jobWrap.raw);
 
       unified.experience = normalizeExperienceLevel(unified.experience as any);
@@ -271,9 +259,7 @@ export async function crawlPortalJobs(options: CrawlerOptions): Promise<CrawlPor
           if (!options.crawlFrom) {
             const ageMs = Date.now() - resolvedDate.getTime();
             const TEN_DAYS_MS = 10 * 24 * 60 * 60 * 1000;
-            if (ageMs > TEN_DAYS_MS) {
-              keepJob = false;
-            }
+            if (ageMs > TEN_DAYS_MS) keepJob = false;
           }
           unified.postedDate = resolvedDate.toISOString() as any;
         }
@@ -313,7 +299,7 @@ export async function crawlPortalJobs(options: CrawlerOptions): Promise<CrawlPor
 
       unifiedJobs.push(unified);
     } catch (mapErr: any) {
-      console.warn(`[Crawler] Mapping error:`, mapErr.message);
+      logger.warn(`Mapping or Sanitization error: ${mapErr.message}`);
     }
   }
 
@@ -321,6 +307,7 @@ export async function crawlPortalJobs(options: CrawlerOptions): Promise<CrawlPor
 
   return {
     jobs: unifiedJobs,
+    dtoJobs,
     errors,
     partial,
     timedOut,

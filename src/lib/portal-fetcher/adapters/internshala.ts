@@ -1,6 +1,7 @@
 import { BasePortalAdapter, PortalFetchQuery, PortalUnifiedJob } from "./base-adapter";
 import { extractSkills } from "@/lib/skills-extractor";
 import { parsePostedDate } from "@/lib/parse-posted-date";
+import { sanitizeJobDescription, validateExternalUrl } from "../sanitizers/sanitizer";
 import crypto from "crypto";
 
 export class InternshalaPortalAdapter extends BasePortalAdapter {
@@ -13,13 +14,12 @@ export class InternshalaPortalAdapter extends BasePortalAdapter {
       ? `https://internshala.com/jobs/keyword-${encodeURIComponent(keyword)}/page-${page}/`
       : `https://internshala.com/jobs/keyword-${encodeURIComponent(keyword)}/`;
 
-    console.log(`[Internshala Portal Adapter] Starting scrape (page ${page}): ${url}`);
+    this.logger.info(`Starting scrape (page ${page}): ${url}`, { portal: this.source });
 
-    // Standard Direct Cheerio Crawl
     try {
       return await this.scrapeWithCheerio(url);
     } catch (cheerioErr: any) {
-      console.warn(`[Internshala Portal Adapter] Cheerio scrape failed: ${cheerioErr.message}`);
+      this.logger.warn(`Cheerio scrape failed: ${cheerioErr.message}`, { portal: this.source });
       return [];
     }
   }
@@ -32,7 +32,8 @@ export class InternshalaPortalAdapter extends BasePortalAdapter {
     const rawHashInput = `${title}${company}${location}`.toLowerCase();
     const dedupeHash = crypto.createHash("sha256").update(rawHashInput).digest("hex");
 
-    const description = `Apply to the role of ${title} at ${company} in ${location}. Stipend/Salary details: ${raw.salary || "Not disclosed"}.`;
+    const rawDesc = `Apply to the role of ${title} at ${company} in ${location}. Stipend/Salary details: ${raw.salary || "Not disclosed"}.`;
+    const description = sanitizeJobDescription(rawDesc);
     const extractedSkills = extractSkills(description).map(s => s.name.toLowerCase());
 
     const isRemote =
@@ -51,8 +52,6 @@ export class InternshalaPortalAdapter extends BasePortalAdapter {
         let min = parseInt(nums[0], 10);
         let max = nums.length > 1 ? parseInt(nums[1], 10) : min;
 
-        // If it's a monthly salary (common in interns), normalize to annual
-        // e.g. "₹20,000 /month" -> annual = * 12
         if (cleanSalary.includes("month") || cleanSalary.includes("/pm") || min < 100000) {
           min *= 12;
           max *= 12;
@@ -63,27 +62,31 @@ export class InternshalaPortalAdapter extends BasePortalAdapter {
       }
     }
 
+    let postedAtISO: string | null = null;
+    if (raw.postedText) {
+      const parsed = parsePostedDate(raw.postedText);
+      if (parsed) postedAtISO = parsed.timestamp.toISOString();
+    }
+
+    const applyUrl = validateExternalUrl(raw.applyUrl) || "https://internshala.com";
+
     return {
       sourceId: dedupeHash.substring(0, 12),
       source: this.source,
-      sourceUrl: raw.applyUrl || "https://internshala.com",
-      applyUrl: raw.applyUrl || null,
+      sourceUrl: applyUrl,
+      applyUrl,
       title,
       company,
       logo: null,
       location,
       isRemote,
       employmentType: title.toLowerCase().includes("intern") ? "internship" : "full-time",
-      experience: "entry", // Internshala is predominantly entry level/internships
+      experience: "entry",
       salary: rawSalary || "Not disclosed",
       salaryMin,
       salaryMax,
       description,
-      postedDate: (() => {
-        if (!raw.postedText) return null;
-        const parsed = parsePostedDate(raw.postedText);
-        return parsed ? parsed.timestamp : null;
-      })(),
+      postedDate: postedAtISO,
       skills: extractedSkills,
     };
   }
@@ -138,7 +141,6 @@ export class InternshalaPortalAdapter extends BasePortalAdapter {
       }
       
       const postedText = postedEl.length > 0 ? postedEl.text().trim() : "";
-      
       const relativeHref = titleEl.attr("href") || "";
       const applyUrl = relativeHref.startsWith("http") ? relativeHref : `https://internshala.com${relativeHref}`;
 
@@ -154,6 +156,7 @@ export class InternshalaPortalAdapter extends BasePortalAdapter {
       }
     });
 
+    this.logger.info(`Scraped ${jobs.length} jobs via Cheerio from Internshala.`, { portal: this.source });
     return jobs;
   }
 }
