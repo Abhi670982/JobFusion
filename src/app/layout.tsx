@@ -27,8 +27,13 @@ export const metadata: Metadata = {
   description: 'AI-powered job aggregation platform that finds your perfect role by parsing your resume and searching unified job openings.',
   keywords: ['jobs', 'AI job search', 'job aggregator', 'career', 'employment', 'remote jobs'],
   icons: {
-    icon: '/favicon.ico',
-    apple: '/gohyred-icon.png',
+    icon: [
+      { url: '/favicon.ico' },
+      { url: '/favicon.png', type: 'image/png' },
+    ],
+    apple: [
+      { url: '/apple-touch-icon.png' },
+    ],
   },
 };
 
