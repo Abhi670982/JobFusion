@@ -139,7 +139,7 @@ Uploads your merged code to GitHub so everyone is on the same page.
 
 **Result:**
 ```
-To https://github.com/Abhi670982/JobFusion.git
+To https://github.com/Abhi670982/Gohyred.git
    2801ba4..88bf4d9  main -> main
 ```
 

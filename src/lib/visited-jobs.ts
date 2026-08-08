@@ -12,7 +12,7 @@ export interface VisitedJob {
   visitedAt: string;
 }
 
-const STORAGE_KEY = 'jobfusion_visited_jobs';
+const STORAGE_KEY = 'gohyred_visited_jobs';
 const MAX_HISTORY_LIMIT = 20;
 
 export function trackVisitedJob(job: DbJob): void {

@@ -457,7 +457,7 @@ export default function OnboardingPage() {
                       Resume & Skills <Rocket className="w-5 h-5 text-primary" />
                     </h2>
                     <p className="text-muted-foreground text-sm leading-relaxed">
-                      Upload your resume and JobFusion will parse it to auto-extract your skills.
+                      Upload your resume and Gohyred will parse it to auto-extract your skills.
                     </p>
                   </div>
 
@@ -609,7 +609,7 @@ export default function OnboardingPage() {
 
       {/* Footer copyright */}
       <div className="text-center text-[10px] text-muted-foreground max-w-xl mx-auto mt-6">
-        &copy; {new Date().getFullYear()} JobFusion Inc. All rights reserved.
+        &copy; {new Date().getFullYear()} Gohyred Inc. All rights reserved.
       </div>
     </div>
   );

@@ -72,8 +72,8 @@ export default function PricingSuccessPage() {
           className="text-xs text-muted-foreground pt-4"
         >
           Need help? Contact us at{' '}
-          <a href="mailto:support@jobfusion.ai" className="text-primary hover:underline">
-            support@jobfusion.ai
+          <a href="mailto:support@gohyred.ai" className="text-primary hover:underline">
+            support@gohyred.ai
           </a>
         </motion.p>
       </div>

@@ -38,17 +38,17 @@ export default function AboutContent() {
         {/* Hero Section */}
         <div className="text-center mb-20 mt-10">
           <h1 className="text-5xl md:text-6xl font-bold mb-6 tracking-tight" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-            About <span className="gradient-brand-text">JobFusion</span>
+            About <span className="gradient-brand-text">Gohyred</span>
           </h1>
           <p className="text-xl text-foreground font-medium mb-8">
             Your career journey starts with one search.
           </p>
           <div className="text-muted-foreground text-lg max-w-3xl mx-auto space-y-6 leading-relaxed">
             <p>
-              JobFusion is a job discovery platform that brings together opportunities from multiple job portals and company career pages into one seamless search experience. Instead of searching across different websites, users can explore thousands of opportunities from a single platform, making the job search faster, easier, and more organized.
+              Gohyred is a job discovery platform that brings together opportunities from multiple job portals and company career pages into one seamless search experience. Instead of searching across different websites, users can explore thousands of opportunities from a single platform, making the job search faster, easier, and more organized.
             </p>
             <p>
-              Whether you're a student, a recent graduate, or an experienced professional, JobFusion helps you discover opportunities that align with your skills, interests, and career goals.
+              Whether you're a student, a recent graduate, or an experienced professional, Gohyred helps you discover opportunities that align with your skills, interests, and career goals.
             </p>
           </div>
         </div>
@@ -73,7 +73,7 @@ export default function AboutContent() {
         <div className="mb-24">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-              Why Choose JobFusion?
+              Why Choose Gohyred?
             </h2>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">

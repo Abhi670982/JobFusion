@@ -26,7 +26,7 @@ export class AshbyAdapter extends AbstractAdapter<AshbyAdapterOptions, RawAshbyJ
   protected async fetchRawJobs(options: AshbyAdapterOptions): Promise<RawAshbyJob[]> {
     const url = `https://api.ashbyhq.com/posting-api/job-board/${options.slug}`;
     const res = await fetch(url, {
-      headers: { Accept: "application/json", "User-Agent": "JobFusion-CrawlEngine/1.0" },
+      headers: { Accept: "application/json", "User-Agent": "Gohyred-CrawlEngine/1.0" },
       signal: AbortSignal.timeout(5000),
     });
 

@@ -12,7 +12,7 @@ export interface AIProviderConfig {
 
 /**
  * Core AI Provider Layer.
- * Exclusively uses JobFusion's internal AI provider and subscription-based access.
+ * Exclusively uses Gohyred's internal AI provider and subscription-based access.
  */
 export async function getAIConfig(
   userId: string,
@@ -32,7 +32,7 @@ export async function getAIConfig(
     };
   }
 
-  // Determine JobFusion Platform Key
+  // Determine Gohyred Platform Key
   let platformKey = '';
   if (defaultProvider === 'openai') {
     platformKey = process.env.OPENAI_API_KEY || '';
@@ -47,7 +47,7 @@ export async function getAIConfig(
   }
 
   const reason = gateResult.message === 'Unlimited access (Pro/Admin)' ? 'Pro' : 'Free Credits';
-  console.log(`[AI Request] Feature: ${featureName} | Provider Selected: ${defaultProvider} (JobFusion Internal) | Reason: ${reason}`);
+  console.log(`[AI Request] Feature: ${featureName} | Provider Selected: ${defaultProvider} (Gohyred Internal) | Reason: ${reason}`);
 
   return {
     allowed: true,

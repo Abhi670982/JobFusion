@@ -208,7 +208,7 @@ export default function AdminSettings() {
                 type="email"
                 value={settings.contactEmail || ""}
                 onChange={(e) => setSettings({ ...settings, contactEmail: e.target.value })}
-                placeholder="support@jobfusion.ai"
+                placeholder="support@gohyred.ai"
                 className="w-full bg-[#09090b]/60 border border-[#27272a] hover:border-[#3f3f46] text-xs text-[#f4f4f5] px-3.5 py-2.5 rounded-xl outline-none transition-all placeholder-[#71717a]"
               />
               <p className="text-[9px] text-[#71717a]">

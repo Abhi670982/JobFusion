@@ -212,7 +212,7 @@ export default function AdminLayoutClient({ children, adminUser }: AdminLayoutCl
           <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center shadow-md">
             <Shield className="w-4 h-4 text-white" />
           </div>
-          <span className="font-semibold tracking-tight">JobFusion Admin</span>
+          <span className="font-semibold tracking-tight">Gohyred Admin</span>
         </div>
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -236,7 +236,7 @@ export default function AdminLayoutClient({ children, adminUser }: AdminLayoutCl
                 <Shield className="w-4.5 h-4.5 text-white" />
               </div>
               <div>
-                <h1 className="text-sm font-bold tracking-tight">JobFusion</h1>
+                <h1 className="text-sm font-bold tracking-tight">Gohyred</h1>
                 <p className="text-[9px] text-[#a1a1aa] font-semibold uppercase tracking-wider">Operations Dashboard</p>
               </div>
             </div>

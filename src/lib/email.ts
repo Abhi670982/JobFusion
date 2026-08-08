@@ -5,7 +5,7 @@ const smtpHost = process.env.SMTP_HOST;
 const smtpPort = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 587;
 const smtpUser = process.env.SMTP_USER;
 const smtpPass = process.env.SMTP_PASS;
-const smtpFrom = process.env.SMTP_FROM_EMAIL || "noreply@jobfusion.ai";
+const smtpFrom = process.env.SMTP_FROM_EMAIL || "noreply@gohyred.ai";
 
 // Create Nodemailer transporter lazily when needed
 let transporter: nodemailer.Transporter | null = null;
@@ -86,14 +86,14 @@ export async function sendContactNotification({
       <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
       
       <p style="font-size: 11px; color: #9ca3af; text-align: center; margin-bottom: 0;">
-        This is an automated notification from your JobFusion platform.
+        This is an automated notification from your Gohyred platform.
       </p>
     </div>
   `;
 
   try {
     const info = await client.sendMail({
-      from: `JobFusion Support <${smtpFrom}>`,
+      from: `Gohyred Support <${smtpFrom}>`,
       to,
       subject: `[Contact Us] ${subject}`,
       html: htmlContent,

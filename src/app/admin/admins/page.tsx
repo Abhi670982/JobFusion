@@ -495,11 +495,11 @@ export default function AdminManagement() {
                         required
                         value={inviteEmail}
                         onChange={(e) => setInviteEmail(e.target.value)}
-                        placeholder="Enter JobFusion account email..."
+                        placeholder="Enter Gohyred account email..."
                         className="w-full bg-[#09090b]/60 border border-[#27272a] hover:border-[#3f3f46] text-xs text-[#f4f4f5] px-3.5 py-2.5 rounded-xl outline-none transition-all placeholder-[#71717a]"
                       />
                       <p className="text-[10px] text-[#71717a] leading-normal pt-1">
-                        System will verify if the email corresponds to an existing, verified, and active JobFusion user account before granting access.
+                        System will verify if the email corresponds to an existing, verified, and active Gohyred user account before granting access.
                       </p>
                     </div>
 

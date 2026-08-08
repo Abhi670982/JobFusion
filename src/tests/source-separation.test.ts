@@ -1,5 +1,5 @@
 if (!process.env.DATABASE_URL) {
-  process.env.DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/jobfusion?schema=public";
+  process.env.DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/gohyred?schema=public";
 }
 
 import assert from "assert";

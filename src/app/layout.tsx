@@ -23,7 +23,7 @@ const plusJakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: 'JobFusion – One Search. Every Opportunity.',
+  title: 'Gohyred – One Search. Every Opportunity.',
   description: 'AI-powered job aggregation platform that finds your perfect role by parsing your resume and searching unified job openings.',
   keywords: ['jobs', 'AI job search', 'job aggregator', 'career', 'employment', 'remote jobs'],
   icons: {

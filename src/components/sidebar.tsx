@@ -107,13 +107,13 @@ export default function Sidebar() {
   useEffect(() => {
     // Safely read client-only storage after mount to avoid hydration mismatch
     setCollapsed(localStorage.getItem('sidebar_collapsed') === 'true');
-    const cachedUser = sessionStorage.getItem('jobfusion_user');
+    const cachedUser = sessionStorage.getItem('gohyred_user');
     if (cachedUser) setUser(JSON.parse(cachedUser));
-    const cachedCount = sessionStorage.getItem('jobfusion_saved_count');
+    const cachedCount = sessionStorage.getItem('gohyred_saved_count');
     if (cachedCount) setSavedCount(parseInt(cachedCount, 10));
 
     fetchCurrentUser().then(u => {
-      if (u) { setUser(u); sessionStorage.setItem('jobfusion_user', JSON.stringify(u)); }
+      if (u) { setUser(u); sessionStorage.setItem('gohyred_user', JSON.stringify(u)); }
     }).catch(() => { });
 
     fetch('/api/user-plan/status')
@@ -130,7 +130,7 @@ export default function Sidebar() {
     if (!user) return;
     fetchSavedJobs(user._id).then(saved => {
       setSavedCount(saved.length);
-      sessionStorage.setItem('jobfusion_saved_count', String(saved.length));
+      sessionStorage.setItem('gohyred_saved_count', String(saved.length));
     }).catch(() => { });
   }, [pathname, user]);
 
@@ -152,7 +152,7 @@ export default function Sidebar() {
           <div className="relative flex-shrink-0">
             <Image
               src="/logo-circle.png"
-              alt="JobFusion"
+              alt="Gohyred"
               width={34}
               height={34}
               className="rounded-full object-cover border-[3px] border-border/70 shadow-sm"
@@ -169,8 +169,7 @@ export default function Sidebar() {
                 className="font-bold text-base whitespace-nowrap overflow-hidden"
                 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
               >
-                <span className="gradient-brand-text">Job</span>
-                <span>Fusion</span>
+                <span className="gradient-brand-text">Gohyred</span>
               </motion.span>
             )}
           </AnimatePresence>

@@ -1,8 +1,8 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Company | JobFusion',
-  description: 'Learn about JobFusion company information.',
+  title: 'Company | Gohyred',
+  description: 'Learn about Gohyred company information.',
 };
 
 export default function CompanyPage() {
@@ -17,7 +17,7 @@ export default function CompanyPage() {
           
           <div className="space-y-8 text-foreground/90 leading-relaxed">
             <p className="text-muted-foreground">
-              JobFusion is dedicated to bringing you the best opportunities from across the web. Our company operates with the belief that finding a job should be a simple, unified process.
+              Gohyred is dedicated to bringing you the best opportunities from across the web. Our company operates with the belief that finding a job should be a simple, unified process.
             </p>
             
             <section>

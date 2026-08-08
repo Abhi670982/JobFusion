@@ -27,7 +27,7 @@ export class LeverAdapter extends AbstractAdapter<LeverAdapterOptions, RawLeverJ
   protected async fetchRawJobs(options: LeverAdapterOptions): Promise<RawLeverJob[]> {
     const url = `https://api.lever.co/v0/postings/${options.slug}?mode=json`;
     const res = await fetch(url, {
-      headers: { Accept: "application/json", "User-Agent": "JobFusion-CrawlEngine/1.0" },
+      headers: { Accept: "application/json", "User-Agent": "Gohyred-CrawlEngine/1.0" },
       signal: AbortSignal.timeout(5000),
     });
 

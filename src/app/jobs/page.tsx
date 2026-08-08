@@ -403,7 +403,7 @@ export default function JobsPage() {
   const skipNextFilterEffect = useRef(false);
   
   // Cache key for sessionStorage based on the current query string
-  const JOBS_CACHE_PREFIX = 'jobfusion_jobs_cache_';
+  const JOBS_CACHE_PREFIX = 'gohyred_jobs_cache_';
   const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes — skip re-fetch entirely if cache is fresh
  
   // 2. Fetch jobs — Stale-While-Revalidate for Company Careers to prevent pre-crawl lock-in
@@ -475,7 +475,7 @@ export default function JobsPage() {
         // Parse search params from URL immediately (no async needed)
         let searchString = window.location.search;
         if (!searchString) {
-          const cachedQuery = sessionStorage.getItem('jobfusion_filter_query');
+          const cachedQuery = sessionStorage.getItem('gohyred_filter_query');
           if (cachedQuery) {
             searchString = '?' + cachedQuery;
             window.history.replaceState(null, '', searchString);
@@ -634,7 +634,7 @@ export default function JobsPage() {
     const newQueryString = params.toString();
 
     // Cache the filter query in sessionStorage
-    sessionStorage.setItem('jobfusion_filter_query', newQueryString);
+    sessionStorage.setItem('gohyred_filter_query', newQueryString);
 
     // Update URL string
     const newUrl = newQueryString ? `?${newQueryString}` : window.location.pathname;
@@ -783,7 +783,7 @@ export default function JobsPage() {
 
       // Cache the relevance-mode response.
       sessionStorage.setItem(
-        'jobfusion_jobs_cache_' + queryString,
+        'gohyred_jobs_cache_' + queryString,
         JSON.stringify({
           jobs: returnedJobs,
           total: data.total || returnedJobs.length,
@@ -791,7 +791,7 @@ export default function JobsPage() {
           cachedAt: Date.now(),
         })
       );
-      sessionStorage.setItem('jobfusion_filter_query', queryString);
+      sessionStorage.setItem('gohyred_filter_query', queryString);
       window.history.pushState(null, '', `?${queryString}`);
 
       setToastMessage(`Matched ${returnedJobs.length} opportunities with your profile skills.`);
@@ -843,9 +843,9 @@ export default function JobsPage() {
     // Also exit relevance mode so the sort dropdown shows "Latest" again.
     setRelevanceMode(false);
     
-    sessionStorage.removeItem('jobfusion_filter_query');
+    sessionStorage.removeItem('gohyred_filter_query');
     Object.keys(sessionStorage).forEach((key) => {
-      if (key.startsWith('jobfusion_jobs_cache_')) {
+      if (key.startsWith('gohyred_jobs_cache_')) {
         sessionStorage.removeItem(key);
       }
     });

@@ -1,8 +1,8 @@
-# 🚀 JobFusion
+# 🚀 Gohyred
 
-**JobFusion** is an AI-powered job search platform that aggregates opportunities from multiple job portals into a single dashboard. It helps job seekers discover relevant opportunities, analyze resumes using AI, match jobs based on skills, and manage applications efficiently.
+**Gohyred** is an AI-powered job search platform that aggregates opportunities from multiple job portals into a single dashboard. It helps job seekers discover relevant opportunities, analyze resumes using AI, match jobs based on skills, and manage applications efficiently.
 
-Built with **Next.js**, **TypeScript**, **Prisma**, **MongoDB**, **Clerk Authentication**, and **Dodo Payments**, JobFusion provides a modern, scalable, and intelligent job-hunting experience.
+Built with **Next.js**, **TypeScript**, **Prisma**, **MongoDB**, **Clerk Authentication**, and **Dodo Payments**, Gohyred provides a modern, scalable, and intelligent job-hunting experience.
 
 ---
 
@@ -102,8 +102,8 @@ src/
 ## Clone the repository
 
 ```bash
-git clone https://github.com/your-username/JobFusion.git
-cd JobFusion
+git clone https://github.com/your-username/Gohyred.git
+cd Gohyred
 ```
 
 ## Install dependencies
@@ -149,21 +149,21 @@ http://localhost:3000
 
 # 🔄 AI Provider Architecture
 
-JobFusion supports a centralized AI provider system.
+Gohyred supports a centralized AI provider system.
 
 Priority Order:
 
 ```
 User BYOK
       ↓
-JobFusion Premium Provider
+Gohyred Premium Provider
       ↓
 Free Daily Credits
       ↓
 Limit Reached
 ```
 
-Once a user connects their own API key, all AI-powered features automatically use the user's provider without consuming JobFusion's AI quota.
+Once a user connects their own API key, all AI-powered features automatically use the user's provider without consuming Gohyred's AI quota.
 
 ---
 

@@ -16,7 +16,7 @@ export async function GET() {
     });
 
     const providerDistribution = [
-      { name: 'Gemini (JobFusion Internal)', value: totalUsersWithUsage.length, color: '#10b981' },
+      { name: 'Gemini (Gohyred Internal)', value: totalUsersWithUsage.length, color: '#10b981' },
     ];
 
     // 2. Daily AI usage chart (last 14 days)

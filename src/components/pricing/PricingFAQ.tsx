@@ -80,7 +80,7 @@ export function PricingFAQ({ className }: PricingFAQProps) {
           Frequently Asked Questions
         </h2>
         <p className="text-muted-foreground text-sm max-w-lg mx-auto">
-          Everything you need to know about JobFusion&apos;s plans and billing.
+          Everything you need to know about Gohyred&apos;s plans and billing.
         </p>
       </div>
 

@@ -121,7 +121,7 @@ export function PremiumPortalModal({ open, onClose, portalName }: PremiumPortalM
                     Unlock Premium Job Portals
                   </h2>
                   <p className="text-white/85 text-xs max-w-sm mx-auto leading-relaxed">
-                    Upgrade to JobFusion Premium to access exclusive job opportunities from India&apos;s leading job platforms.
+                    Upgrade to Gohyred Premium to access exclusive job opportunities from India&apos;s leading job platforms.
                   </p>
                 </div>
               </div>
@@ -142,7 +142,7 @@ export function PremiumPortalModal({ open, onClose, portalName }: PremiumPortalM
                   <div className="flex items-center gap-2 border-b border-primary/15 pb-2">
                     <ShieldCheck className="w-4 h-4 text-primary" />
                     <span className="text-xs font-extrabold uppercase tracking-wider text-foreground">
-                      Included with JobFusion Premium
+                      Included with Gohyred Premium
                     </span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">

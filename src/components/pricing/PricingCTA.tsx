@@ -75,7 +75,7 @@ export function PricingCTA({ className, variant = 'default' }: PricingCTAProps) 
         </h2>
 
         <p className="text-white/70 text-sm sm:text-base mb-8 leading-relaxed">
-          Join thousands of job seekers using JobFusion Pro to craft better resumes,
+          Join thousands of job seekers using Gohyred Pro to craft better resumes,
           ace ATS filters, and get matched with the right opportunities.
         </p>
 

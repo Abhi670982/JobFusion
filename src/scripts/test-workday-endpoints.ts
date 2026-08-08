@@ -30,7 +30,7 @@ async function testWorkday(c: WorkdayCompany) {
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
-        'User-Agent': 'JobFusion-CrawlEngine/1.0',
+        'User-Agent': 'Gohyred-CrawlEngine/1.0',
       },
       body: JSON.stringify({
         searchText: '',

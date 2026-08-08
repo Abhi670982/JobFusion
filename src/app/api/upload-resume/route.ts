@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
       cloudinaryResult = await new Promise<any>((resolve, reject) => {
         cloudinary.uploader
           .upload_stream(
-            { resource_type: "raw", folder: "jobfusion-resumes", public_id: `${userId}_resume_${Date.now()}.${extension}` },
+            { resource_type: "raw", folder: "gohyred-resumes", public_id: `${userId}_resume_${Date.now()}.${extension}` },
             (error, result) => { if (error) reject(error); else resolve(result); }
           )
           .end(buffer);

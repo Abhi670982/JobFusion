@@ -131,7 +131,7 @@ export default function PricingPage() {
             transition={{ duration: 0.55, delay: 0.1 }}
             className="text-muted-foreground text-base sm:text-lg max-w-2xl mx-auto leading-relaxed"
           >
-            From your first job search to landing your dream role, JobFusion grows with you.
+            From your first job search to landing your dream role, Gohyred grows with you.
             Find all our pricing plans below.
           </motion.p>
         </div>

@@ -36,14 +36,13 @@ export default function Footer() {
             <Link href="/" className="flex items-center gap-2.5 mb-4">
               <Image
                 src="/logo-circle.png"
-                alt="JobFusion Logo"
+                alt="Gohyred Logo"
                 width={32}
                 height={32}
                 className="rounded-full object-cover border-[3px] border-border/70 shadow-sm"
               />
               <span className="font-bold text-xl" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-                <span className="gradient-brand-text">Job</span>
-                <span>Fusion</span>
+                <span className="gradient-brand-text">Gohyred</span>
               </span>
             </Link>
             <p className="text-sm text-muted-foreground leading-relaxed max-w-xs mb-6">
@@ -74,7 +73,7 @@ export default function Footer() {
 
         <div className="mt-12 pt-8 flex flex-col-reverse md:flex-row items-center justify-between gap-6 border-t border-border/10">
           <p className="text-sm text-muted-foreground text-center md:text-left">
-            © 2026 JobFusion, All rights reserved.
+            © 2026 Gohyred, All rights reserved.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 text-sm text-muted-foreground">
             <span className="flex items-center gap-1.5">

@@ -1,4 +1,4 @@
-import { withPage } from './src/lib/browser-pool.ts';
+import { withPage } from './src/lib/browser-pool';
 
 withPage(async (page) => {
   console.log('success');

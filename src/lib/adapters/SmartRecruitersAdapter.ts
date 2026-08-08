@@ -32,7 +32,7 @@ export class SmartRecruitersAdapter extends AbstractAdapter<SmartRecruitersAdapt
     while (offset < 500) {
       const url = `https://api.smartrecruiters.com/v1/companies/${options.slug}/postings?limit=${limit}&offset=${offset}`;
       const res = await fetch(url, {
-        headers: { Accept: "application/json", "User-Agent": "JobFusion-CrawlEngine/1.0" },
+        headers: { Accept: "application/json", "User-Agent": "Gohyred-CrawlEngine/1.0" },
         signal: AbortSignal.timeout(5000),
       });
 

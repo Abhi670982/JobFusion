@@ -109,7 +109,7 @@ function ReadyToAnalyzeState({
 
       <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border bg-muted/50 text-xs font-semibold text-muted-foreground">
         <span className="w-2 h-2 rounded-full bg-emerald-500" />
-        Powered by JobFusion AI
+        Powered by Gohyred AI
       </div>
 
       <Button
@@ -394,7 +394,7 @@ export default function ResumeAnalyzerPage() {
               <div className="space-y-2">
                 <h2 className="text-xl font-bold text-foreground">Resume Analyzer is available with Pro</h2>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  Upgrade to JobFusion Pro to unlock full AI Resume Analysis, ATS scoring, missing skills detection, and bullet point improvements.
+                  Upgrade to Gohyred Pro to unlock full AI Resume Analysis, ATS scoring, missing skills detection, and bullet point improvements.
                 </p>
               </div>
               <Link href="/pricing" className="block">

@@ -360,12 +360,12 @@ export default function CustomSignInPage() {
         <Link href="/" className="flex items-center gap-2.5 relative z-10">
           <Image
             src="/logo-circle.png"
-            alt="JobFusion Logo"
+            alt="Gohyred Logo"
             width={32}
             height={32}
             className="rounded-full object-cover border-[3px] border-white/40 shadow-sm"
           />
-          <span className="font-bold text-lg xl:text-xl text-white font-sans">JobFusion</span>
+          <span className="font-bold text-lg xl:text-xl text-white font-sans">Gohyred</span>
         </Link>
 
         <div className="relative z-10 space-y-6 xl:space-y-8 my-auto">
@@ -400,7 +400,7 @@ export default function CustomSignInPage() {
           </div>
         </div>
 
-        <p className="text-white/50 text-xs xl:text-sm relative z-10">© 2026 JobFusion Inc.</p>
+        <p className="text-white/50 text-xs xl:text-sm relative z-10">© 2026 Gohyred Inc.</p>
       </div>
 
       {/* Right Panel */}
@@ -413,12 +413,12 @@ export default function CustomSignInPage() {
           <Link href="/" className="lg:hidden flex items-center gap-2 mb-6">
             <Image
               src="/logo-circle.png"
-              alt="JobFusion Logo"
+              alt="Gohyred Logo"
               width={32}
               height={32}
               className="rounded-full object-cover border-[3px] border-border/70 shadow-sm"
             />
-            <span className="font-bold text-xl gradient-brand-text font-sans">JobFusion</span>
+            <span className="font-bold text-xl gradient-brand-text font-sans">Gohyred</span>
           </Link>
 
           {/* ── VERIFICATION CODE STEP ── */}

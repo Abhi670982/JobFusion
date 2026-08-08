@@ -1,8 +1,8 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Refund Policy | JobFusion',
-  description: 'Refund Policy for JobFusion services.',
+  title: 'Refund Policy | Gohyred',
+  description: 'Refund Policy for Gohyred services.',
 };
 
 export default function RefundPolicyPage() {
@@ -18,7 +18,7 @@ export default function RefundPolicyPage() {
           
           <div className="space-y-8 text-foreground/90 leading-relaxed">
             <p className="text-muted-foreground">
-              Thank you for choosing JobFusion. If you are not entirely satisfied with your purchase, we're here to help.
+              Thank you for choosing Gohyred. If you are not entirely satisfied with your purchase, we're here to help.
             </p>
             
             <section>
@@ -32,7 +32,7 @@ export default function RefundPolicyPage() {
             <section>
               <h2 className="text-2xl font-semibold text-foreground mb-4">Requesting a Refund</h2>
               <p className="text-muted-foreground">
-                To request a refund, please contact our support team at support@jobfusion.com with your account details and the reason for the refund request. We will notify you of the approval or rejection of your refund within 3-5 business days.
+                To request a refund, please contact our support team at support@gohyred.com with your account details and the reason for the refund request. We will notify you of the approval or rejection of your refund within 3-5 business days.
               </p>
             </section>
           </div>

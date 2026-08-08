@@ -210,7 +210,7 @@ export default function SettingsPage() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-bold" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Personal Profile</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">Your main identity and resume information across JobFusion.</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Your main identity and resume information across Gohyred.</p>
           </div>
           {!loadingProfile && profile && (
             <Button
@@ -309,7 +309,7 @@ export default function SettingsPage() {
       >
         <div>
           <h2 className="text-lg font-bold" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Appearance</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">Customize the visual theme of the JobFusion interface.</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Customize the visual theme of the Gohyred interface.</p>
         </div>
 
         <div className="grid grid-cols-2 gap-4 max-w-md mx-auto pt-2">
@@ -422,7 +422,7 @@ export default function SettingsPage() {
           <div>
             <h3 className="text-base font-bold text-rose-600 dark:text-rose-400" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Delete Account</h3>
             <p className="text-xs text-muted-foreground mt-0.5 font-medium">
-              Permanently delete your account and all associated user data from JobFusion. This action is irreversible.
+              Permanently delete your account and all associated user data from Gohyred. This action is irreversible.
             </p>
           </div>
           <Button
@@ -483,7 +483,7 @@ export default function SettingsPage() {
           </DialogHeader>
           <div className="py-3">
             <p className="text-sm text-muted-foreground font-medium">
-              Are you sure you want to sign out of your JobFusion account?
+              Are you sure you want to sign out of your Gohyred account?
             </p>
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
@@ -520,7 +520,7 @@ export default function SettingsPage() {
               ⚠️ WARNING: This action cannot be undone. All your profile details, uploaded resumes, saved jobs, applications, AI analyses, and account history will be permanently deleted.
             </div>
             <p className="text-xs text-muted-foreground font-medium">
-              Click the button below to confirm that you want to permanently delete your JobFusion account and erase all your data.
+              Click the button below to confirm that you want to permanently delete your Gohyred account and erase all your data.
             </p>
           </div>
           <DialogFooter className="gap-2 sm:gap-0">

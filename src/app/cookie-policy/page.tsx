@@ -1,8 +1,8 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Cookie Policy | JobFusion',
-  description: 'Cookie Policy for JobFusion.',
+  title: 'Cookie Policy | Gohyred',
+  description: 'Cookie Policy for Gohyred.',
 };
 
 export default function CookiePolicyPage() {
@@ -17,7 +17,7 @@ export default function CookiePolicyPage() {
           <p className="text-muted-foreground mb-10">Last Updated: July 01, 2026</p>
           
           <div className="space-y-8 text-foreground/90 leading-relaxed">
-            <p className="text-muted-foreground">This Cookie Policy explains what cookies are and how we use them on Job Fusion.</p>
+            <p className="text-muted-foreground">This Cookie Policy explains what cookies are and how we use them on Gohyred.</p>
             
             <section>
               <h2 className="text-2xl font-semibold text-foreground mb-4">What Are Cookies?</h2>
@@ -27,7 +27,7 @@ export default function CookiePolicyPage() {
             <section>
               <h2 className="text-2xl font-semibold text-foreground mb-4">How We Use Cookies</h2>
               <ul className="list-disc pl-6 space-y-4 text-muted-foreground">
-                <li><strong className="text-foreground">Essential/Authentication Cookies:</strong> These are necessary for the core functionality of our site. For example, staying logged into your Job Fusion account as you browse different pages requires these cookies.</li>
+                <li><strong className="text-foreground">Essential/Authentication Cookies:</strong> These are necessary for the core functionality of our site. For example, staying logged into your Gohyred account as you browse different pages requires these cookies.</li>
                 <li><strong className="text-foreground">Preference Cookies:</strong> These allow our website to remember choices you make (like language preferences or dark/light mode configurations).</li>
                 <li><strong className="text-foreground">Analytics & Performance Cookies:</strong> We may use third-party analytics services (such as Google Analytics) to monitor and analyze the use of our service, helping us improve the job-searching experience.</li>
               </ul>

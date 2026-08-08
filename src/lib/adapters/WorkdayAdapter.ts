@@ -26,7 +26,7 @@ export class WorkdayAdapter extends AbstractAdapter<WorkdayAdapterOptions, RawWo
       headers: {
         "Accept": "application/json",
         "Content-Type": "application/json",
-        "User-Agent": "JobFusion-CrawlEngine/1.0",
+        "User-Agent": "Gohyred-CrawlEngine/1.0",
       },
       body: JSON.stringify({
         searchText: options.keyword || "",

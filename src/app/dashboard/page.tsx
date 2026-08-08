@@ -418,7 +418,7 @@ export default function DashboardPage() {
               <h3 className="font-bold">Complete your profile for better job recommendations</h3>
             </div>
             <p className="text-sm text-muted-foreground max-w-xl">
-              JobFusion uses AI to match you with opportunities. Upload a resume or add skills to get started.
+              Gohyred uses AI to match you with opportunities. Upload a resume or add skills to get started.
             </p>
           </div>
           <div className="flex flex-wrap gap-2 justify-center">

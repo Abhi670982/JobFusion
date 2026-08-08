@@ -77,11 +77,11 @@ const FAQS = [
     answer: "Our AI engine analyzes your resume's skills, experience, and domain, then cross-references them against thousands of active job listings across multiple platforms to find the perfect match."
   },
   {
-    question: "Is JobFusion really free?",
+    question: "Is Gohyred really free?",
     answer: "Yes! We offer a generous free tier that gives you access to basic job matching and tracking. You only pay when you want to unlock advanced features like unlimited matches, AI cover letters, and priority support."
   },
   {
-    question: "Can I use JobFusion if I'm not in tech?",
+    question: "Can I use Gohyred if I'm not in tech?",
     answer: "Absolutely. While we excel at tech roles, our AI is trained on a vast array of industries including finance, marketing, healthcare, design, and more."
   },
   {
@@ -320,7 +320,7 @@ export default function LandingPage() {
               <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
                 From signup to hired in 3 steps
               </h2>
-              <p className="text-muted-foreground text-base leading-relaxed">JobFusion's AI does the heavy lifting so you can focus on what matters — interviews.</p>
+              <p className="text-muted-foreground text-base leading-relaxed">Gohyred's AI does the heavy lifting so you can focus on what matters — interviews.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
@@ -402,7 +402,7 @@ export default function LandingPage() {
               <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
                 Got questions? We've got answers
               </h2>
-              <p className="text-muted-foreground text-base leading-relaxed">Everything you need to know about JobFusion and how it works.</p>
+              <p className="text-muted-foreground text-base leading-relaxed">Everything you need to know about Gohyred and how it works.</p>
             </div>
 
             <div className="flex flex-col gap-4">
@@ -433,7 +433,7 @@ export default function LandingPage() {
                   Ready to find your dream job?
                 </h2>
                 <p className="text-white/75 text-lg mb-10 max-w-xl mx-auto leading-relaxed">
-                  Join thousands of professionals using JobFusion to discover their perfect roles in real-time.
+                  Join thousands of professionals using Gohyred to discover their perfect roles in real-time.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
                   {isSignedIn ? (

@@ -311,7 +311,7 @@ export default function JobPortalsSection({
   ) => {
     const skillsQuery = optSkills && profileSkills.length > 0 ? profileSkills.join(",") : "";
     const queryKey = `${kw}::${loc}::${skillsQuery}`;
-    const PORTAL_CACHE_PREFIX = 'jobfusion_portal_cache_';
+    const PORTAL_CACHE_PREFIX = 'gohyred_portal_cache_';
     const cacheKey = `${PORTAL_CACHE_PREFIX}${portal}_${kw}_${loc}_${skillsQuery}`;
     
     if (!forceRefresh) {
@@ -440,7 +440,7 @@ export default function JobPortalsSection({
   };
 
   const doRefresh = () => {
-    const PORTAL_CACHE_PREFIX = 'jobfusion_portal_cache_';
+    const PORTAL_CACHE_PREFIX = 'gohyred_portal_cache_';
     const portalsToFetch = activePortal === 'all'
       ? ['linkedin', 'internshala', 'wellfound', 'indeed']
       : [activePortal];

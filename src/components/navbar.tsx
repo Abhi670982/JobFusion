@@ -119,17 +119,16 @@ export default function Navbar() {
             >
               <Image
                 src="/logo-circle.png"
-                alt="JobFusion Logo"
+                alt="Gohyred Logo"
                 width={32}
                 height={32}
                 className="rounded-full object-cover group-hover:scale-105 transition-transform border-[3px] border-border/70 shadow-sm"
               />
               <span
-                className="font-bold text-lg sm:text-xl tracking-tight"
+                className="font-bold text-lg sm:text-xl tracking-tight text-foreground"
                 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
               >
-                <span className="gradient-brand-text">Job</span>
-                <span className="text-foreground">Fusion</span>
+                <span className="gradient-brand-text">Gohyred</span>
               </span>
             </Link>
 

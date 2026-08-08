@@ -18,7 +18,7 @@ const getPublicIdFromUrl = (url) => {
 };
 
 async function test() {
-  const originalUrl = "https://res.cloudinary.com/dgnabufda/raw/upload/v1780571644/jobfusion-resumes/6a214cd92ae8423d5aaa0ff6_resume_1780571640419.pdf";
+  const originalUrl = "https://res.cloudinary.com/dgnabufda/raw/upload/v1780571644/gohyred-resumes/6a214cd92ae8423d5aaa0ff6_resume_1780571640419.pdf";
   const publicId = getPublicIdFromUrl(originalUrl);
   console.log("Extracted Public ID:", publicId);
 

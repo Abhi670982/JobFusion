@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
     if (!targetUser) {
       return NextResponse.json({
         success: false,
-        error: "User with this email was not found. The user must register for an account on JobFusion first before they can be promoted to admin."
+        error: "User with this email was not found. The user must register for an account on Gohyred first before they can be promoted to admin."
       }, { status: 440 });
     }
 

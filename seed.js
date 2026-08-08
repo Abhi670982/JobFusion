@@ -351,7 +351,7 @@ async function seed() {
         bio: "Passionate frontend engineer with expertise in building scalable, performant web applications.",
         location: "Bengaluru, Karnataka",
         experience: "6 years",
-        resumeUrl: "https://jobfusion-resumes.s3.amazonaws.com/demo-resume-eng.pdf",
+        resumeUrl: "https://gohyred-resumes.s3.amazonaws.com/demo-resume-eng.pdf",
         expectedSalary: "₹28L – ₹45L",
         isOnboarded: true,
         skills: {

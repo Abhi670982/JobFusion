@@ -218,7 +218,7 @@ export default function ResumePage() {
         setProfile(updated); 
         setSuccessMessage('Resume removed.'); 
         if (typeof window !== 'undefined') {
-          sessionStorage.removeItem('jobfusion_filter_query');
+          sessionStorage.removeItem('gohyred_filter_query');
         }
       }
     } catch (err: any) { setError(err.message || 'Failed to remove resume.'); }
@@ -596,7 +596,7 @@ export default function ResumePage() {
               We found {newlyExtractedSkills.length} new skill{newlyExtractedSkills.length === 1 ? '' : 's'}
             </DialogTitle>
             <p className="text-xs text-muted-foreground text-center mt-1">
-              JobFusion parsed your resume. What would you like to do?
+              Gohyred parsed your resume. What would you like to do?
             </p>
           </DialogHeader>
           

@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
       cloudinary.uploader
         .upload_stream(
           {
-            folder: "jobfusion-avatars",
+            folder: "gohyred-avatars",
             resource_type: "image",
             transformation: [{ width: 300, height: 300, crop: "fill", gravity: "face" }],
           },

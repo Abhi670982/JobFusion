@@ -4,7 +4,7 @@ import { prisma } from "../lib/prisma";
 
 async function main() {
   console.log("============================================================");
-  console.log("=== JOBFUSION DIRECT CRAWLER EXECUTION RUNNER ===");
+  console.log("=== GOHYRED DIRECT CRAWLER EXECUTION RUNNER ===");
   console.log("============================================================");
 
   // 1. Verify Database Connection

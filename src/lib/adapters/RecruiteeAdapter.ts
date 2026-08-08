@@ -29,7 +29,7 @@ export class RecruiteeAdapter extends AbstractAdapter<RecruiteeAdapterOptions, R
   protected async fetchRawJobs(options: RecruiteeAdapterOptions): Promise<RawRecruiteeJob[]> {
     const url = `https://${options.slug}.recruitee.com/api/offers`;
     const res = await fetch(url, {
-      headers: { Accept: "application/json", "User-Agent": "JobFusion-CrawlEngine/1.0" },
+      headers: { Accept: "application/json", "User-Agent": "Gohyred-CrawlEngine/1.0" },
       signal: AbortSignal.timeout(5000),
     });
 

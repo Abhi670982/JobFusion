@@ -246,7 +246,7 @@ export default function JobDetailPage() {
           portfolioUrl: uploadData.data.portfolioUrl || prev.portfolioUrl
         }));
 
-        setToastMessage("JobFusion AI successfully extracted details from your resume!");
+        setToastMessage("Gohyred AI successfully extracted details from your resume!");
         setShowSuccessToast(true);
         setTimeout(() => setShowSuccessToast(false), 5000);
       }
@@ -684,7 +684,7 @@ export default function JobDetailPage() {
                 />
                 {uploadingResume && (
                   <p className="text-[11px] text-primary animate-pulse font-medium">
-                    JobFusion AI is uploading and reading your resume...
+                    Gohyred AI is uploading and reading your resume...
                   </p>
                 )}
               </div>

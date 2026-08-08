@@ -1,5 +1,5 @@
 # Next Steps After Git Recovery
-## Actionable Items for JobFusion Project
+## Actionable Items for Gohyred Project
 
 ---
 
@@ -25,7 +25,7 @@
 Start the development server and verify everything works:
 
 ```bash
-cd jobfusion
+cd gohyred
 npm run dev
 ```
 
@@ -238,7 +238,7 @@ Use Chrome DevTools Performance tab to profile.
 Create a `CONTRIBUTING.md` file with team guidelines:
 
 ```markdown
-# Contributing to JobFusion
+# Contributing to Gohyred
 
 ## Git Workflow
 
@@ -556,5 +556,5 @@ Remember: Every developer encounters Git issues. What matters is knowing how to 
 ---
 
 *Created: July 2, 2026*  
-*Project: JobFusion*  
+*Project: Gohyred*  
 *Status: Recovery Complete, Ready for Next Steps*

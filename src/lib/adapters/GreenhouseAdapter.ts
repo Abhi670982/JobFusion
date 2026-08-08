@@ -24,7 +24,7 @@ export class GreenhouseAdapter extends AbstractAdapter<GreenhouseAdapterOptions,
   protected async fetchRawJobs(options: GreenhouseAdapterOptions): Promise<RawGreenhouseJob[]> {
     const url = `https://boards-api.greenhouse.io/v1/boards/${options.slug}/jobs?content=true`;
     const res = await fetch(url, {
-      headers: { Accept: "application/json", "User-Agent": "JobFusion-CrawlEngine/1.0" },
+      headers: { Accept: "application/json", "User-Agent": "Gohyred-CrawlEngine/1.0" },
       signal: AbortSignal.timeout(5000),
     });
 

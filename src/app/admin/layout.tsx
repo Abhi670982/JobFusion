@@ -5,7 +5,7 @@ import { verifyAdmin } from "@/lib/admin-auth";
 import AdminLayoutClient from "@/components/admin/AdminLayoutClient";
 
 export const metadata: Metadata = {
-  title: "Admin Dashboard – JobFusion",
+  title: "Admin Dashboard – Gohyred",
   description: "Internal admin operations dashboard",
   robots: "noindex, nofollow",
 };

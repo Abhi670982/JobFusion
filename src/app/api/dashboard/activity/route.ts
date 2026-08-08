@@ -120,7 +120,7 @@ export async function GET() {
         seedActivities.push({
           userId: userIdStr,
           type: "updated_profile",
-          details: "Registered and signed in to JobFusion",
+          details: "Registered and signed in to Gohyred",
           createdAt: user.createdAt || new Date(),
         });
       }

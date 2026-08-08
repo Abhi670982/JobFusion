@@ -1,8 +1,8 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'GDPR Compliance | JobFusion',
-  description: 'Information regarding JobFusion\'s compliance with the General Data Protection Regulation.',
+  title: 'GDPR Compliance | Gohyred',
+  description: 'Information regarding Gohyred\'s compliance with the General Data Protection Regulation.',
 };
 
 export default function GDPRCompliancePage() {
@@ -19,7 +19,7 @@ export default function GDPRCompliancePage() {
           <div className="space-y-8 text-foreground/90 leading-relaxed">
             <section>
               <h2 className="text-2xl font-semibold text-foreground mb-4">1. Commitment to GDPR</h2>
-              <p>JobFusion is fully committed to complying with the General Data Protection Regulation (GDPR) to ensure the protection and privacy of personal data for all our users in the European Union (EU) and European Economic Area (EEA).</p>
+              <p>Gohyred is fully committed to complying with the General Data Protection Regulation (GDPR) to ensure the protection and privacy of personal data for all our users in the European Union (EU) and European Economic Area (EEA).</p>
             </section>
             
             <section>
@@ -55,7 +55,7 @@ export default function GDPRCompliancePage() {
 
             <section>
               <h2 className="text-2xl font-semibold text-foreground mb-4">5. Contacting Our Data Protection Officer (DPO)</h2>
-              <p>We have appointed a Data Protection Officer (DPO) to oversee compliance with this privacy notice. If you have any questions about this privacy notice or how we handle your personal data, please contact our DPO at dpo@jobfusion.com.</p>
+              <p>We have appointed a Data Protection Officer (DPO) to oversee compliance with this privacy notice. If you have any questions about this privacy notice or how we handle your personal data, please contact our DPO at dpo@gohyred.com.</p>
             </section>
           </div>
         </div>

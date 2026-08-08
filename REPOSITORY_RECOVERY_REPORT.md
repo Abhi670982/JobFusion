@@ -1,4 +1,4 @@
-# Repository Recovery Report - JobFusion
+# Repository Recovery Report - Gohyred
 ## Matching Local Repository to Deployed Vercel Production
 
 **Date:** July 6, 2026  

@@ -125,7 +125,7 @@ export const FAQ_ITEMS = [
   {
     question: 'Is my payment information secure?',
     answer:
-      'Absolutely. Payments are processed by Dodo Payments, a PCI-DSS compliant payment processor. JobFusion never stores your card details.',
+      'Absolutely. Payments are processed by Dodo Payments, a PCI-DSS compliant payment processor. Gohyred never stores your card details.',
   },
   {
     question: 'What is the difference between monthly and yearly billing?',
@@ -140,7 +140,7 @@ export const FAQ_ITEMS = [
   {
     question: 'Is there a student or non-profit discount?',
     answer:
-      'We offer special pricing for students and non-profit organizations. Please contact us at support@jobfusion.ai with a valid institutional email for eligibility.',
+      'We offer special pricing for students and non-profit organizations. Please contact us at support@gohyred.ai with a valid institutional email for eligibility.',
   },
   {
     question: 'What payment methods are accepted?',
@@ -163,7 +163,7 @@ export const TRUST_BADGES = [
 
 export const TESTIMONIALS = [
   {
-    quote: "JobFusion Pro's AI resume builder helped me land 3x more interviews in just 2 weeks.",
+    quote: "Gohyred Pro's AI resume builder helped me land 3x more interviews in just 2 weeks.",
     name: 'Priya Sharma',
     role: 'Software Engineer at Swiggy',
     avatar: 'PS',

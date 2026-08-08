@@ -1,8 +1,8 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy | JobFusion',
-  description: 'Privacy Policy for JobFusion.',
+  title: 'Privacy Policy | Gohyred',
+  description: 'Privacy Policy for Gohyred.',
 };
 
 export default function PrivacyPolicyPage() {
@@ -17,14 +17,14 @@ export default function PrivacyPolicyPage() {
           <p className="text-muted-foreground mb-10">Last Updated: July 01, 2026</p>
           
           <div className="space-y-8 text-foreground/90 leading-relaxed">
-            <p className="text-muted-foreground">At Job Fusion, accessible from job-fusion-omega.vercel.app, one of our main priorities is the privacy of our visitors. This Privacy Policy document contains types of information that is collected and recorded by Job Fusion and how we use it.</p>
+            <p className="text-muted-foreground">At Gohyred, accessible from gohyred-omega.vercel.app, one of our main priorities is the privacy of our visitors. This Privacy Policy document contains types of information that is collected and recorded by Gohyred and how we use it.</p>
             
             <section>
               <h2 className="text-2xl font-semibold text-foreground mb-4">Information We Collect</h2>
               <ul className="list-disc pl-6 space-y-4 text-muted-foreground">
                 <li><strong className="text-foreground">Account Information:</strong> When you register for an account (as a Job Seeker or Employer), we may ask for your contact information, including items such as name, company name, email address, and telephone number.</li>
                 <li><strong className="text-foreground">Profile & Resume Data:</strong> Job Seekers may upload resumes, CVs, work experience, education history, and skills to build their profiles.</li>
-                <li><strong className="text-foreground">Log Files:</strong> Job Fusion follows a standard procedure of using log files. These files log visitors when they visit websites. The information collected includes internet protocol (IP) addresses, browser type, Internet Service Provider (ISP), date and time stamp, referring/exit pages, and possibly the number of clicks.</li>
+                <li><strong className="text-foreground">Log Files:</strong> Gohyred follows a standard procedure of using log files. These files log visitors when they visit websites. The information collected includes internet protocol (IP) addresses, browser type, Internet Service Provider (ISP), date and time stamp, referring/exit pages, and possibly the number of clicks.</li>
               </ul>
             </section>
             
