@@ -116,11 +116,11 @@ export default function SavedJobsPage() {
         ) : (
           savedJobs.map((savedJob, i) => {
             const job = savedJob.jobId;
-            if (!job) return null;
+            if (!job || typeof job === 'string') return null;
             return (
               <JobCard
-                key={savedJob._id}
-                job={job}
+                key={savedJob._id || i}
+                job={job as any}
                 index={i}
                 userId={user?._id}
                 initialIsSaved={true}

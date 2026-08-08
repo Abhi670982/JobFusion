@@ -10,7 +10,7 @@ type SavedJobWithUserAndJob = Prisma.SavedJobGetPayload<{
 }>;
 
 function mapSavedJob(sj: SavedJobWithUserAndJob | null) {
-  if (!sj) return null;
+  if (!sj || !sj.job) return null;
   return {
     _id: sj.id,
     userId: sj.user ? {
@@ -24,7 +24,7 @@ function mapSavedJob(sj: SavedJobWithUserAndJob | null) {
       createdAt: sj.user.createdAt,
       updatedAt: sj.user.updatedAt
     } : sj.userId,
-    jobId: sj.job ? {
+    jobId: {
       _id: sj.job.id,
       title: sj.job.title,
       company: sj.job.company,
@@ -33,15 +33,31 @@ function mapSavedJob(sj: SavedJobWithUserAndJob | null) {
       location: sj.job.location,
       locationType: sj.job.locationType,
       salary: sj.job.salary,
+      salaryMin: sj.job.salaryMin,
+      salaryMax: sj.job.salaryMax,
       experience: sj.job.experience,
       experienceLevel: sj.job.experienceLevel,
       type: sj.job.type === "full_time" ? "full-time" : (sj.job.type === "part_time" ? "part-time" : sj.job.type),
+      skills: sj.job.skills || [],
+      description: sj.job.description || "",
+      requirements: sj.job.requirements || [],
+      responsibilities: sj.job.responsibilities || [],
+      benefits: sj.job.benefits || [],
       postedAt: sj.job.postedAt,
       postedAtDate: sj.job.postedAtDate,
       category: sj.job.category,
       source: sj.job.source,
-      applyUrl: sj.job.applyUrl
-    } : sj.jobId,
+      applyUrl: sj.job.applyUrl,
+      sourceId: sj.job.sourceId,
+      sourceUrl: sj.job.sourceUrl,
+      city: sj.job.city,
+      country: sj.job.country,
+      isRemote: sj.job.isRemote,
+      salaryCurrency: sj.job.salaryCurrency,
+      salaryPeriod: sj.job.salaryPeriod,
+      isActive: sj.job.isActive,
+      expiresAt: sj.job.expiresAt
+    },
     savedAt: sj.savedAt,
     createdAt: sj.createdAt,
     updatedAt: sj.updatedAt
@@ -137,7 +153,7 @@ export async function GET(req: NextRequest) {
       orderBy: { savedAt: "desc" }
     });
 
-    return NextResponse.json({ success: true, data: savedJobs.map(mapSavedJob) });
+    return NextResponse.json({ success: true, data: savedJobs.map(mapSavedJob).filter(Boolean) });
   } catch (error: unknown) {
     return safeErrorResponse(error, "Failed to fetch saved jobs");
   }
