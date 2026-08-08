@@ -72,11 +72,11 @@ export function GohyredLogo({
         style={{ width: iconSize, height: iconSize }}
       />
 
-      {/* 2. PURE WHITE BOLD WORDMARK */}
+      {/* 2. THEME-AWARE BOLD WORDMARK (Dark Blue in Light Mode, White in Dark Mode) */}
       {variant === 'full' && (
         <span
           className={cn(
-            'font-bold tracking-tight text-white transition-opacity duration-200',
+            'font-bold tracking-tight text-blue-950 dark:text-white transition-colors duration-200',
             textSizeClass,
             hideTextOnMobile && 'hidden sm:inline-block'
           )}
