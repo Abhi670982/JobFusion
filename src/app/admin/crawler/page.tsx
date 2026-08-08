@@ -94,10 +94,20 @@ export default function AdminCrawlerMonitoringPage() {
   const [triggering, setTriggering] = useState(false);
   const [manualMessage, setManualMessage] = useState<string | null>(null);
 
+  const safeParseJson = async (res: Response) => {
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      console.error("[Admin Crawler] Received non-JSON response:", text.slice(0, 200));
+      return { success: false, error: "Crawler request failed. The server returned an unexpected response." };
+    }
+  };
+
   const fetchStats = async () => {
     try {
       const res = await fetch("/api/admin/crawler-stats");
-      const json = await res.json();
+      const json = await safeParseJson(res);
 
       if (json.success && json.data) {
         setCrawlerStatus(json.data.crawlerStatus || "IDLE");
@@ -118,35 +128,37 @@ export default function AdminCrawlerMonitoringPage() {
     fetchStats();
   }, []);
 
-  // Auto-poll every 5 seconds if crawler is running
+  // Auto-poll every 4 seconds if crawler is running
   useEffect(() => {
     if (crawlerStatus === "RUNNING") {
       const timer = setInterval(() => {
         fetchStats();
-      }, 5000);
+      }, 4000);
       return () => clearInterval(timer);
     }
   }, [crawlerStatus]);
 
   const handleRunCrawlNow = async () => {
     setTriggering(true);
-    setManualMessage("Initiating production crawl pass across all portals...");
+    setManualMessage("Initiating background job aggregation pass across all portals...");
     try {
       const res = await fetch("/api/admin/crawler-stats", { method: "POST" });
-      const json = await res.json();
+      const json = await safeParseJson(res);
+
       if (json.success) {
-        setManualMessage(json.message || "Crawl completed successfully.");
+        setManualMessage(json.message || "Background crawler started successfully.");
+        setCrawlerStatus("RUNNING");
         await fetchStats();
       } else {
-        if (res.status === 409) {
-          setManualMessage("Crawler is already running in background. Monitoring active run...");
+        if (res.status === 409 || json.status === "ALREADY_RUNNING") {
+          setManualMessage(json.message || "A crawler run is already in progress.");
           setCrawlerStatus("RUNNING");
         } else {
-          setManualMessage(`Crawl failed: ${json.error || "Unknown error"}`);
+          setManualMessage(json.error || "Crawler request failed. Please check server logs.");
         }
       }
     } catch (err: any) {
-      setManualMessage(`Execution error: ${err.message || "Failed to trigger crawl"}`);
+      setManualMessage(err.message || "Execution error: Failed to trigger crawl.");
     } finally {
       setTriggering(false);
     }
