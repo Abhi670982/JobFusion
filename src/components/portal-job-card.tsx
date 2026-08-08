@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { MapPin, Clock, ExternalLink, Building2, Wifi, Star, DollarSign, Lock } from 'lucide-react';
+import { MapPin, Clock, ExternalLink, Building2, Wifi, Star, DollarSign, Lock, Zap } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -93,138 +93,136 @@ export default function PortalJobCard({ job, index = 0, isPro = false, onRequire
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: index * 0.03, ease: 'easeOut' }}
-      className={cn(
-        'group relative flex flex-col gap-3 rounded-2xl border border-border/80 bg-card/70',
-        'p-4 shadow-sm backdrop-blur-sm transition-all duration-200',
-        'hover:border-border hover:shadow-md hover:bg-card/90',
-        'cursor-pointer'
-      )}
+      transition={{ duration: 0.35, delay: index * 0.06, ease: [0.22, 1, 0.36, 1] }}
+      whileHover={{ y: -2 }}
+      className="card-premium cursor-pointer group relative overflow-hidden"
       onClick={handleApply}
+      style={{ transition: 'box-shadow 0.25s ease, border-color 0.25s ease, transform 0.25s ease' }}
     >
-      {/* Header Info */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2.5 min-w-0">
-          {job.companyLogo ? (
-            <img 
-              src={job.companyLogo} 
-              alt={job.company} 
-              className="w-9 h-9 rounded-xl object-contain bg-white p-1 border border-border/40 flex-shrink-0"
-              onError={(e) => {
-                (e.target as HTMLElement).style.display = 'none';
-              }}
-            />
-          ) : (
-            <div className={cn(
-              'w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-sm font-bold',
-              srcConfig.bg, srcConfig.text
-            )}>
-              {job.company?.charAt(0)?.toUpperCase() || <Building2 className="w-4 h-4" />}
+      {/* Hover glow */}
+      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl pointer-events-none"
+        style={{ background: `radial-gradient(ellipse at top left, #6366f108, transparent 70%)` }} />
+
+      <div className="p-5 relative z-10">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="flex items-center gap-3 min-w-0">
+            {/* Company Logo */}
+            <div
+              className="w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold text-base shadow-md flex-shrink-0 overflow-hidden transition-transform group-hover:scale-105 duration-300 bg-white"
+            >
+              {job.companyLogo && (job.companyLogo.startsWith('http') || job.companyLogo.includes('/')) ? (
+                <img
+                  src={`/api/proxy-image?url=${encodeURIComponent(job.companyLogo)}&company=${encodeURIComponent(job.company || 'Company')}&color=${encodeURIComponent('#6366f1')}`}
+                  alt={job.company}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none';
+                  }}
+                />
+              ) : (
+                <div className={cn(
+                  'w-full h-full flex items-center justify-center font-bold text-base',
+                  srcConfig.bg, srcConfig.text
+                )}>
+                  {job.company?.charAt(0)?.toUpperCase() || <Building2 className="w-5 h-5" />}
+                </div>
+              )}
             </div>
-          )}
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-muted-foreground truncate">{job.company || 'Unknown Company'}</p>
-            <h3 className="text-sm font-bold text-foreground truncate leading-tight mt-0.5" title={job.title}>
-              {job.title}
-            </h3>
+
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <h3 className="font-semibold text-sm leading-tight group-hover:text-primary transition-colors line-clamp-1" title={job.title}>
+                  {job.title}
+                </h3>
+                {isLocked && (
+                  <Badge className="text-[9px] h-4 px-1.5 bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 flex-shrink-0 rounded-full font-bold gap-0.5">
+                    <Lock className="w-2.5 h-2.5" /> Premium
+                  </Badge>
+                )}
+                {/* Portal Badge */}
+                <span className={cn(
+                  'inline-flex items-center gap-1 text-[9px] h-4 font-bold uppercase tracking-wide px-1.5 rounded-full border flex-shrink-0',
+                  srcConfig.bg, srcConfig.text, srcConfig.border
+                )}>
+                  <span className={cn('w-1.5 h-1.5 rounded-full', srcConfig.dot)} />
+                  {srcConfig.label}
+                </span>
+              </div>
+              <div className="flex items-center gap-1 mt-0.5">
+                <Building2 className="w-3 h-3 text-muted-foreground" />
+                <span className="text-xs text-muted-foreground truncate">{job.company || 'Unknown Company'}</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Portal Tag Badge */}
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          {isLocked && (
-            <span className="inline-flex items-center gap-1 text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
-              <Lock className="w-2.5 h-2.5" /> Premium
-            </span>
+        {/* Tags */}
+        <div className="flex flex-wrap gap-1.5 mb-3.5">
+          {job.isRemote && (
+            <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 rounded-full text-xs border">
+              <Wifi className="w-3 h-3 mr-1" />
+              Remote
+            </Badge>
           )}
-          <span className={cn(
-            'inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full border',
-            srcConfig.bg, srcConfig.text, srcConfig.border
-          )}>
-            <span className={cn('w-1.5 h-1.5 rounded-full', srcConfig.dot)} />
-            {srcConfig.label}
-          </span>
+          {job.employmentType && (
+            <Badge variant="secondary" className="rounded-full text-xs capitalize">{job.employmentType}</Badge>
+          )}
+          {job.experienceLevel && (
+            <Badge variant="secondary" className="rounded-full text-xs capitalize">{job.experienceLevel}</Badge>
+          )}
         </div>
-      </div>
 
-      {/* Meta Indicators */}
-      <div className="flex flex-wrap items-center gap-2.5 text-xs text-muted-foreground">
-        {job.location && (
-          <span className="flex items-center gap-1">
-            <MapPin className="w-3.5 h-3.5 flex-shrink-0 text-primary" />
-            <span className="truncate max-w-[150px]">{job.location}</span>
-          </span>
-        )}
-        {job.isRemote && (
-          <span className="flex items-center gap-1 text-emerald-500 font-semibold">
-            <Wifi className="w-3.5 h-3.5" />
-            Remote
-          </span>
-        )}
-        {job.employmentType && (
-          <Badge variant="secondary" className="text-[10px] px-2 py-0 h-auto rounded-full font-bold capitalize">
-            {job.employmentType}
-          </Badge>
-        )}
-        {job.experienceLevel && (
-          <span className="flex items-center gap-1 text-[11px]">
-            <Star className="w-3.5 h-3.5 text-amber-500" />
-            <span className="capitalize">{job.experienceLevel}</span>
-          </span>
-        )}
-      </div>
+        {/* Location & Salary */}
+        <div className="flex items-center justify-between text-xs text-muted-foreground mb-3.5">
+          <div className="flex items-center gap-1">
+            <MapPin className="w-3 h-3" />
+            <span className="truncate max-w-[140px]">{job.location || 'Location not specified'}</span>
+          </div>
+          {job.salaryText && job.salaryText !== 'Not disclosed' && (
+            <span className="font-semibold text-foreground text-xs">{job.salaryText}</span>
+          )}
+        </div>
 
-      {/* Short Job Description snippet */}
-      <p className="text-xs text-muted-foreground/90 line-clamp-2 leading-relaxed">
-        {job.description || "No description provided."}
-      </p>
+        {/* Skills */}
+        {displaySkills.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            {displaySkills.map((skill: string) => (
+              <span
+                key={skill}
+                className="text-[10px] px-2 py-0.5 rounded-full bg-accent text-accent-foreground border border-border/60 font-medium capitalize"
+              >
+                {skill}
+              </span>
+            ))}
+            {(job.matchedSkills?.length ?? 0) > 4 && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+                +{(job.matchedSkills?.length ?? 0) - 4} more
+              </span>
+            )}
+          </div>
+        )}
 
-      {/* Extracted Skills */}
-      {displaySkills.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {displaySkills.map((skill: string) => (
-            <span
-              key={skill}
-              className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-muted text-muted-foreground capitalize"
+        {/* Footer */}
+        <div className="flex items-center justify-between pt-3 border-t border-border/50">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Clock className="w-3 h-3" />
+            <span>{job.isDateless || !postedStr ? "Date unknown" : postedStr}</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={(e) => handleApply(e)}
+              size="sm"
+              className="h-7 px-3 text-xs rounded-full gradient-brand text-white border-0 hover:opacity-90 transition-opacity z-10 shadow-sm"
             >
-              {skill}
-            </span>
-          ))}
-          {(job.matchedSkills?.length ?? 0) > 4 && (
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-muted text-muted-foreground">
-              +{(job.matchedSkills?.length ?? 0) - 4} more
-            </span>
-          )}
+              <Zap className="w-3 h-3 mr-1" />
+              Apply
+            </Button>
+          </div>
         </div>
-      )}
-
-      {/* Footer Compensation & Date Posted */}
-      <div className="flex items-center justify-between gap-2 mt-auto pt-2 border-t border-border/60">
-        <div className="flex items-center gap-3 min-w-0">
-          <span className="flex items-center gap-1 text-xs font-bold text-foreground">
-            <DollarSign className="w-3.5 h-3.5 text-primary" />
-            <span>{job.salaryText || "Not disclosed"}</span>
-          </span>
-          <span className="flex items-center gap-1 text-[10px] text-muted-foreground font-semibold">
-            <Clock className="w-3.5 h-3.5" />
-            {job.isDateless || !postedStr ? "Date unknown" : postedStr}
-          </span>
-        </div>
-
-        <Button
-          size="sm"
-          className={cn(
-            'h-7 px-3 text-[11px] font-bold rounded-lg flex-shrink-0 gap-1',
-            'bg-primary/10 text-primary border border-primary/20 hover:bg-primary hover:text-primary-foreground',
-            'transition-all duration-150'
-          )}
-          onClick={(e) => handleApply(e)}
-        >
-          Apply
-          <ExternalLink className="w-3.5 h-3.5" />
-        </Button>
       </div>
     </motion.div>
   );

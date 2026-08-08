@@ -626,21 +626,20 @@ export default function CustomSignInPage() {
                   )}
                 </div>
 
-                {/* Remember Me & Forgot Password Row */}
                 <div className="flex items-center justify-between pt-0.5">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2.5">
                     <Checkbox
                       id="rememberMe"
                       checked={rememberMe}
                       onCheckedChange={(checked) => setRememberMe(!!checked)}
                       disabled={loading || isLockedOut}
-                      className="w-3.5 h-3.5 rounded border-border focus-visible:ring-primary data-[state=checked]:bg-primary transition-all duration-200"
+                      className="w-4 h-4 p-0 shrink-0 rounded border-border focus-visible:ring-primary data-[state=checked]:bg-primary transition-all duration-200 appearance-none"
                     />
-                    <Label htmlFor="rememberMe" className="text-xs text-muted-foreground cursor-pointer select-none font-medium">
+                    <Label htmlFor="rememberMe" className="text-sm text-muted-foreground cursor-pointer select-none font-medium">
                       Remember Me
                     </Label>
                   </div>
-                  <Link href="/auth/forgot-password" className="text-xs text-primary hover:underline font-medium">
+                  <Link href="/auth/forgot-password" className="text-sm text-primary hover:underline font-medium">
                     Forgot password?
                   </Link>
                 </div>

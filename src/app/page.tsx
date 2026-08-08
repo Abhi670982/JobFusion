@@ -22,6 +22,7 @@ import { features } from '@/lib/data';
 // so they don't need to be in the initial JS bundle.
 const Footer = dynamic(() => import('@/components/footer'), { ssr: true });
 const HeroBackground = dynamic(() => import('@/components/hero-background'), { ssr: false });
+import { CompanyMarquee } from '@/components/company-marquee';
 
 const iconMap: Record<string, React.ComponentType<any>> = {
   brain: Brain, zap: Zap, target: Target,
@@ -254,6 +255,13 @@ export default function LandingPage() {
               ))}
             </motion.div>
 
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+            >
+              <CompanyMarquee />
+            </motion.div>
 
           </motion.div>
 

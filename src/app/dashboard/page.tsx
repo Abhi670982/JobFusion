@@ -354,13 +354,13 @@ export default function DashboardPage() {
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto mt-2 sm:mt-0 flex-shrink-0">
             {!subscription?.features?.hasProAccess && (
               <Link href="/pricing">
                 <Button
                   id="dashboard-upgrade-btn"
                   size="sm"
-                  className="rounded-xl gradient-brand text-white border-0 font-semibold text-xs hover:opacity-90 shadow-sm h-8"
+                  className="rounded-xl gradient-brand text-white border-0 font-semibold text-[11px] px-3 hover:opacity-90 shadow-sm h-8"
                   aria-label="Upgrade to Pro plan"
                 >
                   <Sparkles className="w-3 h-3 mr-1.5" aria-hidden="true" />
@@ -373,7 +373,7 @@ export default function DashboardPage() {
                 id="dashboard-manage-sub-btn"
                 size="sm"
                 variant="outline"
-                className="rounded-xl text-xs h-8"
+                className="rounded-xl text-[11px] px-3 h-8"
                 aria-label="Manage subscription"
               >
                 Manage Billing
