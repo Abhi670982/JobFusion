@@ -179,7 +179,7 @@ export default function LandingPage() {
 
             {/* Description — CSS animated, not Framer Motion, so LCP isn't blocked */}
             <p
-              className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed animate-hero-fade-in"
+              className="text-sm md:text-xl text-muted-foreground mb-6 md:mb-10 max-w-2xl mx-auto leading-relaxed animate-hero-fade-in px-4 md:px-0"
               style={{ animationDelay: '0.1s' }}
             >
               The most intelligent career platform. AI parses your resume, matches your skills and surfaces the roles you were meant to apply for.
@@ -189,32 +189,32 @@ export default function LandingPage() {
             <motion.div
               initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.3 }}
-              className="relative max-w-2xl mx-auto mb-5"
+              className="relative max-w-2xl mx-auto mb-5 px-2 md:px-0"
             >
-              <div className="glass bg-white/90 dark:bg-black/60 backdrop-blur-3xl rounded-2xl p-1.5 glow-brand border border-white/30 dark:border-white/10 relative z-30">
-                <div className="flex flex-col sm:flex-row gap-1.5">
-                  <div className="flex items-center gap-2 flex-1 px-3 py-1">
-                    <Search className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+              <div className="glass bg-white/90 dark:bg-black/60 backdrop-blur-3xl rounded-2xl p-1 md:p-1.5 glow-brand border border-white/30 dark:border-white/10 relative z-30">
+                <div className="flex flex-col sm:flex-row gap-1 md:gap-1.5">
+                  <div className="flex items-center gap-2 flex-1 px-2 py-0.5 md:px-3 md:py-1">
+                    <Search className="w-3.5 h-3.5 md:w-4 md:h-4 text-muted-foreground flex-shrink-0" />
                     <AutocompleteInput
                       dataSource="roles"
                       placeholder="Role, company, or keyword..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       onSelect={(val) => setSearchQuery(val)}
-                      className="border-0 bg-transparent shadow-none focus-visible:ring-0 text-sm h-9 px-0 w-full min-w-0"
+                      className="border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 focus:outline-none focus-visible:outline-none text-xs md:text-sm h-8 md:h-9 px-0 w-full min-w-0"
                       wrapperClassName="w-full flex-1"
                     />
                   </div>
                   <div className="hidden sm:block w-px bg-border/60 my-2" />
-                  <div className="flex items-center gap-2 flex-1 px-3 py-1">
-                    <MapPin className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                  <div className="flex items-center gap-2 flex-1 px-2 py-0.5 md:px-3 md:py-1">
+                    <MapPin className="w-3.5 h-3.5 md:w-4 md:h-4 text-muted-foreground flex-shrink-0" />
                     <AutocompleteInput
                       dataSource="locations"
                       placeholder="Location or Remote..."
                       value={location}
                       onChange={(e) => setLocation(e.target.value)}
                       onSelect={(val) => setLocation(val)}
-                      className="border-0 bg-transparent shadow-none focus-visible:ring-0 text-sm h-9 px-0 w-full min-w-0"
+                      className="border-0 bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 focus:outline-none focus-visible:outline-none text-xs md:text-sm h-8 md:h-9 px-0 w-full min-w-0"
                       wrapperClassName="w-full flex-1"
                     />
                   </div>
@@ -227,9 +227,9 @@ export default function LandingPage() {
                         router.push('/sign-in');
                       }
                     }}
-                    className="gradient-brand text-white border-0 rounded-xl h-10 px-6 font-semibold hover:opacity-90 shadow-md glow-sm whitespace-nowrap w-full sm:w-auto"
+                    className="gradient-brand text-white border-0 rounded-xl h-9 md:h-10 px-5 md:px-6 text-sm font-semibold hover:opacity-90 shadow-md glow-sm whitespace-nowrap w-full sm:w-auto mt-0.5 sm:mt-0"
                   >
-                    <Search className="w-4 h-4 mr-1.5" />
+                    <Search className="w-3.5 h-3.5 md:w-4 md:h-4 mr-1.5" />
                     Find Jobs
                   </Button>
                 </div>
@@ -239,14 +239,15 @@ export default function LandingPage() {
             {/* Popular searches */}
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}
-              className="flex flex-wrap justify-center items-center gap-3 md:gap-2 mb-14"
+              className="flex flex-wrap justify-center items-center gap-1.5 md:gap-2 mb-10 md:mb-14 px-2 md:px-0"
             >
-              <span className="text-sm md:text-xs text-muted-foreground mr-1">Popular:</span>
+              <span className="text-[10px] md:text-xs text-muted-foreground mr-1">Popular:</span>
               {['Remote Engineer', 'Product Designer', 'Data Scientist', 'Full Stack Dev', 'AI/ML Engineer'].map((term) => (
                 <Link
                   key={term}
                   href={isSignedIn ? "/jobs" : "/sign-in"}
-                  className="text-sm md:text-xs px-5 py-3 md:px-3 md:py-1.5 min-h-[48px] md:min-h-[32px] inline-flex items-center justify-center rounded-full border border-border hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all duration-200 font-medium m-1"
+                  prefetch={false}
+                  className="text-[10px] md:text-xs px-2.5 md:px-3 py-1 md:py-1.5 min-h-[24px] md:min-h-[32px] inline-flex items-center justify-center rounded-full border border-border hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all duration-200 font-medium m-0.5"
                 >
                   {term}
                 </Link>
@@ -255,6 +256,7 @@ export default function LandingPage() {
 
 
           </motion.div>
+
 
         </section>
 
@@ -434,14 +436,14 @@ export default function LandingPage() {
                       </Button>
                     </Link>
                   ) : (
-                    <Link href="/sign-up">
+                    <Link href="/sign-up" prefetch={false}>
                       <Button size="lg" className="bg-white text-primary hover:bg-white/90 rounded-xl font-bold px-8 shadow-xl h-12">
                         Get Started Free
                         <ArrowRight className="w-4 h-4 ml-2" />
                       </Button>
                     </Link>
                   )}
-                  <Link href={isSignedIn ? "/jobs" : "/sign-in"}>
+                  <Link href={isSignedIn ? "/jobs" : "/sign-in"} prefetch={false}>
                     <Button size="lg" variant="outline" className="bg-transparent border-white/30 text-white hover:bg-white/10 hover:text-white rounded-xl font-semibold px-8 h-12">
                       Browse Jobs
                     </Button>

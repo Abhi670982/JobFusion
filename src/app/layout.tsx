@@ -43,10 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
-        {/* Preconnect to Clerk CDN (profile images on every page).
-            Google favicon API is lazy-loaded so only dns-prefetch needed. */}
-        <link rel="preconnect" href="https://img.clerk.com" crossOrigin="anonymous" />
-        <link rel="dns-prefetch" href="https://img.clerk.com" />
+        {/* Google favicon API is lazy-loaded so only dns-prefetch needed. */}
         <link rel="dns-prefetch" href="https://www.google.com" />
       </head>
       <body className={`${inter.variable} ${plusJakarta.variable} font-sans antialiased overflow-x-hidden`}>

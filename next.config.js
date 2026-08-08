@@ -92,7 +92,8 @@ const nextConfig = {
   },
 
   experimental: {
-    inlineCss: false,
+    inlineCss: true,
+    optimizePackageImports: ['lucide-react', 'framer-motion'],
   },
 
   turbopack: {

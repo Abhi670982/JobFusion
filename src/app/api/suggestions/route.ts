@@ -15,7 +15,7 @@ const SUGGESTIONS_MAP: Record<string, string[]> = {
     "vue.js", "angular", "ruby on rails", "php", "c#", "scala"
   ],
   locations: [
-    "remote", "bengaluru, karnataka", "delhi ncr", "mumbai, maharashtra", 
+    "remote", "bengaluru, karnataka", "delhi ncr", "new delhi", "mumbai, maharashtra", 
     "hyderabad, telangana", "pune, maharashtra", "chennai, tamil nadu", 
     "san francisco, ca", "new york, ny", "london, uk", "berlin, germany",
     "singapore", "toronto, canada", "sydney, australia", "noida, uttar pradesh",
