@@ -20,6 +20,7 @@ export default function HeroBackground() {
   const { resolvedTheme } = useTheme();
 
   useEffect(() => {
+
     // Generate starfield
     const generatedStars: StarItem[] = [];
     let starId = 0;

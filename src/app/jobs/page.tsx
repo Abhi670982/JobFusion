@@ -925,37 +925,30 @@ export default function JobsPage() {
           </div>
           
           <div className="flex flex-col items-end gap-1.5">
-            {usageStats && (
+            {usageStats && !usageStats.isPro && (
               <div className="flex items-center gap-2 mb-1">
-                {usageStats.isPro ? (
-                  <span className="text-[11px] font-semibold text-primary flex items-center gap-1 bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    ⭐ JobFusion Pro
+                <div className="flex flex-col items-end bg-card px-3 py-1.5 rounded-xl border border-border shadow-sm">
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-1">
+                    AI Usage Today
                   </span>
-                ) : (
-                  <div className="flex flex-col items-end bg-card px-3 py-1.5 rounded-xl border border-border shadow-sm">
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-1">
-                      AI Usage Today
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
-                        <div 
-                          className={cn("h-full rounded-full transition-all duration-500", 
-                            (usageStats.featureUsage?.['match-my-skills'] || 0) >= usageStats.limit 
-                              ? "bg-red-500" 
-                              : "bg-primary"
-                          )}
-                          style={{ width: `${Math.min(100, ((usageStats.featureUsage?.['match-my-skills'] || 0) / usageStats.limit) * 100)}%` }}
-                        />
-                      </div>
-                      <span className={cn("text-[11px] font-bold", 
-                        (usageStats.featureUsage?.['match-my-skills'] || 0) >= usageStats.limit ? "text-red-500" : "text-foreground"
-                      )}>
-                        {(usageStats.featureUsage?.['match-my-skills'] || 0)} / {usageStats.limit} Used
-                      </span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className={cn("h-full rounded-full transition-all duration-500", 
+                          (usageStats.featureUsage?.['match-my-skills'] || 0) >= usageStats.limit 
+                            ? "bg-red-500" 
+                            : "bg-primary"
+                        )}
+                        style={{ width: `${Math.min(100, ((usageStats.featureUsage?.['match-my-skills'] || 0) / usageStats.limit) * 100)}%` }}
+                      />
                     </div>
+                    <span className={cn("text-[11px] font-bold", 
+                      (usageStats.featureUsage?.['match-my-skills'] || 0) >= usageStats.limit ? "text-red-500" : "text-foreground"
+                    )}>
+                      {(usageStats.featureUsage?.['match-my-skills'] || 0)} / {usageStats.limit} Used
+                    </span>
                   </div>
-                )}
+                </div>
               </div>
             )}
             <Button 

@@ -296,10 +296,10 @@ export default function Navbar() {
               </>
             ) : (
               <div className="flex items-center gap-2">
-                <Link href="/sign-in" className="hidden sm:block">
+                <Link href="/sign-in" prefetch={false} className="hidden sm:block">
                   <Button variant="ghost" size="sm" className="rounded-xl font-medium">Sign In</Button>
                 </Link>
-                <Link href="/sign-up" className="hidden sm:block">
+                <Link href="/sign-up" prefetch={false} className="hidden sm:block">
                   <Button size="sm" className="rounded-xl gradient-brand text-white border-0 shadow-md hover:opacity-90 font-medium text-xs sm:text-sm px-3 sm:px-4">
                     Get Started
                   </Button>
@@ -388,10 +388,10 @@ export default function Navbar() {
                 </Link>
                 <div className="h-px bg-border my-2" />
                 <div className="flex flex-col gap-2 px-4">
-                  <Link href="/sign-in" onClick={() => setMobileMenuOpen(false)} className="w-full block">
+                  <Link href="/sign-in" prefetch={false} onClick={() => setMobileMenuOpen(false)} className="w-full block">
                     <Button variant="outline" className="w-full rounded-xl font-medium justify-center h-10">Sign In</Button>
                   </Link>
-                  <Link href="/sign-up" onClick={() => setMobileMenuOpen(false)} className="w-full block">
+                  <Link href="/sign-up" prefetch={false} onClick={() => setMobileMenuOpen(false)} className="w-full block">
                     <Button className="w-full rounded-xl gradient-brand text-white border-0 font-medium justify-center h-10 shadow-md">
                       Get Started
                     </Button>
