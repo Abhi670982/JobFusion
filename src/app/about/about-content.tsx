@@ -38,7 +38,7 @@ export default function AboutContent() {
         {/* Hero Section */}
         <div className="text-center mb-20 mt-10">
           <h1 className="text-5xl md:text-6xl font-bold mb-6 tracking-tight" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-            About <span className="gradient-brand-text">Gohyred</span>
+            About <span className="text-white">Gohyred</span>
           </h1>
           <p className="text-xl text-foreground font-medium mb-8">
             Your career journey starts with one search.

@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -18,6 +17,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
+import { GohyredLogo } from '@/components/ui/gohyred-logo';
 import { cn } from '@/lib/utils';
 
 type NavLink = {
@@ -107,31 +107,16 @@ export default function Navbar() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           {/* Logo & Brand + Mobile Hamburger */}
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-            <Link 
-              href="/" 
-              className="flex items-center gap-2 group flex-shrink-0"
+            <GohyredLogo
+              href="/"
+              size="md"
               onClick={(e) => {
                 if (pathname === '/') {
                   e.preventDefault();
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }
               }}
-            >
-              <Image
-                src="/logo-circle.png"
-                alt="Gohyred Logo"
-                width={32}
-                height={32}
-                className="rounded-full object-cover group-hover:scale-105 transition-transform border-[3px] border-border/70 shadow-sm"
-              />
-              <span
-                className="font-bold text-lg sm:text-xl tracking-tight text-foreground"
-                style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
-              >
-                <span className="gradient-brand-text">Gohyred</span>
-              </span>
-            </Link>
-
+            />
           </div>
 
           {/* Center Nav — hidden on mobile, show on logged-in pages  */}

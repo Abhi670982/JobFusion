@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -14,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
+import { GohyredLogo } from '@/components/ui/gohyred-logo';
 import { cn } from '@/lib/utils';
 import { fetchCurrentUser, fetchSavedJobs, DbUser } from '@/lib/api-helper';
 
@@ -148,32 +148,7 @@ export default function Sidebar() {
         'flex items-center gap-3 px-4 h-16 border-b border-sidebar-border flex-shrink-0',
         collapsed && 'justify-center px-3'
       )}>
-        <Link href="/" className="flex items-center gap-2.5 min-w-0">
-          <div className="relative flex-shrink-0">
-            <Image
-              src="/logo-circle.png"
-              alt="Gohyred"
-              width={34}
-              height={34}
-              className="rounded-full object-cover border-[3px] border-border/70 shadow-sm"
-            />
-            <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-sidebar" />
-          </div>
-          <AnimatePresence>
-            {!collapsed && (
-              <motion.span
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -8 }}
-                transition={{ duration: 0.18 }}
-                className="font-bold text-base whitespace-nowrap overflow-hidden"
-                style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
-              >
-                <span className="gradient-brand-text">Gohyred</span>
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </Link>
+        <GohyredLogo href="/" variant={collapsed ? "icon" : "full"} size={collapsed ? 28 : 32} />
       </div>
 
       {/* Nav */}

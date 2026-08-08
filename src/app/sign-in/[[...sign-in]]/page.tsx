@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { mapSignInError } from '@/lib/auth-errors';
 import { validateEmailInput, validatePasswordInput } from '@/lib/auth-validation';
+import { GohyredLogo } from '@/components/ui/gohyred-logo';
 
 const GoogleIcon = () => (
   <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -357,16 +358,7 @@ export default function CustomSignInPage() {
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_top_left,white,transparent_60%)]" />
         <div className="absolute bottom-0 right-0 w-96 h-96 rounded-full bg-white/5 blur-3xl" />
 
-        <Link href="/" className="flex items-center gap-2.5 relative z-10">
-          <Image
-            src="/logo-circle.png"
-            alt="Gohyred Logo"
-            width={32}
-            height={32}
-            className="rounded-full object-cover border-[3px] border-white/40 shadow-sm"
-          />
-          <span className="font-bold text-lg xl:text-xl text-white font-sans">Gohyred</span>
-        </Link>
+        <GohyredLogo href="/" size="lg" className="relative z-10" />
 
         <div className="relative z-10 space-y-6 xl:space-y-8 my-auto">
           <div>
@@ -410,16 +402,7 @@ export default function CustomSignInPage() {
           animate={{ opacity: 1, y: 0 }}
           className="w-full max-w-[380px] xl:max-w-md my-auto"
         >
-          <Link href="/" className="lg:hidden flex items-center gap-2 mb-6">
-            <Image
-              src="/logo-circle.png"
-              alt="Gohyred Logo"
-              width={32}
-              height={32}
-              className="rounded-full object-cover border-[3px] border-border/70 shadow-sm"
-            />
-            <span className="font-bold text-xl gradient-brand-text font-sans">Gohyred</span>
-          </Link>
+          <GohyredLogo href="/" size="md" className="lg:hidden mb-6" />
 
           {/* ── VERIFICATION CODE STEP ── */}
           {verificationStep ? (

@@ -18,6 +18,7 @@ import {
   validateEmailInput,
   validatePasswordInput,
 } from '@/lib/auth-validation';
+import { GohyredLogo } from '@/components/ui/gohyred-logo';
 
 const perks = [
   'Access aggregated job opportunities',
@@ -278,16 +279,7 @@ export default function CustomSignUpPage() {
       <div className="hidden lg:flex flex-col justify-between p-6 xl:p-10 gradient-brand relative overflow-hidden h-full">
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_bottom_right,white,transparent_60%)]" />
 
-        <Link href="/" className="flex items-center gap-2.5 relative z-10">
-          <Image
-            src="/logo-circle.png"
-            alt="Gohyred Logo"
-            width={32}
-            height={32}
-            className="rounded-full object-cover border-[3px] border-white/40 shadow-sm"
-          />
-          <span className="font-bold text-lg xl:text-xl text-white font-sans">Gohyred</span>
-        </Link>
+        <GohyredLogo href="/" size="lg" className="relative z-10" />
 
         <div className="relative z-10 space-y-4 xl:space-y-5 my-auto">
           <h2 className="text-xl xl:text-3xl font-extrabold text-white font-sans leading-snug">
@@ -313,16 +305,7 @@ export default function CustomSignUpPage() {
           animate={{ opacity: 1, y: 0 }}
           className="w-full max-w-[370px] xl:max-w-md my-auto py-0"
         >
-          <Link href="/" className="lg:hidden flex items-center gap-2 mb-5">
-            <Image
-              src="/logo-circle.png"
-              alt="Gohyred Logo"
-              width={32}
-              height={32}
-              className="rounded-full object-cover border-[3px] border-border/70 shadow-sm"
-            />
-            <span className="font-bold text-xl gradient-brand-text font-sans">Gohyred</span>
-          </Link>
+          <GohyredLogo href="/" size="md" className="lg:hidden mb-5" />
 
           {!verifying ? (
             // Phase 1: Sign Up Form

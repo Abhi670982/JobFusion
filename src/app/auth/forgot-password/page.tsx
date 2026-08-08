@@ -10,6 +10,7 @@ import { Mail, ArrowRight, ArrowLeft, CheckCircle2, Lock, Eye, EyeOff, AlertCirc
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { GohyredLogo } from '@/components/ui/gohyred-logo';
 
 export default function ForgotPasswordPage() {
   const { signIn, fetchStatus } = useSignIn();
@@ -137,18 +138,9 @@ export default function ForgotPasswordPage() {
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md"
       >
-        <Link href="/" className="flex items-center gap-2 mb-8 justify-center">
-          <Image
-            src="/logo-circle.png"
-            alt="Gohyred Logo"
-            width={36}
-            height={36}
-            className="rounded-full object-cover border border-border/40"
-          />
-          <span className="font-bold text-xl font-sans">
-            <span className="gradient-brand-text">Job</span>Fusion
-          </span>
-        </Link>
+        <div className="flex justify-center mb-8">
+          <GohyredLogo href="/" size="lg" />
+        </div>
 
         <div className="card-premium p-8">
           {error && (

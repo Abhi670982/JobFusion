@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { Globe, Heart } from 'lucide-react';
 import { useAuth } from '@clerk/nextjs';
+
+import { GohyredLogo } from '@/components/ui/gohyred-logo';
 
 const footerLinks = {
   Product: [
@@ -33,18 +34,7 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-10">
           {/* Brand */}
           <div className="lg:col-span-2">
-            <Link href="/" className="flex items-center gap-2.5 mb-4">
-              <Image
-                src="/logo-circle.png"
-                alt="Gohyred Logo"
-                width={32}
-                height={32}
-                className="rounded-full object-cover border-[3px] border-border/70 shadow-sm"
-              />
-              <span className="font-bold text-xl" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-                <span className="gradient-brand-text">Gohyred</span>
-              </span>
-            </Link>
+            <GohyredLogo href="/" size="md" className="mb-4" />
             <p className="text-sm text-muted-foreground leading-relaxed max-w-xs mb-6">
               Search once. Discover opportunities everywhere.<br />
               Find thousands of jobs from leading platforms—all in one place.

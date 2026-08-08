@@ -28,6 +28,7 @@ import {
   Mail,
   CreditCard,
 } from "lucide-react";
+import { GohyredLogo } from "@/components/ui/gohyred-logo";
 
 interface AdminLayoutClientProps {
   children: React.ReactNode;
@@ -209,10 +210,8 @@ export default function AdminLayoutClient({ children, adminUser }: AdminLayoutCl
       {/* Sidebar Mobile Toggle Header */}
       <div className="lg:hidden flex items-center justify-between px-6 py-4 bg-[#09090b]/80 backdrop-blur-md border-b border-[#27272a] sticky top-0 z-50">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center shadow-md">
-            <Shield className="w-4 h-4 text-white" />
-          </div>
-          <span className="font-semibold tracking-tight">Gohyred Admin</span>
+          <GohyredLogo href="/admin/dashboard" size="sm" />
+          <span className="text-xs font-semibold text-[#a1a1aa] uppercase tracking-wider ml-1">Admin</span>
         </div>
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -231,14 +230,9 @@ export default function AdminLayoutClient({ children, adminUser }: AdminLayoutCl
             }`}
           >
             {/* Logo */}
-            <div className="px-6 py-6 border-b border-[#27272a]/60 hidden lg:flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center shadow-md shadow-indigo-500/10">
-                <Shield className="w-4.5 h-4.5 text-white" />
-              </div>
-              <div>
-                <h1 className="text-sm font-bold tracking-tight">Gohyred</h1>
-                <p className="text-[9px] text-[#a1a1aa] font-semibold uppercase tracking-wider">Operations Dashboard</p>
-              </div>
+            <div className="px-6 py-6 border-b border-[#27272a]/60 hidden lg:flex items-center justify-between">
+              <GohyredLogo href="/admin/dashboard" size="sm" />
+              <span className="text-[9px] text-[#a1a1aa] font-semibold uppercase tracking-wider bg-[#18181b] border border-[#27272a] px-1.5 py-0.5 rounded">Admin</span>
             </div>
 
             {/* Links */}
