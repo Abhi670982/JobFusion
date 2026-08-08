@@ -138,7 +138,12 @@ export default function AdminCrawlerMonitoringPage() {
         setManualMessage(json.message || "Crawl completed successfully.");
         await fetchStats();
       } else {
-        setManualMessage(`Crawl error: ${json.error}`);
+        if (res.status === 409) {
+          setManualMessage("Crawler is already running in background. Monitoring active run...");
+          setCrawlerStatus("RUNNING");
+        } else {
+          setManualMessage(`Crawl failed: ${json.error || "Unknown error"}`);
+        }
       }
     } catch (err: any) {
       setManualMessage(`Execution error: ${err.message || "Failed to trigger crawl"}`);

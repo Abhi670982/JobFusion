@@ -163,6 +163,21 @@ export async function POST() {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
+    const runningRun = await prisma.crawlerRun.findFirst({
+      where: { status: "RUNNING" }
+    });
+    if (runningRun) {
+      return NextResponse.json({
+        success: false,
+        error: "Crawler already running",
+        data: {
+          crawlerRunId: runningRun.id,
+          startedAt: runningRun.startedAt,
+          triggeredBy: runningRun.triggeredBy,
+        }
+      }, { status: 409 });
+    }
+
     console.log(`[Admin Manual Trigger] Admin ${adminUser.email} initiated manual job portal crawl pass...`);
 
     const crawlRes = await crawlPortalJobs({
