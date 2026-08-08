@@ -79,25 +79,47 @@ export default function ResumePage() {
     loadData();
   }, []);
 
-  const processFile = async (file: File) => {
+  const [confirmReplaceModalOpen, setConfirmReplaceModalOpen] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+
+  const processFile = async (file: File, confirmOverwrite = false) => {
     if (!user) return;
     setError(null);
     setSuccessMessage(null);
+
     const ext = file.name.split('.').pop()?.toLowerCase();
-    if (ext !== 'pdf' && ext !== 'docx') { setError('Only PDF and DOCX files are allowed.'); return; }
+    if (!ext || (ext !== 'pdf' && ext !== 'docx')) {
+      setError('Please upload a valid resume file. Supported formats: PDF, DOCX.');
+      return;
+    }
+
+    // Single active resume replacement confirmation
+    const hasExistingResume = Boolean(profile?.resumeUrl || profile?.resumeText);
+    if (hasExistingResume && !confirmOverwrite) {
+      setPendingFile(file);
+      setConfirmReplaceModalOpen(true);
+      return;
+    }
+
     setUploading(true);
     try {
-      const result = await uploadResume(user._id, file);
+      const result = await uploadResume(user._id, file, confirmOverwrite);
       if (result.success) {
         setNewlyExtractedSkills(result.data.extractedSkills || []);
         setTempProfileData(result.data);
         setSelectedWorkflow('merge'); // default suggestion
         setShowWorkflowModal(true);
+      } else if (result.code === 'CONFIRM_REPLACE') {
+        setPendingFile(file);
+        setConfirmReplaceModalOpen(true);
+      } else if (result.code === 'RESUME_DAILY_LIMIT_REACHED' || result.code === 'AI_LIMIT_REACHED' || result.upgradeRequired) {
+        setUpgradeModalOpen(true);
+        setError(result.error || "You've used your 2 free resume analyses for today. Upgrade to Pro for unlimited resume uploads and analysis.");
       } else {
-        setError(result.error || 'Failed to upload resume.');
+        setError(result.error || 'Please upload a valid resume file.');
       }
     } catch (err: any) {
-      setError(err.message || 'An error occurred during upload.');
+      setError(err.message || 'Please upload a valid resume file.');
     } finally {
       setUploading(false);
     }
@@ -630,6 +652,39 @@ export default function ResumePage() {
               className="w-full rounded-xl gradient-brand text-white border-0 font-bold shadow-md glow-sm btn-press h-10"
             >
               Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm Replace Active Resume Dialog */}
+      <Dialog open={confirmReplaceModalOpen} onOpenChange={setConfirmReplaceModalOpen}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader className="flex flex-col items-center text-center">
+            <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center mb-3 text-amber-500">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <DialogTitle className="text-lg font-bold text-foreground">Replace Active Resume?</DialogTitle>
+            <p className="text-sm text-muted-foreground mt-2 px-2">
+              You already have an active resume uploaded. Uploading a new resume will replace your existing resume. Do you want to continue?
+            </p>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-center gap-3 mt-4">
+            <Button variant="outline" onClick={() => { setConfirmReplaceModalOpen(false); setPendingFile(null); }} className="rounded-xl flex-1 max-w-[120px]">
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                setConfirmReplaceModalOpen(false);
+                if (pendingFile) {
+                  const target = pendingFile;
+                  setPendingFile(null);
+                  await processFile(target, true);
+                }
+              }}
+              className="rounded-xl gradient-brand text-white border-0 flex-1 max-w-[150px] btn-press font-semibold"
+            >
+              Replace Resume
             </Button>
           </DialogFooter>
         </DialogContent>

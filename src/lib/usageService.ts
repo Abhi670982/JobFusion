@@ -83,25 +83,84 @@ export const usageService = {
   },
 
   /**
-   * Check and increment the usage of an AI feature in a single workflow.
-   * If user is Pro, continues.
+   * Check and increment the usage of an AI feature in a single concurrency-safe workflow.
+   * If user is Pro, continues without incrementing.
    * If Free and today's usage < 2, increments and continues.
-   * Otherwise returns allowed: false with AI_LIMIT_REACHED code.
+   * Otherwise returns allowed: false with RESUME_DAILY_LIMIT_REACHED code.
    */
-  async checkAndIncrement(userId: string, featureName: string, clerkUserId?: string): Promise<{ allowed: boolean; code?: string; message?: string }> {
-    const check = await this.canUseAI(userId, featureName);
-    if (!check.allowed) {
+  async checkAndIncrement(userId: string, featureName: string, clerkUserId?: string): Promise<{
+    allowed: boolean;
+    code?: string;
+    message?: string;
+    limit?: number | null;
+    used?: number;
+    remaining?: number | string;
+  }> {
+    const sub = await getCurrentSubscription(userId);
+    if (sub.isPro) {
+      return { allowed: true, used: 0, limit: null, remaining: "Unlimited" };
+    }
+
+    const limit = 2; // 2 requests per calendar day for Free users
+    const todayStr = this.getTodayDateString();
+
+    const result = await prisma.$transaction(async (tx) => {
+      const record = await tx.userUsage.findUnique({
+        where: {
+          userId_featureName_usageDate: {
+            userId,
+            featureName,
+            usageDate: todayStr,
+          },
+        },
+      });
+
+      const currentUsage = record?.usageCount ?? 0;
+      if (currentUsage >= limit) {
+        return { allowed: false, used: currentUsage, limit };
+      }
+
+      await tx.userUsage.upsert({
+        where: {
+          userId_featureName_usageDate: {
+            userId,
+            featureName,
+            usageDate: todayStr,
+          },
+        },
+        update: {
+          usageCount: {
+            increment: 1,
+          },
+        },
+        create: {
+          userId,
+          clerkUserId: clerkUserId || null,
+          featureName,
+          usageDate: todayStr,
+          usageCount: 1,
+        },
+      });
+
+      return { allowed: true, used: currentUsage + 1, limit };
+    });
+
+    if (!result.allowed) {
       return {
         allowed: false,
-        code: 'AI_LIMIT_REACHED',
-        message: 'Daily AI limit reached.',
+        code: 'RESUME_DAILY_LIMIT_REACHED',
+        message: "You have reached today's free resume analysis limit. Upgrade to Pro for unlimited uploads and analysis.",
+        limit: result.limit,
+        used: result.used,
+        remaining: 0
       };
     }
 
-    if (check.limit !== null) {
-      await this.incrementUsage(userId, featureName, clerkUserId);
-    }
-
-    return { allowed: true };
+    return {
+      allowed: true,
+      limit: result.limit,
+      used: result.used,
+      remaining: Math.max(0, limit - result.used)
+    };
   }
 };

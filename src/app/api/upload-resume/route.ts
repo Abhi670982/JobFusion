@@ -23,8 +23,37 @@ export async function POST(req: NextRequest) {
 
     const formData = await req.formData();
     const file = formData.get("file") as File;
+    const confirmOverwrite = formData.get("confirmOverwrite") === "true";
 
-    if (!file) return NextResponse.json({ success: false, step: "file_validation", error: "No file uploaded" }, { status: 400 });
+    if (!file) {
+      return NextResponse.json({ success: false, step: "file_validation", error: "Please upload a valid resume file." }, { status: 400 });
+    }
+
+    const fileName = file.name || "";
+    const extension = fileName.split(".").pop()?.toLowerCase();
+    const allowedExtensions = ["pdf", "docx"];
+
+    if (!extension || !allowedExtensions.includes(extension)) {
+      return NextResponse.json({ success: false, step: "file_validation", error: "Please upload a valid resume file. Supported formats: PDF, DOCX." }, { status: 400 });
+    }
+
+    // Validate MIME type
+    const allowedMimeTypes = [
+      "application/pdf",
+      "application/x-pdf",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/msword",
+      "application/octet-stream"
+    ];
+    if (file.type && !allowedMimeTypes.includes(file.type.toLowerCase())) {
+      return NextResponse.json({ success: false, step: "file_validation", error: "Please upload a valid resume file." }, { status: 400 });
+    }
+
+    // Validate file size (max 10MB, min 50 bytes)
+    const MAX_FILE_SIZE = 10 * 1024 * 1024;
+    if (file.size <= 50 || file.size > MAX_FILE_SIZE) {
+      return NextResponse.json({ success: false, step: "file_validation", error: "Please upload a valid resume file (max 10MB)." }, { status: 400 });
+    }
 
     let pgProfile = await prisma.profile.findUnique({
       where: { userId },
@@ -44,14 +73,68 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const fileName = file.name;
-    const extension = fileName.split(".").pop()?.toLowerCase();
-    if (!extension || !["pdf", "docx"].includes(extension)) {
-      return NextResponse.json({ success: false, step: "file_validation", error: "Only PDF and DOCX files are allowed." }, { status: 400 });
+    // Check single active resume replacement confirmation
+    if ((pgProfile.resumeUrl || pgProfile.resumeText) && !confirmOverwrite) {
+      return NextResponse.json({
+        success: false,
+        code: "CONFIRM_REPLACE",
+        error: "You already have an active resume uploaded. Uploading a new resume will replace your existing resume. Do you want to continue?",
+        hasExisting: true,
+      }, { status: 409 });
     }
 
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
+
+    if (!buffer || buffer.length < 50) {
+      return NextResponse.json({ success: false, step: "file_validation", error: "Please upload a valid resume file." }, { status: 400 });
+    }
+
+    // Validate text extraction BEFORE uploading to Cloudinary so corrupted/non-resume files are rejected without storing
+    let extractedText = "";
+    try {
+      extractedText = extension === "pdf" ? await parsePdf(buffer) : await parseDocx(buffer);
+    } catch (parseErr: any) {
+      console.error("[Resume Upload] Parser error:", parseErr);
+      return NextResponse.json({ success: false, step: "parser", error: "Please upload a valid text-based resume file (PDF or DOCX)." }, { status: 400 });
+    }
+
+    if (!extractedText || extractedText.trim().length < 100) {
+      return NextResponse.json({ success: false, step: "parser", error: "Unable to read resume content. Please upload a text-based PDF or DOCX resume containing readable text." }, { status: 400 });
+    }
+
+    // MULTI-LAYER AI & HEURISTIC RESUME VALIDATION
+    const { validateAndExtractResume } = await import("@/lib/resume-validator");
+    const validation = await validateAndExtractResume(extractedText);
+
+    if (!validation.isValid) {
+      console.warn(`[Resume Upload Rejected] User: ${userId} | DocType: ${validation.documentType} | Confidence: ${validation.confidence.toFixed(2)} | Reason: ${validation.reason}`);
+      return NextResponse.json({
+        success: false,
+        step: "resume_validation",
+        error: validation.reason,
+        isResume: false,
+        confidence: validation.confidence,
+        documentType: validation.documentType
+      }, { status: 400 });
+    }
+
+    // ATOMIC DAILY USAGE CHECK & INCREMENT FOR FREE USERS (Max 2/day, Pro = Unlimited)
+    const { usageService } = await import("@/lib/usageService");
+    const usageCheck = await usageService.checkAndIncrement(userId, "resume-analyzer", mongoUser.id);
+
+    if (!usageCheck.allowed) {
+      console.warn(`[Resume Upload Blocked] User: ${userId} | Reason: Daily free limit (2/day) reached.`);
+      return NextResponse.json({
+        success: false,
+        code: "RESUME_DAILY_LIMIT_REACHED",
+        error: "You have reached today's free resume analysis limit. Upgrade to Pro for unlimited uploads and analysis.",
+        limit: 2,
+        used: usageCheck.used || 2,
+        remaining: 0,
+        upgradeRequired: true
+      }, { status: 403 });
+    }
 
     let cloudinaryResult: any;
     try {
@@ -68,14 +151,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, step: "cloudinary_upload", error: "Cloudinary upload failed" }, { status: 500 });
     }
     const resumeUrl = cloudinaryResult.secure_url;
-
-    let extractedText = "";
-    try {
-      extractedText = extension === "pdf" ? await parsePdf(buffer) : await parseDocx(buffer);
-    } catch (parseErr: any) {
-      console.error("[Resume Upload] Parser error:", parseErr);
-      return NextResponse.json({ success: false, step: "parser", error: "Failed to extract text from resume" }, { status: 500 });
-    }
 
     let newSkills: { name: string; level: number }[] = [];
     try {

@@ -154,6 +154,11 @@ export default function DashboardPage() {
       }
     }
     loadData();
+
+    // Revalidate stats on window focus/tab return for real-time accuracy
+    const handleFocus = () => { loadData(); };
+    window.addEventListener('focus', handleFocus);
+    return () => { window.removeEventListener('focus', handleFocus); };
   }, [router]);
 
   const firstName = user?.fullName.split(' ')[0] || 'User';

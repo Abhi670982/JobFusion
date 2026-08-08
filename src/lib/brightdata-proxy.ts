@@ -30,7 +30,7 @@ export async function fetchWithBrightDataProxy(
     ...restOptions
   } = options;
 
-  const apiKey = process.env.BRIGHTDATA_API_KEY || "";
+  const apiKey = process.env.BRIGHTDATA_API_KEY || process.env.BRIGHTDATA_KEY || "";
   let attempt = 0;
 
   while (true) {

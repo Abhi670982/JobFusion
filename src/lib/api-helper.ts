@@ -448,22 +448,24 @@ export async function unsaveJob(userId: string, jobId: string): Promise<boolean>
   return false;
 }
 
-export async function uploadResume(userId: string, file: File): Promise<any> {
+export async function uploadResume(userId: string, file: File, confirmOverwrite = false): Promise<any> {
   try {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('userId', userId);
+    if (confirmOverwrite) {
+      formData.append('confirmOverwrite', 'true');
+    }
 
     const res = await fetch('/api/upload-resume', {
       method: 'POST',
       body: formData,
     });
 
-    if (!res.ok) {
-      const data = await res.json();
-      throw new Error(data.error || `HTTP error! status: ${res.status}`);
-    }
     const data = await res.json();
+    if (!res.ok) {
+      return { success: false, code: data.code, error: data.error || `HTTP error! status: ${res.status}`, hasExisting: data.hasExisting };
+    }
     if (data.success && data.data) {
       profileCache.set(userId, { data: data.data, time: Date.now() });
     } else {

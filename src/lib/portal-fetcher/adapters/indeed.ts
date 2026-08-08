@@ -21,11 +21,12 @@ export class IndeedPortalAdapter extends BasePortalAdapter {
     const page = query.page || 1;
 
     // 1. Try Primary: SerpAPI Google Jobs
-    if (process.env.SERPAPI_KEY) {
+    const serpApiKey = process.env.SERPAPI_KEY || process.env.SERPAPI_API_KEY;
+    if (serpApiKey) {
       try {
         console.log(`[Indeed Adapter] Fetching via SerpAPI (keyword: "${keyword}")`);
         const start = (page - 1) * 10;
-        const serpUrl = `https://serpapi.com/search?engine=google_jobs&q=${encodeURIComponent(keyword)}&location=${encodeURIComponent(location)}&start=${start}&api_key=${process.env.SERPAPI_KEY}`;
+        const serpUrl = `https://serpapi.com/search?engine=google_jobs&q=${encodeURIComponent(keyword)}&location=${encodeURIComponent(location)}&start=${start}&api_key=${serpApiKey}`;
         const res = await fetch(serpUrl);
         if (res.ok) {
           const data = await res.json();

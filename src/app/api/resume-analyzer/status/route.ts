@@ -61,7 +61,7 @@ export async function GET() {
       data: {
         isPro,
         hasResume,
-        hasAccess: true,
+        hasAccess: isPro,
         resumeName: profile?.resumeName || null,
         resumeCategory: profile?.resumeCategory || null,
         resumeUpdatedAt: profile?.resumeUpdatedAt || null,

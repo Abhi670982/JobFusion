@@ -8,7 +8,7 @@ import {
   Search, SlidersHorizontal, X, MapPin,
   LayoutGrid, List, Target, Sparkles,
   Building2, AlertTriangle, Check,
-  Activity, ArrowRight, ArrowLeft, Globe
+  Activity, ArrowRight, ArrowLeft, Globe, Upload, FileText
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -698,6 +698,13 @@ export default function JobsPage() {
       return;
     }
     
+    const hasResume = Boolean(profile?.resumeUrl || profile?.resumeText);
+    if (!hasResume) {
+      setToastMessage('Upload your resume to unlock personalized job matching.');
+      setShowSuccessToast(true);
+      return;
+    }
+
     const userSkills = profile.skills?.map(s => s.name.toLowerCase()) || [];
     if (userSkills.length === 0) {
       setSkillWarning(true);
@@ -727,11 +734,6 @@ export default function JobsPage() {
       params.set('skills', userSkills.join(','));
       if (datePosted) params.set('datePosted', datePosted);
       params.set('page', '1');
-
-      // Asynchronously trigger background refresh without blocking instant database search
-      fetch(`/api/portal-jobs?portal=all&refresh=true&keyword=${encodeURIComponent(userSkills[0] || 'Software Engineer')}`).catch((e) => {
-        console.warn('[Match My Skills] Non-blocking background sync notice:', e.message);
-      });
 
       const queryString = params.toString();
 
@@ -996,6 +998,31 @@ export default function JobsPage() {
             </div>
           </div>
         </div>
+
+        {/* Compact Resume Upload Blocking Card */}
+        {!profileLoading && !Boolean(profile?.resumeUrl || profile?.resumeText) && (
+          <div className="card-premium p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4 border-primary/20 bg-primary/5 rounded-2xl">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <FileText className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-foreground">
+                  Upload your resume to unlock personalized job matching.
+                </h4>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Get AI-powered skill matching, candidate relevance scoring, and accurate recommendations.
+                </p>
+              </div>
+            </div>
+            <Link href="/resume">
+              <Button size="sm" className="rounded-xl gradient-brand text-white border-0 font-semibold text-xs shadow-md whitespace-nowrap">
+                <Upload className="w-3.5 h-3.5 mr-1.5" />
+                Upload Resume
+              </Button>
+            </Link>
+          </div>
+        )}
 
 
 
@@ -1360,8 +1387,25 @@ export default function JobsPage() {
               }
             >
               <div className={cn('grid gap-4', viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1')}>
-                {(profileLoading || loading) ? (
+                {matching ? (
                   <PremiumJobsLoader />
+                ) : (profileLoading || loading) ? (
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="card-premium p-6 rounded-2xl space-y-4 animate-pulse border border-border/40">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-xl bg-muted/60" />
+                        <div className="space-y-2 flex-1">
+                          <div className="h-4 w-3/4 rounded bg-muted/60" />
+                          <div className="h-3 w-1/2 rounded bg-muted/60" />
+                        </div>
+                      </div>
+                      <div className="h-12 w-full rounded-xl bg-muted/40" />
+                      <div className="flex gap-2 pt-2">
+                        <div className="h-6 w-16 rounded-lg bg-muted/60" />
+                        <div className="h-6 w-16 rounded-lg bg-muted/60" />
+                      </div>
+                    </div>
+                  ))
                 ) : (!hasResumeSkills && activeTab === 'careers') || skillWarning ? (
                   <div className="col-span-full flex flex-col items-center justify-center py-20 text-center bg-card/10 border border-dashed border-red-500/30 rounded-3xl p-8 space-y-4">
                     <div className="w-16 h-16 rounded-2xl bg-red-500/5 border border-red-500/15 flex items-center justify-center text-red-500 mb-2">
@@ -1454,17 +1498,36 @@ export default function JobsPage() {
               exit={{ opacity: 0, y: -12 }}
               transition={{ duration: 0.25, ease: 'easeOut' }}
             >
-              <JobPortalsSection
-                keyword={queryInput}
-                locationInput={locationInput}
-                profileSkills={profile?.skills.map((s) => s.name) || []}
-                mobileFilters={mobileFilters}
-                setMobileFilters={setMobileFilters}
-                filtersCollapsed={filtersCollapsed}
-                setFiltersCollapsed={setFiltersCollapsed}
-                viewMode={viewMode}
-                setViewMode={setViewMode}
-              />
+              {!hasResumeSkills && !profileLoading ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center bg-card/10 border border-dashed border-red-500/30 rounded-3xl p-8 space-y-4 my-6">
+                  <div className="w-16 h-16 rounded-2xl bg-red-500/5 border border-red-500/15 flex items-center justify-center text-red-500 mb-2">
+                    <AlertTriangle className="w-8 h-8 animate-pulse" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="font-bold text-lg" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>No Skills Added</h3>
+                    <p className="text-muted-foreground text-xs max-w-sm mx-auto">
+                      To find relevant jobs, please upload your resume or add skills in the resume section.
+                    </p>
+                  </div>
+                  <Link href="/resume">
+                    <Button className="rounded-xl gradient-brand text-white border-0 shadow-md btn-press">
+                      Go to Resume Section
+                    </Button>
+                  </Link>
+                </div>
+              ) : (
+                <JobPortalsSection
+                  keyword={queryInput}
+                  locationInput={locationInput}
+                  profileSkills={profile?.skills.map((s) => s.name) || []}
+                  mobileFilters={mobileFilters}
+                  setMobileFilters={setMobileFilters}
+                  filtersCollapsed={filtersCollapsed}
+                  setFiltersCollapsed={setFiltersCollapsed}
+                  viewMode={viewMode}
+                  setViewMode={setViewMode}
+                />
+              )}
             </motion.div>
           </AnimatePresence>
         )}

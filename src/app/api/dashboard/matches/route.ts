@@ -61,7 +61,11 @@ export async function GET() {
       include: { skills: true }
     });
 
-    if (!pgProfile) {
+    const hasResume = Boolean(pgProfile?.resumeUrl || pgProfile?.resumeText);
+    const userSkills = (pgProfile?.skills || []).map(s => s.name);
+
+    // Section 13 Requirement: If user has no uploaded resume or no skills, matches found MUST be 0
+    if (!hasResume || userSkills.length === 0) {
       return NextResponse.json({
         success: true,
         totalMatches: 0,
@@ -69,27 +73,38 @@ export async function GET() {
         topMatchedJobs: [],
       });
     }
-
-    const userSkills = (pgProfile.skills || []).map(s => s.name.toLowerCase());
-    const userDomain = (pgProfile.resumeCategory || "").toLowerCase().trim();
 
     const { getPermittedJobSources } = await import("@/lib/subscription");
     const { allowedSources } = await getPermittedJobSources(user.id);
 
-    const jobWhere: any = { isActive: true };
+    const now = new Date();
+    const jobWhere: any = {
+      isActive: true,
+      OR: [
+        { expiresAt: { gt: now } },
+        { expiresAt: null }
+      ]
+    };
+
     if (allowedSources && allowedSources.length > 0) {
-      jobWhere.OR = [
-        { sourceCategory: "company_career" },
-        { source: { in: allowedSources, mode: "insensitive" } },
-        { sourceCategory: { in: allowedSources, mode: "insensitive" } },
+      jobWhere.AND = [
+        {
+          OR: [
+            { sourceCategory: "company_career" },
+            { source: { in: allowedSources, mode: "insensitive" } },
+            { sourceCategory: { in: allowedSources, mode: "insensitive" } },
+          ]
+        }
       ];
     }
 
-    const allJobs = await prisma.job.findMany({
-      where: jobWhere
+    const activeJobs = await prisma.job.findMany({
+      where: jobWhere,
+      take: 200,
+      orderBy: { postedAtDate: "desc" }
     });
 
-    if (allJobs.length === 0) {
+    if (activeJobs.length === 0) {
       return NextResponse.json({
         success: true,
         totalMatches: 0,
@@ -98,46 +113,36 @@ export async function GET() {
       });
     }
 
-    const matchedJobs = allJobs.map((job) => {
-      const jobSkills = (job.skills || []).map(s => s.toLowerCase());
-      const overlap = jobSkills.filter(s => userSkills.includes(s));
-      
-      let score = 0;
-      if (jobSkills.length > 0) {
-        score = (overlap.length / jobSkills.length) * 80;
-      }
+    const { calculateDetailedRelevance } = await import("@/lib/relevance");
 
-      if (userDomain && job.category && job.category.toLowerCase().includes(userDomain)) {
-        score += 20;
-      } else if (userDomain && job.title && job.title.toLowerCase().includes(userDomain)) {
-        score += 15;
-      }
-
-      if (userSkills.length === 0) {
-        score = userDomain && job.category && job.category.toLowerCase().includes(userDomain) ? 75 : 50;
-      }
-
-      const matchScore = Math.min(100, Math.max(45, Math.round(score)));
-
+    const matchedJobs = activeJobs.map((job) => {
+      const result = calculateDetailedRelevance(
+        {
+          title: job.title,
+          company: job.company,
+          skills: job.skills,
+          description: job.description,
+          requirements: job.requirements
+        },
+        userSkills
+      );
       return {
         job,
-        matchScore,
+        matchScore: result.score,
+        tier: result.tier
       };
-    });
+    }).filter((jm) => jm.matchScore > 0);
 
-    const threshold = userSkills.length > 0 ? 60 : 50;
-    const filteredMatches = matchedJobs.filter((jm) => jm.matchScore >= threshold);
-    
-    filteredMatches.sort((a, b) => b.matchScore - a.matchScore);
+    matchedJobs.sort((a, b) => b.matchScore - a.matchScore);
 
-    const topMatches = filteredMatches.slice(0, 10).map(jm => mapJob(jm.job, jm.matchScore));
-    const avgScore = filteredMatches.length > 0
-      ? Math.round(filteredMatches.reduce((acc, jm) => acc + jm.matchScore, 0) / filteredMatches.length)
+    const topMatches = matchedJobs.slice(0, 10).map(jm => mapJob(jm.job, jm.matchScore));
+    const avgScore = matchedJobs.length > 0
+      ? Math.round(matchedJobs.reduce((acc, jm) => acc + jm.matchScore, 0) / matchedJobs.length)
       : 0;
 
     return NextResponse.json({
       success: true,
-      totalMatches: filteredMatches.length,
+      totalMatches: matchedJobs.length,
       averageMatchPercentage: avgScore,
       topMatchedJobs: topMatches,
     });

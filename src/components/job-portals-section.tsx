@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 import PortalJobCard from '@/components/portal-job-card';
 import { PortalUnifiedJob as PortalJobDTOV1 } from '@/lib/portal-fetcher/adapters/base-adapter';
 import { parsePostedDate } from '@/lib/parse-posted-date';
+import Link from 'next/link';
 import { JobsErrorBoundary } from '@/components/error-boundary';
 import { UpgradeModal } from '@/components/pricing/UpgradeModal';
 import { PremiumPortalModal } from '@/components/pricing/PremiumPortalModal';
@@ -825,6 +826,27 @@ export default function JobPortalsSection({
                   <PortalJobSkeleton key={i} />
                 ))}
               </div>
+            ) : (profileSkills.length === 0 && !keyword) ? (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex flex-col items-center justify-center py-16 text-center bg-card/10 border border-dashed border-red-500/30 rounded-3xl p-8 space-y-4"
+              >
+                <div className="w-16 h-16 rounded-2xl bg-red-500/5 border border-red-500/15 flex items-center justify-center text-red-500 mb-2">
+                  <AlertTriangle className="w-8 h-8 animate-pulse" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-bold text-lg" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>No Skills Added</h3>
+                  <p className="text-muted-foreground text-xs max-w-sm mx-auto">
+                    To find relevant jobs, please upload your resume or add skills in the resume section.
+                  </p>
+                </div>
+                <Link href="/resume">
+                  <Button className="rounded-xl gradient-brand text-white border-0 shadow-md btn-press">
+                    Go to Resume Section
+                  </Button>
+                </Link>
+              </motion.div>
             ) : (
               <motion.div
                 initial={{ opacity: 0 }}

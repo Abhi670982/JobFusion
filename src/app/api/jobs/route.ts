@@ -4,7 +4,6 @@ import { getOrCreateMongoUser } from "@/lib/auth-sync";
 import { validateJobsQuery } from "@/lib/api-validators";
 import { calculateRelevanceScore } from "@/lib/relevance";
 import { queryCareersJobs } from "@/lib/pipeline";
-import { checkAndEnqueueCareersRefresh } from "@/lib/careers-freshness";
 import { Prisma, Job, JobType, ExperienceLevel, JobSourceCategory } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -399,18 +398,6 @@ export async function GET(req: NextRequest) {
 
     if (userResumeSkills.length === 0 && skills) {
       userResumeSkills = skills.split(",").map((s) => s.trim()).filter(Boolean);
-    }
-
-    const isCareersRequest =
-      source === "careers" ||
-      (source ? source.split(",").map((s) => s.trim().toLowerCase()).includes("careers") : false) ||
-      rawCategoryParam === "COMPANY_CAREER" ||
-      rawCategoryParam === "CAREERS";
-
-    if (isCareersRequest) {
-      checkAndEnqueueCareersRefresh().catch((err) => {
-        console.error("[API Jobs] Background careers refresh check failed:", err?.message || err);
-      });
     }
 
     // Dedicated fast-path for Company Careers using shared queryCareersJobs service

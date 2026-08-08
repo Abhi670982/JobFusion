@@ -1,18 +1,107 @@
-name: Crawl Jobs
+name: Crawl Jobs Workflow
 
 on:
   schedule:
-    - cron: "0 */3 * * *"   # every 3 hours
-  workflow_dispatch:          # allow manual trigger from GitHub UI
+    - cron: "0 */3 * * *"   # Run every 3 hours
+  workflow_dispatch:        # Allow manual trigger from GitHub Actions UI
 
 jobs:
   crawl:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Trigger crawl endpoint
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      # Step 1: Safe Preflight Validation
+      - name: Preflight Environment Secret Validation
         run: |
-          curl -s -L -X POST "${{ secrets.APP_URL }}/api/cron/crawl" \
-            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+          echo "============================================================"
+          echo "=== PREFLIGHT SECRET VALIDATION ==="
+          echo "============================================================"
+
+          check_secret() {
+            local name="$1"
+            local val="$2"
+            if [ -n "$val" ]; then
+              echo "$name: configured"
+            else
+              echo "$name: missing"
+            fi
+          }
+
+          check_secret "DATABASE_URL" "${{ secrets.DATABASE_URL }}"
+          check_secret "DIRECT_URL" "${{ secrets.DIRECT_URL }}"
+          check_secret "APIFY_TOKEN" "${{ secrets.APIFY_TOKEN }}"
+          check_secret "SERPAPI_KEY" "${{ secrets.SERPAPI_KEY }}"
+          check_secret "BRIGHTDATA_API_KEY" "${{ secrets.BRIGHTDATA_API_KEY }}"
+          check_secret "APP_URL" "${{ secrets.APP_URL }}"
+          check_secret "CRON_SECRET" "${{ secrets.CRON_SECRET }}"
+
+          echo "============================================================"
+
+      # Step 2: Attempt HTTP API Trigger
+      - name: Trigger Internal Cron Endpoint via HTTP
+        id: http_trigger
+        continue-on-error: true
+        run: |
+          APP_URL="${{ secrets.APP_URL }}"
+          CRON_SECRET="${{ secrets.CRON_SECRET }}"
+
+          if [ -z "$APP_URL" ]; then
+            echo "APP_URL secret is not set. Skipping HTTP API trigger."
+            exit 1
+          fi
+
+          # Normalize URL (remove trailing slash and prepend https:// if missing)
+          CLEAN_URL=$(echo "$APP_URL" | sed -e 's/\/$//')
+          if [[ ! "$CLEAN_URL" =~ ^https?:// ]]; then
+            CLEAN_URL="https://$CLEAN_URL"
+          fi
+
+          TARGET_URL="${CLEAN_URL}/api/cron/crawl"
+          echo "Sending HTTP POST trigger to: $TARGET_URL"
+
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST "$TARGET_URL" \
+            -H "x-cron-secret: ${CRON_SECRET}" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
             -H "Content-Type: application/json" \
-            --fail \
-            --show-error
+            --max-time 30)
+
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d':' -f2)
+          BODY=$(echo "$RESPONSE" | sed '/HTTP_STATUS:/d')
+
+          echo "HTTP Response Status: $HTTP_STATUS"
+          echo "HTTP Response Body: $BODY"
+
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "HTTP Cron trigger executed successfully."
+          else
+            echo "HTTP Cron trigger returned status $HTTP_STATUS. Trigger failed."
+            exit 1
+          fi
+
+      # Step 3: Fallback Direct Execution (Runs if HTTP trigger skipped or failed)
+      - name: Run Background Crawler Directly (Fallback)
+        if: steps.http_trigger.outcome != 'success'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+          APIFY_API_TOKEN: ${{ secrets.APIFY_TOKEN }}
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+          SERPAPI_API_KEY: ${{ secrets.SERPAPI_KEY }}
+          BRIGHTDATA_API_KEY: ${{ secrets.BRIGHTDATA_API_KEY }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: ${{ secrets.APP_URL }}
+        run: |
+          echo "Starting Direct Crawler Execution Fallback..."
+          npm ci --prefer-offline
+          npx prisma generate
+          npx tsx src/scripts/run-crawler.ts

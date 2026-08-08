@@ -48,19 +48,14 @@ export async function POST(req: NextRequest) {
       (subscription.status === "active" || subscription.status === "trialing");
 
     if (!isPro) {
-      const { usageService } = await import("@/lib/usageService");
-      const todayUsage = await usageService.getTodayUsage(mongoUser.id, "resume-analyzer");
-      if (todayUsage >= 2) {
-        return NextResponse.json(
-          {
-            success: false,
-            code: "LIMIT_REACHED",
-            error: "Free users can analyze up to 2 resumes per day. Upgrade to Premium for unlimited AI Resume Analysis.",
-            usage: { used: todayUsage, limit: 2 }
-          },
-          { status: 403 }
-        );
-      }
+      return NextResponse.json(
+        {
+          success: false,
+          code: "PRO_REQUIRED",
+          error: "Resume Analyzer is available with Pro."
+        },
+        { status: 403 }
+      );
     }
 
     const profile = await prisma.profile.findUnique({

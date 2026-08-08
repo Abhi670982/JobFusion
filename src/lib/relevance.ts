@@ -274,8 +274,22 @@ export function calculateDetailedRelevance(input: RelevanceInput, userSkills: st
     }
   }
 
+  // Strict Role Domain Compatibility Check (Section 13 Requirement)
+  // Prevent surfacing completely unrelated non-software job titles
+  const isUnrelatedRoleDomain = /\b(accountant|auditor|financial analyst|bookkeeper|human resources|hr manager|recruiter|talent acquisition|sales associate|sales executive|sales manager|nursing|nurse|physician|doctor|pharmacist|civil engineer|mechanical engineer|structural engineer|marketing specialist|marketing manager|customer support|telecaller)\b/i.test(titleText);
+
   // Technical Role Title check (e.g., Software Engineer, Full Stack, Frontend, Backend, Web Developer)
   const isTechnicalTitle = /\b(software engineer|software developer|fullstack|full-stack|full stack|frontend|front-end|backend|back-end|web developer|systems engineer|devops engineer|data engineer|mobile developer|platform engineer|sre|site reliability engineer)\b/i.test(titleText);
+
+  // If title is an explicitly unrelated non-tech domain, reject match immediately
+  if (isUnrelatedRoleDomain && !isTechnicalTitle) {
+    return {
+      score: 0,
+      tier: "NONE",
+      matchedSkills: [],
+      eligibilityReason: "Failed Domain Compatibility: Unrelated non-tech job domain"
+    };
+  }
 
   // STEP 1 ELIGIBILITY RULE:
   // Must have at least ONE CORE technical skill match OR (technical title AND at least 1 skill match).

@@ -1,53 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import crypto from "crypto";
 import { requireAuthUser, safeErrorResponse } from "@/lib/security";
 
 export const dynamic = "force-dynamic";
-
-const jobPortals = [
-  { source: "Indeed", domain: "indeed.com" },
-  { source: "Google Jobs", domain: "google.com/search?q=jobs" },
-  { source: "LinkedIn", domain: "linkedin.com" },
-  { source: "Glassdoor", domain: "glassdoor.com" },
-  { source: "SimplyHired", domain: "simplyhired.com" }
-];
-
-const mockLocations = [
-  "Bengaluru, Karnataka",
-  "Mumbai, Maharashtra",
-  "Noida, Uttar Pradesh",
-  "Chennai, Tamil Nadu",
-  "Hyderabad, Telangana"
-];
-
-function parseSalaryMin(salary: string, index: number): number {
-  const matches = salary.match(/\b\d+(?:,\d+)*(?:\.\d+)?k?\b/gi);
-  if (matches && matches[0]) {
-    const cleanNum = matches[0].toLowerCase().replace(/[^0-9k]/g, "");
-    let val = cleanNum.includes("k") 
-      ? parseFloat(cleanNum) * 1000 
-      : parseFloat(cleanNum);
-    
-    if (val < 1000) val = val * 85000;
-    return Math.floor(val);
-  }
-  return 1500000 + (index * 200000);
-}
-
-function parseSalaryMax(salary: string, index: number, min: number): number {
-  const matches = salary.match(/\b\d+(?:,\d+)*(?:\.\d+)?k?\b/gi);
-  if (matches && matches[1]) {
-    const cleanNum = matches[1].toLowerCase().replace(/[^0-9k]/g, "");
-    let val = cleanNum.includes("k") 
-      ? parseFloat(cleanNum) * 1000 
-      : parseFloat(cleanNum);
-    
-    if (val < 1000) val = val * 85000;
-    return Math.floor(val);
-  }
-  return min + 600000 + (index * 150000);
-}
 
 function mapJob(j: any) {
   if (!j) return null;
@@ -87,176 +42,68 @@ function mapJob(j: any) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { errorResponse } = await requireAuthUser();
+    const { user: mongoUser, errorResponse } = await requireAuthUser();
     if (errorResponse) return errorResponse;
 
-    const body = await req.json();
-    const { skills } = body;
+    // Check if user has uploaded a resume (Section 1 requirement)
+    const profile = await prisma.profile.findUnique({
+      where: { userId: mongoUser.id },
+      select: { resumeUrl: true, resumeText: true, skills: true }
+    });
 
-    if (!skills || !Array.isArray(skills) || skills.length === 0) {
-      const pgJobs = await prisma.job.findMany({
-        orderBy: { createdAt: "desc" }
-      });
-      return NextResponse.json({
-        success: true,
-        data: pgJobs.map(mapJob),
-        matchedCount: 0
-      });
-    }
-
-    const fetchedJobs: any[] = [];
-    const skillsToQuery = skills.slice(0, 4);
-
-    await Promise.all(skillsToQuery.map(async (skill) => {
-      try {
-        const url = `https://himalayas.app/jobs/api/search?q=${encodeURIComponent(skill)}&limit=10`;
-        const res = await fetch(url, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-          }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.jobs && Array.isArray(data.jobs)) {
-            data.jobs.forEach((job: any) => {
-              job.querySkill = skill;
-              fetchedJobs.push(job);
-            });
-          }
-        }
-      } catch (err) {
-        console.error(`Failed to fetch jobs from Himalayas for skill: ${skill}`, err);
-      }
-    }));
-
-    const dbMatchedJobs: any[] = [];
-
-    if (fetchedJobs.length > 0) {
-      for (let i = 0; i < fetchedJobs.length; i++) {
-        const item = fetchedJobs[i];
-        const skill = item.querySkill;
-        const portal = jobPortals[i % jobPortals.length];
-        const applyUrl = item.applicationLink || `https://himalayas.app/jobs?q=${encodeURIComponent(skill)}`;
-        const category = (item.categories && item.categories[0]) || "Engineering";
-        
-        const rawDescription = item.description || "";
-        const cleanDescription = rawDescription
-          .replace(/<[^>]+>/g, " ")
-          .replace(/\s+/g, " ")
-          .trim()
-          .substring(0, 8000); 
-
-        const salaryMin = item.minSalary || parseSalaryMin(item.excerpt || "", i);
-        const salaryMax = item.maxSalary || parseSalaryMax(item.excerpt || "", i, salaryMin);
-        const salaryString = item.minSalary 
-          ? `₹${Math.round(item.minSalary / 10000)}L – ₹${Math.round(item.maxSalary / 10000)}L` 
-          : `₹${(salaryMin / 100000).toFixed(0)}L – ₹${(salaryMax / 100000).toFixed(0)}L`;
-
-        const jobSkills = [skill];
-        if (item.categories && Array.isArray(item.categories)) {
-          item.categories.slice(0, 4).forEach((t: string) => {
-            const formatted = t.split(/[-_\s]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
-            if (!jobSkills.includes(formatted) && formatted.length < 20) {
-              jobSkills.push(formatted);
-            }
-          });
-        }
-
-        const location = (item.locationRestrictions && item.locationRestrictions[0]) || item.location || mockLocations[i % mockLocations.length];
-        
-        const companyColor = 
-          portal.source === 'LinkedIn' ? '#0077B5' : 
-          portal.source === 'Indeed' ? '#003A9B' : 
-          portal.source === 'Glassdoor' ? '#0CAA41' : 
-          portal.source === 'Google Jobs' ? '#EA4335' : 
-          portal.source === 'SimplyHired' ? '#6366F1' : 
-          '#6366F1';
-
-        const hashInput = `${item.title.trim().toLowerCase()}-${(item.companyName || "Unknown Company").trim().toLowerCase()}`;
-        const dedupeHash = crypto.createHash("md5").update(hashInput).digest("hex");
-
-        try {
-          const pgJob = await prisma.job.upsert({
-            where: { dedupeHash },
-            create: {
-              dedupeHash,
-              title: item.title,
-              company: item.companyName || "Unknown Company",
-              companyLogo: item.companyLogo || (item.companyName ? item.companyName.charAt(0) : "J"),
-              companyColor,
-              location,
-              locationType: "remote",
-              salary: salaryString,
-              salaryMin,
-              salaryMax,
-              experience: "2-5 years",
-              experienceLevel: "mid",
-              type: "full_time",
-              skills: jobSkills,
-              matchScore: 82 + (i % 15),
-              postedAt: "1 day ago",
-              description: cleanDescription,
-              requirements: [
-                `Proven professional experience working with ${skill}`,
-                "Collaborate effectively in a remote/distributed engineering team",
-                "Strong analytical and web problem-solving capabilities"
-              ],
-              responsibilities: [
-                `Design and develop modular components utilizing ${skill}`,
-                "Work closely with designers, product managers, and remote developers",
-                "Maintain, optimize, and document core web applications"
-              ],
-              benefits: [
-                "Competitive remote compensation pack",
-                "Flexible vacation policy and work-from-home allowance",
-                "Health, dental, and vision insurance coverage"
-              ],
-              applicants: Math.floor(Math.random() * 20) + 4,
-              featured: i % 4 === 0,
-              category,
-              source: portal.source,
-              applyUrl
-            },
-            update: {
-              companyLogo: item.companyLogo || (item.companyName ? item.companyName.charAt(0) : "J"),
-              companyColor,
-              location,
-              salary: salaryString,
-              salaryMin,
-              salaryMax,
-              skills: jobSkills,
-              applyUrl
-            }
-          });
-
-          dbMatchedJobs.push(pgJob);
-        } catch (dbErr) {
-          console.error("Failed to save live job to Postgres:", dbErr);
-        }
-      }
-    }
-
-    if (dbMatchedJobs.length === 0) {
-      const fallbackJobs = await prisma.job.findMany({
-        where: {
-          skills: {
-            hasSome: skills
-          }
+    const hasResume = Boolean(profile?.resumeUrl || profile?.resumeText);
+    if (!hasResume) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "RESUME_REQUIRED",
+          error: "Upload your resume to unlock personalized job matching."
         },
-        orderBy: { createdAt: "desc" }
-      });
-      
-      return NextResponse.json({
-        success: true,
-        data: fallbackJobs.map(mapJob),
-        matchedCount: fallbackJobs.length
-      });
+        { status: 400 }
+      );
     }
+
+    const body = await req.json().catch(() => ({}));
+    const userSkills: string[] = (body.skills && Array.isArray(body.skills) && body.skills.length > 0)
+      ? body.skills
+      : (profile?.skills?.map((s: any) => s.name) || []);
+
+    // Database-first matching: query active PostgreSQL jobs (Section 10 & 12 requirement)
+    const activeJobs = await prisma.job.findMany({
+      where: { isActive: true },
+      orderBy: { postedAtDate: "desc" },
+      take: 100
+    });
+
+    const { calculateDetailedRelevance } = await import("@/lib/relevance");
+    const matched = activeJobs.map(j => {
+      const result = calculateDetailedRelevance(
+        {
+          title: j.title,
+          company: j.company,
+          skills: j.skills,
+          description: j.description,
+          requirements: j.requirements
+        },
+        userSkills
+      );
+      return {
+        job: j,
+        matchScore: result.score,
+        matchedSkills: result.matchedSkills
+      };
+    }).filter(m => m.matchScore > 0);
+
+    matched.sort((a, b) => b.matchScore - a.matchScore);
+    const matchedJobsList = matched.map(m => ({
+      ...mapJob(m.job),
+      matchScore: m.matchScore
+    }));
 
     return NextResponse.json({
       success: true,
-      data: dbMatchedJobs.map(mapJob),
-      matchedCount: dbMatchedJobs.length
+      data: matchedJobsList,
+      matchedCount: matchedJobsList.length
     });
 
   } catch (error: unknown) {

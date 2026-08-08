@@ -18,9 +18,9 @@ export async function runApifyActor(
   timeoutMs = 45000,
   maxRetries = 2
 ): Promise<any[]> {
-  const token = process.env.APIFY_TOKEN || "";
+  const token = process.env.APIFY_TOKEN || process.env.APIFY_API_TOKEN || "";
   if (!token) {
-    throw new Error("APIFY_NOT_CONFIGURED: APIFY_TOKEN environment variable is missing.");
+    throw new Error("APIFY_NOT_CONFIGURED: APIFY_TOKEN or APIFY_API_TOKEN environment variable is missing.");
   }
 
   // Pre-flight Verification: Verify actor exists and token has access before launching

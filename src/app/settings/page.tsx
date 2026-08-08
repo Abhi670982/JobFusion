@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sun, Moon, ArrowLeft, User, Mail, Briefcase, MapPin,
   Edit3, Save, Loader2, CheckCircle2, AlertCircle, X, LogOut,
-  CreditCard
+  CreditCard, Trash2
 } from 'lucide-react';
 import { useClerk } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';
@@ -41,6 +41,10 @@ export default function SettingsPage() {
   const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
+  // Account Deletion states
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
   const handleSignOut = async () => {
     setLoggingOut(true);
     try {
@@ -48,6 +52,24 @@ export default function SettingsPage() {
     } catch (err) {
       console.error("Sign out error:", err);
       setLoggingOut(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeletingAccount(true);
+    try {
+      const res = await fetch('/api/user/delete-account', { method: 'DELETE' });
+      const data = await res.json();
+      if (!data.success) {
+        showToast('error', 'Deletion Failed', data.error || 'Failed to delete account.');
+        setDeletingAccount(false);
+        return;
+      }
+      await signOut({ redirectUrl: '/' });
+    } catch (err) {
+      console.error("Account deletion error:", err);
+      showToast('error', 'Deletion Failed', 'An error occurred during account deletion.');
+      setDeletingAccount(false);
     }
   };
 
@@ -373,7 +395,7 @@ export default function SettingsPage() {
         </div>
       </motion.div>
 
-      {/* ── Danger Zone / Sign Out Section ── */}
+      {/* ── Danger Zone / Sign Out & Account Deletion Section ── */}
       <motion.div 
         initial={{ opacity: 0, y: 10 }} 
         animate={{ opacity: 1, y: 0 }} 
@@ -391,6 +413,24 @@ export default function SettingsPage() {
           >
             <LogOut className="w-4 h-4" />
             Sign Out
+          </Button>
+        </div>
+
+        <Separator className="bg-rose-500/10 my-2" />
+
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-base font-bold text-rose-600 dark:text-rose-400" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Delete Account</h3>
+            <p className="text-xs text-muted-foreground mt-0.5 font-medium">
+              Permanently delete your account and all associated user data from JobFusion. This action is irreversible.
+            </p>
+          </div>
+          <Button
+            onClick={() => setConfirmDeleteOpen(true)}
+            className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold shadow-md w-full sm:w-auto sm:max-w-xs gap-2 transition-all duration-200"
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete Account
           </Button>
         </div>
       </motion.div>
@@ -461,6 +501,43 @@ export default function SettingsPage() {
                 <LogOut className="w-4 h-4" />
               )}
               {loggingOut ? 'Signing Out...' : 'Sign Out'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Account Confirmation Dialog */}
+      <Dialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <DialogContent className="max-w-md rounded-2xl border-rose-500/30">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-rose-600 dark:text-rose-400 flex items-center gap-2">
+              <AlertCircle className="w-5 h-5" />
+              Delete Account Permanently?
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-3 space-y-3">
+            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs font-semibold text-rose-700 dark:text-rose-300">
+              ⚠️ WARNING: This action cannot be undone. All your profile details, uploaded resumes, saved jobs, applications, AI analyses, and account history will be permanently deleted.
+            </div>
+            <p className="text-xs text-muted-foreground font-medium">
+              Click the button below to confirm that you want to permanently delete your JobFusion account and erase all your data.
+            </p>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setConfirmDeleteOpen(false)} disabled={deletingAccount} className="rounded-xl">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleDeleteAccount}
+              disabled={deletingAccount}
+              className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold gap-1.5 shadow-md btn-press touch-auto"
+            >
+              {deletingAccount ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4" />
+              )}
+              {deletingAccount ? 'Deleting Account...' : 'Delete my account permanently'}
             </Button>
           </DialogFooter>
         </DialogContent>

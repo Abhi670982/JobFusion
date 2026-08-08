@@ -380,17 +380,29 @@ export default function ResumeAnalyzerPage() {
             </motion.div>
           )}
 
-          {pageState === 'no-access' && !premiumModalOpen && (
+          {pageState === 'no-access' && (
             <motion.div
               key="no-access"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="text-center py-16"
+              className="card-premium p-10 sm:p-12 text-center space-y-6 max-w-lg mx-auto border-primary/20 bg-gradient-to-b from-primary/5 via-card to-card"
             >
-              <Button onClick={() => setPremiumModalOpen(true)} className="rounded-xl gradient-brand text-white border-0">
-                Unlock Premium Analyzer
-              </Button>
+              <div className="w-16 h-16 rounded-2xl gradient-brand flex items-center justify-center mx-auto shadow-lg text-white">
+                <Sparkles className="w-8 h-8" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-xl font-bold text-foreground">Resume Analyzer is available with Pro</h2>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Upgrade to JobFusion Pro to unlock full AI Resume Analysis, ATS scoring, missing skills detection, and bullet point improvements.
+                </p>
+              </div>
+              <Link href="/pricing" className="block">
+                <Button className="w-full rounded-xl gradient-brand text-white border-0 font-semibold shadow-md hover:opacity-90 h-12 text-base">
+                  <Sparkles className="w-5 h-5 mr-2" />
+                  Upgrade Pro
+                </Button>
+              </Link>
             </motion.div>
           )}
 

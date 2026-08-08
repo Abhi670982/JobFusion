@@ -22,6 +22,9 @@ export async function GET() {
       interviewCount,
       offerCount,
       savedCount,
+      totalJobsCount,
+      portalJobsCount,
+      companyCareersCount,
     ] = await Promise.all([
       prisma.application.count({ where: { userId: userIdStr } }),
       prisma.application.count({ where: { userId: userIdStr, appliedAt: { gte: oneWeekAgo } } }),
@@ -29,6 +32,9 @@ export async function GET() {
       prisma.application.count({ where: { userId: userIdStr, status: "Interview" } }),
       prisma.application.count({ where: { userId: userIdStr, status: "Offer" } }),
       prisma.savedJob.count({ where: { userId: userIdStr } }),
+      prisma.job.count({ where: { isActive: true } }),
+      prisma.job.count({ where: { isActive: true, sourceCategory: "JOB_PORTAL" } }),
+      prisma.job.count({ where: { isActive: true, sourceCategory: "COMPANY_CAREER" } }),
     ]);
 
     const { hasProAccess } = await import("@/lib/subscription");
@@ -46,6 +52,9 @@ export async function GET() {
         interviewCount,
         offerCount,
         savedCount,
+        totalJobsCount,
+        portalJobsCount,
+        companyCareersCount,
         monetization: {
           isPro,
           todayResumeAnalysisCount: todayUsage,
