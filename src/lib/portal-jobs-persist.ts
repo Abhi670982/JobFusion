@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { classifySourceCategory } from "@/lib/source-category";
 import { calculateRelevanceScore } from "@/lib/relevance";
 import { canonicalizeUrl } from "@/lib/url-cleaner";
+import { markExpiredJobsInactive } from "@/lib/job-freshness";
 import crypto from "crypto";
 
 export interface PersistMetrics {
@@ -10,15 +11,36 @@ export interface PersistMetrics {
   jobsInserted: number;
   jobsUpdated: number;
   duplicatesSkipped: number;
+  expiredJobsDeactivated: number;
 }
 
 export async function persistPortalJobs(
   jobs: any[],
   userId?: string,
-  userSkills: string[] = []
+  userSkills: string[] = [],
+  crawlerRunId?: string | null
 ): Promise<PersistMetrics> {
+  // Always clean up expired/stale jobs in DB during persist pass
+  const expiredJobsDeactivated = await markExpiredJobsInactive();
+
   if (!jobs || jobs.length === 0) {
-    return { jobsDiscovered: 0, jobsInserted: 0, jobsUpdated: 0, duplicatesSkipped: 0 };
+    if (crawlerRunId) {
+      try {
+        await prisma.crawlerRun.update({
+          where: { id: crawlerRunId },
+          data: { expiredJobs: expiredJobsDeactivated }
+        });
+      } catch (err: any) {
+        console.warn("[Persist DB Warning] Failed updating crawler run expired jobs:", err.message);
+      }
+    }
+    return {
+      jobsDiscovered: 0,
+      jobsInserted: 0,
+      jobsUpdated: 0,
+      duplicatesSkipped: 0,
+      expiredJobsDeactivated
+    };
   }
 
   let jobsInserted = 0;
@@ -26,13 +48,15 @@ export async function persistPortalJobs(
   let duplicatesSkipped = 0;
 
   const lowerSkills = userSkills.map(s => s.toLowerCase().trim());
-  const BATCH_SIZE = 50;
+  const BATCH_SIZE = 20;
 
   // 1. In-Memory Multi-Field Deduplication
   const preparedJobs: any[] = [];
   const seenHashes = new Set<string>();
 
   for (const job of jobs) {
+    if (!job || !job.title || !job.company) continue;
+
     const rawSource = job.source || "linkedin";
     const classified = classifySourceCategory(rawSource, job.sourceProvider);
 
@@ -56,7 +80,7 @@ export async function persistPortalJobs(
     
     // Multi-field deduplication hash
     const hashInput = `job_portal-${rawSource}-${job.sourceId || ""}-${canonicalApplyUrl || ""}-${canonicalSourceUrl || ""}-${job.title}-${job.company}-${job.location || ""}`.toLowerCase();
-    const dedupeHash = crypto.createHash("sha256").update(hashInput).digest("hex");
+    const dedupeHash = crypto.createHash("sha256").update(dedupeKeyHash(hashInput)).digest("hex");
 
     if (seenHashes.has(dedupeHash)) {
       duplicatesSkipped++;
@@ -155,9 +179,26 @@ export async function persistPortalJobs(
             });
           }
         }
-      });
+      }, { timeout: 30000 });
     } catch (err: any) {
       console.error(`[Portal Jobs Persist] Error persisting batch of ${batch.length} jobs:`, err.message);
+    }
+  }
+
+  // Update CrawlerRun DB record if crawlerRunId provided
+  if (crawlerRunId) {
+    try {
+      await prisma.crawlerRun.update({
+        where: { id: crawlerRunId },
+        data: {
+          newJobs: jobsInserted,
+          updatedJobs: jobsUpdated,
+          duplicateJobs: duplicatesSkipped,
+          expiredJobs: expiredJobsDeactivated,
+        }
+      });
+    } catch (err: any) {
+      console.warn("[Persist DB Warning] Failed updating crawler run metrics:", err.message);
     }
   }
 
@@ -166,5 +207,10 @@ export async function persistPortalJobs(
     jobsInserted,
     jobsUpdated,
     duplicatesSkipped,
+    expiredJobsDeactivated,
   };
+}
+
+function dedupeKeyHash(input: string): string {
+  return input;
 }

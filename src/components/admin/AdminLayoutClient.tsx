@@ -75,6 +75,7 @@ export default function AdminLayoutClient({ children, adminUser }: AdminLayoutCl
     { name: "Users", href: "/admin/users", icon: Users },
     { name: "Admins", href: "/admin/admins", icon: Shield },
     { name: "Jobs", href: "/admin/jobs", icon: Briefcase },
+    { name: "Crawler Monitoring", href: "/admin/crawler", icon: Activity },
     { name: "Companies", href: "/admin/companies", icon: Building2 },
     { name: "Resume & AI", href: "/admin/resume-ai", icon: FileText },
     { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },

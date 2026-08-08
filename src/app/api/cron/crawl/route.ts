@@ -71,10 +71,11 @@ export async function POST(req: NextRequest) {
           portal: "all",
           location: "India",
           maxPages: 5,
+          triggeredBy: "SCHEDULER",
         });
 
-        const persistRes = await persistPortalJobs(crawlRes.jobs);
-        console.log(`[Cron Background Crawl Complete] Crawled ${crawlRes.jobs.length} jobs across ${crawlRes.metrics.totalPagesCrawled} pages. DB Persisted: ${persistRes.jobsInserted} new, ${persistRes.jobsUpdated} updated, ${crawlRes.metrics.duplicatesSkipped + persistRes.duplicatesSkipped} duplicates skipped.`);
+        const persistRes = await persistPortalJobs(crawlRes.jobs, undefined, [], crawlRes.crawlerRunId);
+        console.log(`[Cron Background Crawl Complete] Crawled ${crawlRes.jobs.length} jobs across ${crawlRes.metrics.totalPagesCrawled} pages. DB Persisted: ${persistRes.jobsInserted} new, ${persistRes.jobsUpdated} updated, ${crawlRes.metrics.duplicatesSkipped + persistRes.duplicatesSkipped} duplicates skipped, ${persistRes.expiredJobsDeactivated} expired jobs removed.`);
       } catch (err: any) {
         console.error("[Cron Background Crawl Failed]:", err.message || err);
       }

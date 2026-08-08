@@ -68,9 +68,9 @@ export async function POST(req: NextRequest) {
       ? body.skills
       : (profile?.skills?.map((s: any) => s.name) || []);
 
-    // Database-first matching: query active PostgreSQL jobs (Section 10 & 12 requirement)
+    const { getActiveJobWhereClause } = await import("@/lib/job-freshness");
     const activeJobs = await prisma.job.findMany({
-      where: { isActive: true },
+      where: getActiveJobWhereClause(),
       orderBy: { postedAtDate: "desc" },
       take: 100
     });

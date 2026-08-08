@@ -24,7 +24,6 @@ export async function GET(req: NextRequest) {
     const { allowedSources } = await getPermittedJobSources(userId);
 
     // Query active jobs from PostgreSQL directly
-    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
     const sourceFilter = allowedSources
       ? portal !== "all" && allowedSources.includes(portal)
         ? { source: portal }
@@ -33,11 +32,8 @@ export async function GET(req: NextRequest) {
       ? { source: portal }
       : {};
 
-    const whereClause: any = {
-      isActive: true,
-      postedAtDate: { gte: threeDaysAgo },
-      ...sourceFilter,
-    };
+    const { getActiveJobWhereClause } = await import("@/lib/job-freshness");
+    const whereClause: any = getActiveJobWhereClause(sourceFilter);
 
     if (keyword) {
       whereClause.OR = [

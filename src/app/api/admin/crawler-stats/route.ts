@@ -1,7 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { verifyAdmin } from "@/lib/admin-auth";
 import { safeErrorResponse } from "@/lib/security";
 import { prisma } from "@/lib/prisma";
+import { getActiveJobWhereClause } from "@/lib/job-freshness";
+import { crawlPortalJobs } from "@/lib/portal-fetcher/crawler";
+import { persistPortalJobs } from "@/lib/portal-jobs-persist";
 
 export const dynamic = "force-dynamic";
 
@@ -12,54 +15,180 @@ export async function GET() {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
     }
 
-    // Query real-time database job counts grouped by portal source
-    const groupedCounts = await prisma.job.groupBy({
-      by: ["source"],
-      _count: { id: true },
-      orderBy: { _count: { id: "desc" } },
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    // 1. Fetch Overview Database Job Metrics
+    const [totalJobsInDb, activeJobsCount, newJobsToday, updatedJobsToday, expiredJobsCount, failedJobsCount] = await Promise.all([
+      prisma.job.count(),
+      prisma.job.count({ where: getActiveJobWhereClause() }),
+      prisma.job.count({ where: { createdAt: { gte: startOfDay } } }),
+      prisma.job.count({ where: { updatedAt: { gte: startOfDay }, createdAt: { lt: startOfDay } } }),
+      prisma.job.count({ where: { isActive: false } }),
+      prisma.failedJob.count(),
+    ]);
+
+    // 2. Fetch Latest Crawler Run & Status
+    const latestRun = await prisma.crawlerRun.findFirst({
+      orderBy: { startedAt: "desc" },
+      include: { sourceRuns: true },
     });
 
-    const totalJobsInDb = groupedCounts.reduce((acc, curr) => acc + curr._count.id, 0);
+    const isRunning = latestRun && latestRun.status === "RUNNING";
+    const crawlerStatus = isRunning
+      ? "RUNNING"
+      : latestRun
+      ? latestRun.status
+      : "IDLE";
 
-    const CUTOFF_24H = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const jobs24hCount = await prisma.job.count({
+    // 3. Fetch Recent Crawler Runs History (Last 10)
+    const recentRuns = await prisma.crawlerRun.findMany({
+      take: 10,
+      orderBy: { startedAt: "desc" },
+      include: {
+        sourceRuns: {
+          select: {
+            source: true,
+            status: true,
+            rawJobs: true,
+            validJobs: true,
+            newJobs: true,
+            updatedJobs: true,
+            duplicateJobs: true,
+            errorMessage: true,
+            errorCategory: true,
+          }
+        }
+      }
+    });
+
+    // 4. Source Breakdown (Aggregated per portal)
+    const registeredSources = ["linkedin", "indeed", "wellfound", "internshala", "naukri", "foundit", "careers"];
+    
+    const sourceBreakdown = await Promise.all(
+      registeredSources.map(async (src) => {
+        const lastSourceRun = await prisma.crawlerSourceRun.findFirst({
+          where: { source: src },
+          orderBy: { startedAt: "desc" },
+        });
+
+        const totalInDb = await prisma.job.count({
+          where: { source: { equals: src, mode: "insensitive" } }
+        });
+
+        return {
+          source: src,
+          status: lastSourceRun ? lastSourceRun.status : "IDLE",
+          lastCrawlAt: lastSourceRun?.startedAt || lastSourceRun?.finishedAt || null,
+          rawJobs: lastSourceRun?.rawJobs || 0,
+          validJobs: lastSourceRun?.validJobs || 0,
+          newJobs: lastSourceRun?.newJobs || 0,
+          updatedJobs: lastSourceRun?.updatedJobs || 0,
+          duplicateJobs: lastSourceRun?.duplicateJobs || 0,
+          failedJobs: lastSourceRun?.status === "FAILED" ? 1 : 0,
+          totalInDb,
+          provider: lastSourceRun?.provider || "Apify",
+        };
+      })
+    );
+
+    // 5. Recent Error Logs (Failed source runs or logged failed jobs)
+    const failedSourceRuns = await prisma.crawlerSourceRun.findMany({
       where: {
-        createdAt: { gte: CUTOFF_24H },
+        OR: [
+          { status: "FAILED" },
+          { errorMessage: { not: null } }
+        ]
       },
+      take: 15,
+      orderBy: { startedAt: "desc" }
     });
 
-    const portalStats = groupedCounts.map((g) => ({
-      portal: g.source || "unknown",
-      totalJobsStored: g._count.id,
-      status: "active",
-      lastCrawl: new Date().toISOString(),
+    const errorLogs = failedSourceRuns.map((sr) => ({
+      id: sr.id,
+      source: sr.source,
+      timestamp: sr.startedAt,
+      errorCategory: sr.errorCategory || "HTTP_ERROR",
+      errorMessage: sr.errorMessage || "Crawler source execution failed",
+      httpStatus: sr.httpStatus || 500,
+      retryCount: sr.retryCount || 0,
+      usedFallback: sr.usedFallback || false,
     }));
 
     return NextResponse.json({
       success: true,
       data: {
-        stats: {
+        crawlerStatus,
+        overview: {
           totalJobsInDb,
-          crawled24h: jobs24hCount,
-          activePortalsCount: portalStats.length,
-          successRate: 98.5,
+          activeJobs: activeJobsCount,
+          newJobsToday,
+          updatedJobsToday,
+          expiredJobsRemoved: expiredJobsCount,
+          duplicateJobsToday: latestRun?.duplicateJobs || 0,
+          failedJobs: failedJobsCount,
         },
-        portalStats,
-        apifyActors: {
-          linkedin: process.env.APIFY_LINKEDIN_ACTOR || "valig/linkedin-jobs-scraper",
-          indeed: process.env.APIFY_INDEED_ACTOR || "valig/indeed-jobs-scraper",
-          wellfound: process.env.APIFY_WELLFOUND_ACTOR || "orgupdate/wellfound-jobs-scraper",
-          naukri: process.env.APIFY_NAUKRI_ACTOR || "valig/naukri-jobs-scraper",
-          foundit: process.env.APIFY_FOUNDIT_ACTOR || "easyapi/foundit-jobs-scraper",
-        },
-        proxyStatus: {
-          brightDataConfigured: Boolean(process.env.BRIGHTDATA_API_KEY),
-          serpApiConfigured: Boolean(process.env.SERPAPI_KEY),
-          apifyTokenConfigured: Boolean(process.env.APIFY_TOKEN),
-        },
-      },
+        lastCrawl: latestRun ? {
+          startedAt: latestRun.startedAt,
+          finishedAt: latestRun.finishedAt,
+          durationMs: latestRun.durationMs,
+          status: latestRun.status,
+          jobsFetched: latestRun.jobsFetched,
+          newJobs: latestRun.newJobs,
+          updatedJobs: latestRun.updatedJobs,
+          duplicateJobs: latestRun.duplicateJobs,
+          expiredJobs: latestRun.expiredJobs,
+          failedSources: latestRun.failedSources,
+          successfulSources: latestRun.successfulSources,
+          triggeredBy: latestRun.triggeredBy,
+        } : null,
+        sourceBreakdown,
+        recentRuns,
+        errorLogs,
+      }
     });
   } catch (error: unknown) {
     return safeErrorResponse(error, "Failed to fetch crawler diagnostics stats");
+  }
+}
+
+/**
+ * POST /api/admin/crawler-stats
+ * Admin manual trigger: Run Crawl Now
+ */
+export async function POST() {
+  try {
+    const adminUser = await verifyAdmin();
+    if (!adminUser) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 403 });
+    }
+
+    console.log(`[Admin Manual Trigger] Admin ${adminUser.email} initiated manual job portal crawl pass...`);
+
+    const crawlRes = await crawlPortalJobs({
+      portal: "all",
+      location: "India",
+      maxPages: 3,
+      triggeredBy: "MANUAL_ADMIN",
+    });
+
+    const persistRes = await persistPortalJobs(crawlRes.jobs, undefined, [], crawlRes.crawlerRunId);
+
+    return NextResponse.json({
+      success: true,
+      message: `Manual crawl completed successfully in ${crawlRes.metrics.durationMs}ms.`,
+      data: {
+        crawlerRunId: crawlRes.crawlerRunId,
+        status: crawlRes.metrics.status,
+        jobsDiscovered: crawlRes.metrics.jobsDiscovered,
+        jobsInserted: persistRes.jobsInserted,
+        jobsUpdated: persistRes.jobsUpdated,
+        duplicatesSkipped: crawlRes.metrics.duplicatesSkipped + persistRes.duplicatesSkipped,
+        expiredJobsDeactivated: persistRes.expiredJobsDeactivated,
+        failedPortals: crawlRes.failedPortals,
+      }
+    });
+  } catch (error: unknown) {
+    return safeErrorResponse(error, "Failed to execute manual crawl");
   }
 }

@@ -366,6 +366,66 @@ model FetchLog {
   @@map("fetch_logs")
 }
 
+model CrawlerRun {
+  id                String             @id @default(uuid())
+  startedAt         DateTime           @default(now())
+  finishedAt        DateTime?
+  status            String             @default("RUNNING") // RUNNING, SUCCESS, PARTIAL_SUCCESS, FAILED
+  durationMs        Int                @default(0)
+  triggeredBy       String             @default("SCHEDULER") // SCHEDULER, MANUAL_ADMIN, MANUAL_CLI
+  totalSources      Int                @default(0)
+  successfulSources Int                @default(0)
+  failedSources     Int                @default(0)
+  jobsFetched       Int                @default(0)
+  newJobs           Int                @default(0)
+  updatedJobs       Int                @default(0)
+  duplicateJobs     Int                @default(0)
+  expiredJobs       Int                @default(0)
+  rejectedJobs      Int                @default(0)
+  errorCount        Int                @default(0)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  sourceRuns        CrawlerSourceRun[]
+
+  @@index([status])
+  @@index([startedAt(sort: Desc)])
+  @@map("crawler_runs")
+}
+
+model CrawlerSourceRun {
+  id               String      @id @default(uuid())
+  crawlerRunId     String
+  crawlerRun       CrawlerRun  @relation(fields: [crawlerRunId], references: [id], onDelete: Cascade)
+  source           String
+  status           String      @default("RUNNING") // RUNNING, SUCCESS, PARTIAL_SUCCESS, FAILED
+  startedAt        DateTime    @default(now())
+  finishedAt       DateTime?
+  durationMs       Int         @default(0)
+  pagesAttempted   Int         @default(1)
+  pagesSucceeded   Int         @default(0)
+  rawJobs          Int         @default(0)
+  validJobs        Int         @default(0)
+  newJobs          Int         @default(0)
+  updatedJobs      Int         @default(0)
+  duplicateJobs    Int         @default(0)
+  rejectedJobs     Int         @default(0)
+  failedJobs       Int         @default(0)
+  retryCount       Int         @default(0)
+  provider         String?     // Apify, SerpAPI, BrightData, Direct
+  errorCategory    String?     // CONFIGURATION_ERROR, AUTHENTICATION_ERROR, RATE_LIMIT, HTTP_ERROR, TIMEOUT, PARSER_ERROR, DATABASE_ERROR, PROVIDER_ERROR, INVALID_ACTOR, UNKNOWN_ERROR
+  errorMessage     String?
+  httpStatus       Int?
+  usedFallback     Boolean     @default(false)
+  lastSuccessfulAt DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  @@index([crawlerRunId])
+  @@index([source, startedAt(sort: Desc)])
+  @@index([status])
+  @@map("crawler_source_runs")
+}
+
 model PageView {
   id        String   @id @default(uuid())
   path      String

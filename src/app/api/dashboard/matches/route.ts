@@ -77,14 +77,8 @@ export async function GET() {
     const { getPermittedJobSources } = await import("@/lib/subscription");
     const { allowedSources } = await getPermittedJobSources(user.id);
 
-    const now = new Date();
-    const jobWhere: any = {
-      isActive: true,
-      OR: [
-        { expiresAt: { gt: now } },
-        { expiresAt: null }
-      ]
-    };
+    const { getActiveJobWhereClause } = await import("@/lib/job-freshness");
+    const jobWhere: any = getActiveJobWhereClause();
 
     if (allowedSources && allowedSources.length > 0) {
       jobWhere.AND = [

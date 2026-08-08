@@ -368,16 +368,9 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 11. Filter out closed jobs
-    const now = new Date();
-    andConditions.push({
-      OR: [{ expiresAt: { gt: now } }, { expiresAt: null }],
-    });
-
-    // 12. Only show active jobs
-    andConditions.push({
-      isActive: true,
-    });
+    // 11. Filter out expired, closed, or stale jobs (>30 days old)
+    const { getActiveJobWhereClause } = await import("@/lib/job-freshness");
+    andConditions.push(getActiveJobWhereClause());
 
     const queryConditions: Prisma.JobWhereInput =
       andConditions.length > 0 ? { AND: andConditions } : {};
