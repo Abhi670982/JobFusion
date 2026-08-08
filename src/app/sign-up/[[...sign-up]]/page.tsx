@@ -503,7 +503,7 @@ export default function CustomSignUpPage() {
                         if (termsError) setTermsError('');
                       }}
                       disabled={loading}
-                      className="w-[18px] h-[18px] sm:w-[18px] sm:h-[18px] rounded border-border focus-visible:ring-primary data-[state=checked]:bg-primary transition-all duration-200 mt-0.5 flex-shrink-0"
+                      className="w-[18px] h-[18px] p-0 shrink-0 rounded border-border focus-visible:ring-primary data-[state=checked]:bg-primary transition-all duration-200 mt-0.5 flex-shrink-0 appearance-none"
                     />
                     <Label htmlFor="terms" className="text-xs text-muted-foreground leading-tight cursor-pointer select-none">
                       I agree to the <Link href="/terms-of-service" className="text-primary font-semibold hover:underline">Terms of Service</Link> and <Link href="/privacy-policy" className="text-primary font-semibold hover:underline">Privacy Policy</Link>

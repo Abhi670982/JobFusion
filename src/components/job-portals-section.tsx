@@ -690,8 +690,8 @@ export default function JobPortalsSection({
         </div>
 
         {/* Portal selection tabs */}
-        <div className="flex items-center justify-between">
-          <div className="flex flex-wrap gap-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex overflow-x-auto gap-2 pb-2 flex-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             {PORTAL_TABS.map((tab) => {
               const isActive = tab.id === activePortal;
               const isLocked = !isPro && ['indeed', 'internshala', 'foundit', 'naukri'].includes(tab.id);
@@ -707,7 +707,7 @@ export default function JobPortalsSection({
                   }}
                   aria-pressed={isActive}
                   className={cn(
-                    'flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all duration-200',
+                    'flex flex-shrink-0 whitespace-nowrap items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all duration-200',
                     'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
                     isLocked
                       ? 'border-border/40 bg-muted/20 text-muted-foreground/70 cursor-pointer hover:border-amber-500/40 hover:bg-amber-500/5'
@@ -746,7 +746,7 @@ export default function JobPortalsSection({
             variant="ghost" size="sm"
             onClick={doRefresh}
             disabled={isAnyLoading}
-            className="h-8 px-2.5 rounded-xl text-xs gap-1.5 text-muted-foreground hover:text-foreground"
+            className="h-8 px-2.5 mb-2 rounded-xl text-xs gap-1.5 text-muted-foreground hover:text-foreground flex-shrink-0"
           >
             <RefreshCw className={cn('w-3.5 h-3.5', isAnyLoading && 'animate-spin')} />
           </Button>

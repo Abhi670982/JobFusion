@@ -35,7 +35,7 @@ const nextConfig = {
     ],
   },
 
-  serverExternalPackages: ["pdf-parse", "mammoth"],
+  serverExternalPackages: ["pdf-parse", "mammoth", "puppeteer", "puppeteer-core"],
 
   async headers() {
     return [
